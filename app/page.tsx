@@ -1,4 +1,10 @@
 "use client";
+import { useRouter } from "next/navigation";
+import { onAuthStateChanged } from "firebase/auth";
+import { auth } from "../firebase";   // adjust path if needed
+import { signOut } from "firebase/auth";
+import { collection, getDocs } from "firebase/firestore";
+import { db } from "../firebase";   // adjust path if needed
 
 import React, { useState, useEffect } from "react";
 import {
@@ -136,6 +142,9 @@ type TripFormData = {
 type TripData = TripFormData & {
   id: number;
   createdAt: string;
+  ownerId: string;
+  members: string[];
+  
 };
 
 
@@ -1387,56 +1396,109 @@ const addToItineraryStorage = async (
 
 
 export default function TravelJournal() {
+  const router = useRouter();
+
   const [currentView, setCurrentView] = useState("home");
   const [selectedTrip, setSelectedTrip] = useState<TripData | null>(null);
   const [trips, setTrips] = useState<TripData[]>([]);
 
   const [loading, setLoading] = useState(true);
+  const handleLogout = async () => {
+    await signOut(auth);
+  };
 
+  // ⭐ SINGLE AUTH LISTENER (this handles redirect + loading trips)
   useEffect(() => {
-    loadTrips();
+    const unsub = onAuthStateChanged(auth, (user) => {
+      if (!user) {
+        router.push("/login");
+        return;
+      }
+
+      // user exists → load their trips
+      loadTrips(user.uid);
+    });
+
+    return unsub;
   }, []);
-
-  const loadTrips = async () => {
+  const loadTrips = async (uid: string) => {
     setLoading(true);
-    try {
-      const result = await storage.list("trip:");
-      const loadedTrips = [];
 
-      if (result && result.keys) {
+    try {
+      // 🔥 IMPORTANT: list ALL trips, not just user's prefix
+      const result = await storage.list("trip:");
+
+      const loadedTrips: TripData[] = [];
+
+      if (result?.keys) {
         for (const key of result.keys) {
+
           const data = await storage.get(key);
-          if (data && data.value) {
-            loadedTrips.push(JSON.parse(data.value));
+
+          if (data?.value) {
+            const trip: TripData = JSON.parse(data.value);
+
+            // ⭐ SHOW IF OWNER OR MEMBER
+            if (
+              trip.ownerId === uid ||
+              trip.members?.includes(uid)
+            ) {
+              loadedTrips.push(trip);
+            }
           }
         }
       }
 
       setTrips(loadedTrips.sort((a, b) => b.id - a.id));
+
     } catch (error) {
       console.error("Error loading trips:", error);
     }
+
     setLoading(false);
   };
 
+
+
+
   const createTrip = async (tripData: TripFormData): Promise<TripData> => {
+    const user = auth.currentUser;
+    if (!user) throw new Error("Not logged in");
+
     const trip: TripData = {
       id: Date.now(),
       ...tripData,
+      ownerId: user.uid,
+      members: [user.uid],
       createdAt: new Date().toISOString(),
     };
 
     await storage.set(`trip:${trip.id}`, trip);
+
+
+
     setSelectedTrip(trip);
     setCurrentView("trip");
-    loadTrips();
+    loadTrips(user.uid);
 
     return trip;
   };
 
 
+
   if (currentView === "home") {
     return (
+      <div>
+
+      {/* Logout button top right */}
+      <div className="flex justify-end p-4">
+        <button
+          onClick={handleLogout}
+          className="px-4 py-2 border-2 border-gray-300 rounded-lg hover:border-gray-400"
+        >
+          Log out
+        </button>
+      </div>
       <HomePage
         trips={trips}
         loading={loading}
@@ -1446,6 +1508,8 @@ export default function TravelJournal() {
         }}
         onCreateTrip={createTrip}
       />
+
+      </div>
     );
   }
 
@@ -2696,8 +2760,9 @@ export type StoredPacking = PackingData & { id: number; packed: boolean };
 type AdminTabProps = { tripId: number };
 
 function AdminTab({ tripId }: AdminTabProps) {
-
+  
   type AdminSubTab = "flights" | "hotels" | "packing";
+  const [inviteEmail, setInviteEmail] = useState("");
 
   const [flights, setFlights] = useState<StoredFlight[]>([]);
   const [hotels, setHotels] = useState<StoredHotel[]>([]);
@@ -2893,6 +2958,59 @@ function AdminTab({ tripId }: AdminTabProps) {
     <h2 className="text-3xl font-serif text-gray-900">Trip Administration</h2>
     <p className="text-gray-800 mt-1">All your important trip details in one place</p>
   </div>
+  <div className="bg-white border-2 rounded-lg p-4 flex gap-2">
+    <input
+      type="email"
+      placeholder="Invite by email"
+      value={inviteEmail}
+      onChange={(e)=>setInviteEmail(e.target.value)}
+      className="flex-1 border-2 rounded-lg px-3 py-2"
+    />
+
+    <button
+      onClick={async ()=>{
+        if(!inviteEmail) return;
+
+        // lookup user by email
+        const snapshot = await getDocs(collection(db, "users"));
+        let uid = null;
+
+        snapshot.forEach((userDoc) => {
+          const email = userDoc.data().email?.toLowerCase().trim();
+
+          if (email === inviteEmail.toLowerCase().trim()) {
+            uid = userDoc.id;
+          }
+        });
+
+
+        if(!uid){
+          alert("User not found");
+          return;
+        }
+
+        const ownerId = auth.currentUser?.uid;
+        if (!ownerId) return;
+
+        const tripKey = `trip:${tripId}`;
+        const tripDoc = await storage.get(tripKey);
+
+        if(!tripDoc?.value) return;
+
+        const trip = JSON.parse(tripDoc.value);
+
+        trip.members = [...new Set([...(trip.members||[]), uid])];
+
+        await storage.set(tripKey, trip);
+        setInviteEmail("");
+        alert("User invited!");
+      }}
+      className="px-4 py-2 bg-gray-900 text-white rounded-lg"
+    >
+      Invite
+    </button>
+  </div>
+
 
   {/* SUBTABS */}
     <div className="flex gap-2 border-b-2 border-gray-200">

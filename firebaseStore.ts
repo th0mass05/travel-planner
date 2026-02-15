@@ -1,4 +1,6 @@
 import { db } from "./firebase";
+import { auth } from "./firebase";   // ⭐ ADD THIS
+
 import {
   doc,
   setDoc,
@@ -7,6 +9,8 @@ import {
   getDocs,
   onSnapshot
 } from "firebase/firestore";
+
+
 
 export const storage = {
 
@@ -25,6 +29,7 @@ export const storage = {
     const snapshot = await getDocs(col);
 
     const keys: string[] = [];
+
     snapshot.forEach(d => {
       if (d.id.startsWith(prefix)) keys.push(d.id);
     });
@@ -32,11 +37,10 @@ export const storage = {
     return { keys };
   },
 
-  // optional realtime helper if you want later
   subscribe(key: string, callback: (data:any)=>void) {
     return onSnapshot(doc(db, "travelData", key), snap => {
       if (snap.exists()) callback(snap.data());
     });
   }
-
 };
+
