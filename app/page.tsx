@@ -20,16 +20,123 @@ import {
   ShoppingBag,
 } from "lucide-react";
 import { storage } from "../firebaseStore";
+import { exp } from "firebase/firestore/pipelines";
 
-const deleteKey = async (key) => {
-  if (storage.delete) {
-    await storage.delete(key);
-  } else {
-    // Firebase fallback: overwrite with empty object instead of null
-    await storage.set(key, { __deleted: true });
+const deleteKey = async (key: string) => {
+  try {
+    // attempt delete if supported (runtime check)
+    const s = storage as any;
+
+    if (typeof s.delete === "function") {
+      await s.delete(key);
+    } else {
+      // fallback for Firebase/local storage systems
+      await storage.set(key, { __deleted: true });
+    }
+  } catch (err) {
+    console.error("Delete failed:", err);
   }
 };
 
+
+export type PlaceType = "eat" | "visit";
+
+export type PlaceData = {
+  id: number;              // REQUIRED for storage, delete, confirm, sorting
+  name: string;
+  description: string;
+  address: string;
+
+  rating?: string;         // optional
+  imageUrl?: string;       // optional
+  link?: string;           // optional
+
+  visited: boolean;
+  confirmed?: boolean;
+};
+
+
+export type PhotoData = {
+  url: string;         // base64 or URL
+  caption: string;
+  date: string;        // yyyy-mm-dd
+  location: string;
+};
+
+export type FlightData = {
+  airline: string;
+  flightNumber: string;
+  departure: string;
+  arrival: string;
+  date: string;
+  time: string;
+  link?: string;
+  status: string;
+
+  // ✅ ADD THESE
+  price?: string;
+  details?: string;
+};
+
+
+export type HotelData = {
+  id?: number;
+  name: string;
+  address: string;
+  checkIn: string;
+  checkOut: string;
+  confirmationNumber: string;
+  link: string;
+  status: "potential" | "confirmed";
+  price?: string;      // NEW
+  details?: string;    // NEW
+};
+
+
+export type PackingData = {
+  category: string;
+  item: string;
+  packed?: boolean;
+};
+
+export type ShoppingData = {
+  id?: number;
+  bought?: boolean;
+  item: string;
+  category: string;
+  link?: string;
+  notes?: string;
+};
+
+
+export type ActivityData = {
+  time: string;
+  activity: string;
+  location: string;
+  notes?: string;
+  iconType: string;
+};
+
+export type View = "home" | "trip";
+
+export type TripStatus = "upcoming" | "ongoing" | "completed";
+
+type TripFormData = {
+  destination: string;
+  country: string;
+  year: number;
+  tagline: string;
+  startDate: string;
+  endDate: string;
+  status: TripStatus;
+  imageUrl: string;
+  bgGradient: string;
+};
+
+type TripData = TripFormData & {
+  id: number;
+  createdAt: string;
+};
 
 
 const iconMap = {
@@ -43,7 +150,7 @@ const iconMap = {
 
 
 // Helper to get all dates between start and end
-const getDatesInRange = (startDate, endDate) => {
+const getDatesInRange = (startDate: string, endDate: string) => {
   const start = new Date(startDate);
   const end = new Date(endDate);
   const dates = [];
@@ -58,8 +165,32 @@ const getDatesInRange = (startDate, endDate) => {
 };
 
 // Dialog Components
-function PlaceDialog({ onClose, onAdd, type }) {
-  const [formData, setFormData] = useState({
+
+
+
+
+type PlaceFormData = {
+  name: string;
+  description: string;
+  address: string;
+  rating: string;
+  imageUrl: string;
+  link: string;
+  visited: boolean;
+};
+
+type PlaceDialogProps = {
+  onClose: () => void;
+  onAdd: (data: PlaceFormData) => void;
+  type: PlaceType;
+};
+
+function PlaceDialog({ onClose, onAdd, type }: PlaceDialogProps) {
+
+
+  const [formData, setFormData] = useState<PlaceFormData>({
+
+
     name: "",
     description: "",
     address: "",
@@ -69,12 +200,16 @@ function PlaceDialog({ onClose, onAdd, type }) {
     visited: false,
   });
 
-  const handleImageUpload = (e) => {
+
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
       const reader = new FileReader();
       reader.onload = (event) => {
-        setFormData({ ...formData, imageUrl: event.target.result });
+        const result = event.target?.result;
+        if (typeof result === "string") {
+          setFormData({ ...formData, imageUrl: result });
+        }
       };
       reader.readAsDataURL(file);
     }
@@ -111,7 +246,7 @@ function PlaceDialog({ onClose, onAdd, type }) {
                 setFormData({ ...formData, description: e.target.value })
               }
               className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg focus:border-gray-900 outline-none"
-              rows="2"
+              rows={2}
               placeholder="Brief description"
             />
           </div>
@@ -200,24 +335,43 @@ function PlaceDialog({ onClose, onAdd, type }) {
   );
 }
 
-function PhotoDialog({ onClose, onAdd }) {
-  const [formData, setFormData] = useState({
+
+
+type PhotoDialogProps = {
+  onClose: () => void;
+  onAdd: (data: PhotoData) => void;
+};
+
+function PhotoDialog({ onClose, onAdd }: PhotoDialogProps) {
+
+  const [formData, setFormData] = useState<PhotoData>({
     url: "",
     caption: "",
     date: "",
     location: "",
   });
 
-  const handleImageUpload = (e) => {
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        setFormData({ ...formData, url: event.target.result });
-      };
-      reader.readAsDataURL(file);
-    }
+    if (!file) return;
+
+    const reader = new FileReader();
+
+    reader.onload = () => {
+      const result = reader.result;
+
+      // ✅ ensure it's actually a string before saving
+      if (typeof result === "string") {
+        setFormData(prev => ({
+          ...prev,
+          url: result,
+        }));
+      }
+    };
+
+    reader.readAsDataURL(file);
   };
+
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
@@ -299,20 +453,29 @@ function PhotoDialog({ onClose, onAdd }) {
   );
 }
 
-function FlightDialog({ onClose, onAdd, initialData })
- {
-  const [formData, setFormData] = useState(
-  initialData || {
-    airline: "",
-    flightNumber: "",
-    departure: "",
-    arrival: "",
-    date: "",
-    time: "",
-    link: "",
-    status: "potential",
-  }
-);
+type FlightDialogProps = {
+  onClose: () => void;
+  onAdd: (data: FlightData) => void;
+  initialData?: FlightData; // optional, used for edit mode
+};
+
+function FlightDialog({ onClose, onAdd, initialData }: FlightDialogProps) {
+
+  const [formData, setFormData] = useState<FlightData>(
+    initialData ?? {
+      airline: "",
+      flightNumber: "",
+      departure: "",
+      arrival: "",
+      date: "",
+      time: "",
+      link: "",
+      status: "potential",
+      price: "",
+      details: ""
+    }
+  );
+
 
 
   return (
@@ -421,7 +584,7 @@ function FlightDialog({ onClose, onAdd, initialData })
                 setFormData({...formData, details:e.target.value})
               }
               className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg"
-              rows="2"
+              rows={2}
               placeholder="Seat, baggage, terminal, notes..."
             />
           </div>
@@ -473,19 +636,29 @@ function FlightDialog({ onClose, onAdd, initialData })
   );
 }
 
-function HotelDialog({ onClose, onAdd, initialData })
- {
-  const [formData, setFormData] = useState(
-  initialData || {
-    name: "",
-    address: "",
-    checkIn: "",
-    checkOut: "",
-    confirmationNumber: "",
-    link: "",
-    status: "potential",
-  }
-);
+
+type HotelDialogProps = {
+  onClose: () => void;
+  onAdd: (data: HotelData) => void;
+  initialData?: HotelData;
+};
+
+function HotelDialog({ onClose, onAdd, initialData }: HotelDialogProps) {
+
+  const [formData, setFormData] = useState<HotelData>(
+    initialData || {
+      name: "",
+      address: "",
+      checkIn: "",
+      checkOut: "",
+      confirmationNumber: "",
+      link: "",
+      status: "potential",
+      price: "",      // NEW
+      details: "",    // NEW
+    }
+  );
+
 
 
   return (
@@ -578,7 +751,7 @@ function HotelDialog({ onClose, onAdd, initialData })
                 setFormData({...formData, details:e.target.value})
               }
               className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg"
-              rows="2"
+              rows={2}
               placeholder="Room type, breakfast included, notes..."
             />
           </div>
@@ -602,7 +775,7 @@ function HotelDialog({ onClose, onAdd, initialData })
             <select
               value={formData.status}
               onChange={(e) =>
-                setFormData({ ...formData, status: e.target.value })
+                setFormData({ ...formData, status: e.target.value as "potential" | "confirmed", })
               }
               className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg focus:border-gray-900 outline-none"
             >
@@ -630,8 +803,14 @@ function HotelDialog({ onClose, onAdd, initialData })
   );
 }
 
-function PackingDialog({ onClose, onAdd }) {
-  const [formData, setFormData] = useState({
+type PackingDialogProps = {
+  onClose: () => void;
+  onAdd: (data: PackingData) => void;
+};
+
+function PackingDialog({ onClose, onAdd }: PackingDialogProps) {
+
+  const [formData, setFormData] = useState<PackingData>({
     category: "Clothing",
     item: "",
   });
@@ -690,8 +869,14 @@ function PackingDialog({ onClose, onAdd }) {
   );
 }
 
-function ShoppingDialog({ onClose, onAdd }) {
-  const [formData, setFormData] = useState({
+type ShoppingDialogProps = {
+  onClose: () => void;
+  onAdd: (data: ShoppingData) => void;
+};
+
+
+function ShoppingDialog({ onClose, onAdd }: ShoppingDialogProps) {
+  const [formData, setFormData] = useState<ShoppingData>({
     item: "",
     category: "",
     link: "",
@@ -762,7 +947,7 @@ function ShoppingDialog({ onClose, onAdd }) {
                 setFormData({ ...formData, notes: e.target.value })
               }
               className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg focus:border-gray-900 outline-none"
-              rows="2"
+              rows={2}
               placeholder="Size, color, store location..."
             />
           </div>
@@ -786,8 +971,13 @@ function ShoppingDialog({ onClose, onAdd }) {
   );
 }
 
-function ActivityDialog({ onClose, onAdd }) {
-  const [formData, setFormData] = useState({
+type ActivityDialogProps = {
+  onClose: () => void;
+  onAdd: (data: ActivityData) => void;
+};
+
+function ActivityDialog({ onClose, onAdd }: ActivityDialogProps) {
+  const [formData, setFormData] = useState<ActivityData>({
     time: "",
     activity: "",
     location: "",
@@ -862,7 +1052,7 @@ function ActivityDialog({ onClose, onAdd }) {
                 setFormData({ ...formData, notes: e.target.value })
               }
               className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg focus:border-gray-900 outline-none"
-              rows="3"
+              rows={3}
             />
           </div>
           <div className="flex gap-3 pt-4">
@@ -885,8 +1075,14 @@ function ActivityDialog({ onClose, onAdd }) {
   );
 }
 
-function NewTripDialog({ onClose, onCreate }) {
-  const [formData, setFormData] = useState({
+type NewTripDialogProps = {
+  onClose: () => void;
+  onCreate: (data: TripFormData) => void | Promise<void>;
+};
+
+
+function NewTripDialog({ onClose, onCreate }: NewTripDialogProps) {
+  const [formData, setFormData] = useState<TripFormData>({
     destination: "",
     country: "",
     year: new Date().getFullYear(),
@@ -898,18 +1094,27 @@ function NewTripDialog({ onClose, onCreate }) {
     bgGradient: "from-blue-400 to-purple-400",
   });
 
-  const handleImageUpload = (e) => {
+
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        setFormData({ ...formData, imageUrl: event.target.result });
-      };
-      reader.readAsDataURL(file);
-    }
+    if (!file) return;
+
+    const reader = new FileReader();
+
+    reader.onload = (event: ProgressEvent<FileReader>) => {
+      const result = event.target?.result;
+      if (typeof result === "string") {
+        setFormData(prev => ({
+          ...prev,
+          imageUrl: result,   // ✅ correct field
+        }));
+      }
+    };
+
+    reader.readAsDataURL(file);
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     onCreate(formData);
   };
@@ -1018,8 +1223,8 @@ function NewTripDialog({ onClose, onCreate }) {
             <label className="block text-sm font-medium mb-1">Status</label>
             <select
               value={formData.status}
-              onChange={(e) =>
-                setFormData({ ...formData, status: e.target.value })
+              onChange={(e: React.ChangeEvent<HTMLSelectElement>) =>
+                setFormData({ ...formData, status: e.target.value as TripStatus })
               }
               className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg focus:border-gray-900 outline-none"
             >
@@ -1029,29 +1234,49 @@ function NewTripDialog({ onClose, onCreate }) {
             </select>
           </div>
 
-          <div className="flex gap-4 pt-4">
-            <button
-              onClick={handleSubmit}
-              className="flex-1 px-6 py-3 bg-gray-900 text-white rounded-lg hover:bg-gray-800"
-            >
-              Create Journey
-            </button>
-            <button
-              onClick={onClose}
-              className="px-6 py-3 bg-white border-2 border-gray-300 rounded-lg hover:border-gray-400"
-            >
-              Cancel
-            </button>
-          </div>
+          <form onSubmit={handleSubmit}>
+            <div className="flex gap-4 pt-4">
+
+              <button
+                type="submit"
+                className="flex-1 px-6 py-3 bg-gray-900 text-white rounded-lg hover:bg-gray-800"
+              >
+                Create Journey
+              </button>
+
+              <button
+                type="button"
+                onClick={onClose}
+                className="px-6 py-3 bg-white border-2 border-gray-300 rounded-lg hover:border-gray-400"
+              >
+                Cancel
+              </button>
+
+            </div>
+          </form>
+
         </div>
       </div>
     </div>
   );
 }
 
-function ConfirmToItineraryDialog({ onClose, onConfirm, title }) {
-  const [date, setDate] = useState("");
-  const [time, setTime] = useState("");
+type ConfirmToItineraryDialogProps = {
+  onClose: () => void;
+  onConfirm: (date: string, time: string) => void;
+  title: string;
+};
+
+
+function ConfirmToItineraryDialog({
+  onClose,
+  onConfirm,
+  title,
+}: ConfirmToItineraryDialogProps) {
+
+  const [date, setDate] = useState<string>("");
+  const [time, setTime] = useState<string>("");
+
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
@@ -1101,27 +1326,44 @@ function ConfirmToItineraryDialog({ onClose, onConfirm, title }) {
 }
 
 
+type IconType = "activity" | "visit" | "eat" | "flight" | "hotel";
+
+type ItineraryItem = {
+  id: number;
+  time: string;
+  activity: string;
+  location: string;
+  notes: string;
+  iconType: IconType;
+};
+
+type ItineraryDay = {
+  day: number;
+  date: string;
+  items: ItineraryItem[];
+};
+
 const addToItineraryStorage = async (
-  tripId,
-  date,
-  time,
-  activity,
-  location,
-  notes = "",
-  iconType = "activity"
-) => {
+  tripId: number,
+  date: string,
+  time: string,
+  activity: string,
+  location: string,
+  notes: string = "",
+  iconType: IconType = "activity"
+): Promise<void> => {
   if (!date) return;
 
   const key = `itinerary:${tripId}:date:${date}`;
 
-  // load existing day (if any)
   const existing = await storage.get(key);
-  let targetDay = null;
+
+  let targetDay: ItineraryDay;
 
   if (existing?.value) {
-    targetDay = JSON.parse(existing.value);
+    targetDay = JSON.parse(existing.value) as ItineraryDay;
   } else {
-    targetDay = { date, items: [] };
+    targetDay = { day: 0, date, items: [] };
   }
 
   targetDay.items.push({
@@ -1133,17 +1375,22 @@ const addToItineraryStorage = async (
     iconType
   });
 
-  targetDay.items.sort((a, b) => (a.time || "").localeCompare(b.time || ""));
+  // 🔥 FIXES a & b implicit any errors
+  targetDay.items.sort((a: ItineraryItem, b: ItineraryItem) =>
+    (a.time || "").localeCompare(b.time || "")
+  );
 
   await storage.set(key, targetDay);
 };
 
 
 
+
 export default function TravelJournal() {
   const [currentView, setCurrentView] = useState("home");
-  const [selectedTrip, setSelectedTrip] = useState(null);
-  const [trips, setTrips] = useState([]);
+  const [selectedTrip, setSelectedTrip] = useState<TripData | null>(null);
+  const [trips, setTrips] = useState<TripData[]>([]);
+
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -1172,8 +1419,8 @@ export default function TravelJournal() {
     setLoading(false);
   };
 
-  const createTrip = async (tripData) => {
-    const trip = {
+  const createTrip = async (tripData: TripFormData): Promise<TripData> => {
+    const trip: TripData = {
       id: Date.now(),
       ...tripData,
       createdAt: new Date().toISOString(),
@@ -1187,12 +1434,13 @@ export default function TravelJournal() {
     return trip;
   };
 
+
   if (currentView === "home") {
     return (
       <HomePage
         trips={trips}
         loading={loading}
-        onSelectTrip={(trip) => {
+        onSelectTrip={(trip: TripData) => {
           setSelectedTrip(trip);
           setCurrentView("trip");
         }}
@@ -1216,7 +1464,20 @@ export default function TravelJournal() {
   return null;
 }
 
-function HomePage({ trips, loading, onSelectTrip, onCreateTrip }) {
+
+type HomePageProps = {
+  trips: TripData[];
+  loading: boolean;
+  onSelectTrip: (trip: TripData) => void;
+  onCreateTrip: (trip: TripFormData) => Promise<TripData>;
+};
+
+function HomePage({
+  trips,
+  loading,
+  onSelectTrip,
+  onCreateTrip,
+}: HomePageProps) {
   const [filter, setFilter] = useState("all");
   const [showNewTripDialog, setShowNewTripDialog] = useState(false);
 
@@ -1225,7 +1486,7 @@ function HomePage({ trips, loading, onSelectTrip, onCreateTrip }) {
     return trip.status === filter;
   });
 
-  const handleCreateTrip = async (data) => {
+  const handleCreateTrip = async (data: TripFormData) => {
     await onCreateTrip(data);
     setShowNewTripDialog(false);
   };
@@ -1324,8 +1585,14 @@ function HomePage({ trips, loading, onSelectTrip, onCreateTrip }) {
   );
 }
 
-function TripCard({ trip, onClick }) {
-  const statusColors = {
+type TripCardProps = {
+  trip: TripData;
+  onClick: () => void;
+};
+
+
+function TripCard({ trip, onClick }: TripCardProps) {
+  const statusColors: Record<TripStatus, string> = {
     upcoming: "bg-amber-100 text-amber-800",
     ongoing: "bg-green-100 text-green-800",
     completed: "bg-gray-100 text-gray-800",
@@ -1378,9 +1645,32 @@ function TripCard({ trip, onClick }) {
   );
 }
 
-function TripView({ trip, onBack }) {
-  const [activeTab, setActiveTab] = useState("itinerary");
+type TripViewProps = {
+  trip: TripData;
+  onBack: () => void;
+};
 
+type TabId =
+  | "itinerary"
+  | "places-visit"
+  | "places-eat"
+  | "shopping"
+  | "photos"
+  | "scrapbook"
+  | "admin";
+
+
+function TripView({ trip, onBack }: TripViewProps) {
+  const [activeTab, setActiveTab] = useState<TabId>("itinerary");
+  const tabs: { id: TabId; label: string; icon: any }[] = [
+    { id: "itinerary", label: "Itinerary", icon: Calendar },
+    { id: "places-visit", label: "Places to Visit", icon: MapPin },
+    { id: "places-eat", label: "Places to Eat", icon: Utensils },
+    { id: "shopping", label: "Shopping", icon: ShoppingBag },
+    { id: "photos", label: "Photos", icon: Camera },
+    { id: "scrapbook", label: "Scrapbook", icon: Sparkles },
+    { id: "admin", label: "Admin", icon: PackageCheck },
+  ];
   return (
     <div className="min-h-screen bg-[#f5f1e8]">
       <div className="bg-white border-b-2 border-gray-200">
@@ -1421,15 +1711,8 @@ function TripView({ trip, onBack }) {
       <div className="bg-white border-b-2 border-gray-200 sticky top-0 z-10">
         <div className="max-w-7xl mx-auto px-8">
           <div className="flex gap-8 overflow-x-auto">
-            {[
-              { id: "itinerary", label: "Itinerary", icon: Calendar },
-              { id: "places-visit", label: "Places to Visit", icon: MapPin },
-              { id: "places-eat", label: "Places to Eat", icon: Utensils },
-              { id: "shopping", label: "Shopping", icon: ShoppingBag },
-              { id: "photos", label: "Photos", icon: Camera },
-              { id: "scrapbook", label: "Scrapbook", icon: Sparkles },
-              { id: "admin", label: "Admin", icon: PackageCheck },
-            ].map((tab) => {
+            {tabs.map((tab) => {
+
               const Icon = tab.icon;
               return (
                 <button
@@ -1467,8 +1750,14 @@ function TripView({ trip, onBack }) {
   );
 }
 
-function ItineraryTab({ trip }) {
-  const [days, setDays] = useState([]);
+type ItineraryTabProps = {
+  trip: TripData;
+};
+
+function ItineraryTab({ trip }: ItineraryTabProps) {
+
+  const [days, setDays] = useState<ItineraryDay[]>([]);
+
   const [currentDayIndex, setCurrentDayIndex] = useState(0);
   const [showAddDialog, setShowAddDialog] = useState(false);
 
@@ -1480,13 +1769,15 @@ function ItineraryTab({ trip }) {
     const allDates = getDatesInRange(trip.startDate, trip.endDate);
 
     const result = await storage.list(`itinerary:${trip.id}:date:`);
-    const storedByDate = {};
+    const storedByDate: Record<string, ItineraryDay> = {};
+
 
     if (result?.keys) {
       for (const key of result.keys) {
         const data = await storage.get(key);
         if (data?.value) {
-          const parsed = JSON.parse(data.value);
+          const parsed: ItineraryDay = JSON.parse(data.value);
+
           storedByDate[parsed.date] = parsed;
         }
       }
@@ -1506,7 +1797,9 @@ function ItineraryTab({ trip }) {
   };
 
 
-  const addActivity = async (dayNum, activity) => {
+  const addActivity = async (dayNum: number, activity: ActivityData) => {
+
+
     const dayData = days.find((d) => d.day === dayNum);
     const date = dayData?.date;
     if (!date) return;
@@ -1515,19 +1808,27 @@ function ItineraryTab({ trip }) {
 
     // Load existing stored data
     const existing = await storage.get(key);
-    const parsed = existing?.value
-      ? JSON.parse(existing.value)
-      : { date, items: [] };
+    const parsed: ItineraryDay = existing?.value
+    ? JSON.parse(existing.value)
+    : { date, items: [] };
+
 
     // Add the new activity
+    const newItem: ItineraryItem = {
+      id: Date.now(),
+      activity: activity.activity,
+      location: activity.location,
+      notes: activity.notes || "",
+      time: activity.time || "",
+      iconType: (activity.iconType ?? "activity") as IconType,
+    };
+
     const updatedItems = [
       ...(parsed.items || []),
-      {
-        id: Date.now(),
-        ...activity,
-        iconType: activity.iconType || "activity",
-      },
+      newItem,
     ];
+
+
 
     // 🔥 SORT BY TIME (earliest first, no-time last)
     updatedItems.sort((a, b) => {
@@ -1548,20 +1849,20 @@ function ItineraryTab({ trip }) {
 
 
   // Safe access to current day
-  const currentDayData = days[currentDayIndex] || {
-    day: 1,
-    date: "",
-    items: [],
-  };
+  const currentDayData: ItineraryDay =
+  days[currentDayIndex] || { day: 1, date: "", items: [] };
 
-  const deleteActivity = async (date, activityId) => {
+
+  const deleteActivity = async (date: string, activityId: number) => {
+
     const key = `itinerary:${trip.id}:date:${date}`;
     const existing = await storage.get(key);
     if (!existing?.value) return;
 
     const parsed = JSON.parse(existing.value);
 
-    parsed.items = parsed.items.filter(i => i.id !== activityId);
+    parsed.items = parsed.items.filter((i: ItineraryItem) => i.id !== activityId);
+
 
     await storage.set(key, parsed);
     await loadDays();
@@ -1628,7 +1929,8 @@ function ItineraryTab({ trip }) {
               const tb = b.time || "99:99";
               return ta.localeCompare(tb);
             })
-            .map((item) => {
+            .map((item: ItineraryItem) => {
+
               const Icon = iconMap[item.iconType] || Clock;
 
               return (
@@ -1699,10 +2001,24 @@ function ItineraryTab({ trip }) {
 
 }
 
-function PlacesTab({ tripId, type }) {
-  const [places, setPlaces] = useState([]);
+export type StoredPlace = PlaceData & {
+  id: number;
+};
+
+
+type PlacesTabProps = {
+  tripId: number;
+  type: "eat" | "visit";
+};
+
+function PlacesTab({ tripId, type }: PlacesTabProps) {
+  const [places, setPlaces] = useState<StoredPlace[]>([]);
+
+
   const [showAddDialog, setShowAddDialog] = useState(false);
-  const [confirmingPlace,setConfirmingPlace]=useState(null);
+  const [confirmingPlace, setConfirmingPlace] = useState<StoredPlace | null>(null);
+
+
 
 
   useEffect(() => {
@@ -1711,7 +2027,8 @@ function PlacesTab({ tripId, type }) {
 
   const loadPlaces = async () => {
     const result = await storage.list(`place:${tripId}:${type}:`);
-    const loadedPlaces = [];
+    const loadedPlaces: StoredPlace[] = [];
+
 
     if (result && result.keys) {
       for (const key of result.keys) {
@@ -1723,15 +2040,20 @@ function PlacesTab({ tripId, type }) {
     }
 
     setPlaces(loadedPlaces.sort((a, b) => b.id - a.id));
+
+
   };
 
-  const addPlace = async (placeData) => {
-    const place = { id: Date.now(), ...placeData };
+  const addPlace = async (placeData: Omit<PlaceData, "id">) => {
+    const place: PlaceData = { ...placeData, id: Date.now() };
+
     await storage.set(`place:${tripId}:${type}:${place.id}`, place);
     await loadPlaces();
   };
 
-  const toggleVisited = async (placeId) => {
+
+  const toggleVisited = async (placeId: number) => {
+
     const place = places.find((p) => p.id === placeId);
     if (place) {
       place.visited = !place.visited;
@@ -1740,7 +2062,12 @@ function PlacesTab({ tripId, type }) {
     }
   };
 
-  const confirmPlace = async (place,date,time)=>{
+  const confirmPlace = async (
+      place: StoredPlace,
+      date: string,
+      time: string
+    ) => {
+
     await addToItineraryStorage(
       tripId,
       date,
@@ -1767,7 +2094,8 @@ function PlacesTab({ tripId, type }) {
       : "from-green-100 to-teal-100";
   const checkColor = type === "eat" ? "bg-amber-500" : "bg-green-500";
 
-  const deletePlace = async (placeId) => {
+  const deletePlace = async (placeId: number) => {
+
     await deleteKey(`place:${tripId}:${type}:${placeId}`);
     await loadPlaces();
   };
@@ -1924,17 +2252,34 @@ function PlacesTab({ tripId, type }) {
       {confirmingPlace && (
         <ConfirmToItineraryDialog
           title={confirmingPlace.name}
-          onClose={()=>setConfirmingPlace(null)}
-          onConfirm={(date,time)=>confirmPlace(confirmingPlace,date,time)}
+          onClose={() => setConfirmingPlace(null)}
+          onConfirm={(date, time) =>
+            confirmingPlace && confirmPlace(confirmingPlace, date, time)
+          }
         />
       )}
+
     </div>
   );
   
 }
 
-function ShoppingTab({ tripId }) {
-  const [items, setItems] = useState([]);
+type ShoppingTabProps = {
+  tripId: number;
+};
+
+
+function ShoppingTab({ tripId }: ShoppingTabProps) {
+
+  type ShoppingItem = ShoppingData & {
+    id: number;
+    bought: boolean;
+  };
+
+  const [items, setItems] = useState<ShoppingItem[]>([]);
+
+
+
   const [showAddDialog, setShowAddDialog] = useState(false);
 
   useEffect(() => {
@@ -1943,7 +2288,8 @@ function ShoppingTab({ tripId }) {
 
   const loadItems = async () => {
     const result = await storage.list(`shopping:${tripId}:`);
-    const loadedItems = [];
+    const loadedItems: ShoppingItem[] = [];
+
 
     if (result && result.keys) {
       for (const key of result.keys) {
@@ -1957,13 +2303,20 @@ function ShoppingTab({ tripId }) {
     setItems(loadedItems.sort((a, b) => b.id - a.id));
   };
 
-  const addItem = async (itemData) => {
-    const newItem = { id: Date.now(), bought: false, ...itemData };
+  const addItem = async (itemData: ShoppingData) => {
+
+        const newItem: ShoppingItem = {
+      ...itemData,
+      id: Date.now(),
+      bought: false,
+    };
+
     await storage.set(`shopping:${tripId}:${newItem.id}`, newItem);
     await loadItems();
   };
 
-  const toggleBought = async (itemId) => {
+  const toggleBought = async (itemId: number) => {
+
     const item = items.find((i) => i.id === itemId);
     if (item) {
       item.bought = !item.bought;
@@ -1975,7 +2328,8 @@ function ShoppingTab({ tripId }) {
   // Group items by category
   const categories = [...new Set(items.map((i) => i.category))].sort();
   const boughtCount = items.filter((i) => i.bought).length;
-  const deleteItem = async (id) => {
+  const deleteItem = async (id: number) => {
+
     await deleteKey(`shopping:${tripId}:${id}`);
     await loadItems();
   };
@@ -2108,8 +2462,17 @@ function ShoppingTab({ tripId }) {
 
 }
 
-function PhotosTab({ tripId }) {
-  const [photos, setPhotos] = useState([]);
+type PhotosTabProps = {
+  tripId: number;
+};
+
+
+function PhotosTab({ tripId }: PhotosTabProps) {
+  type PhotoItem = PhotoData & {
+    id: number;
+  };
+  const [photos, setPhotos] = useState<PhotoItem[]>([]);
+
   const [showAddDialog, setShowAddDialog] = useState(false);
 
   useEffect(() => {
@@ -2118,7 +2481,8 @@ function PhotosTab({ tripId }) {
 
   const loadPhotos = async () => {
     const result = await storage.list(`photo:${tripId}:`);
-    const loadedPhotos = [];
+    const loadedPhotos: PhotoItem[] = [];
+
 
     if (result && result.keys) {
       for (const key of result.keys) {
@@ -2129,16 +2493,22 @@ function PhotosTab({ tripId }) {
       }
     }
 
-    setPhotos(loadedPhotos.sort((a, b) => b.id - a.id));
+    setPhotos(loadedPhotos.sort((a: PhotoItem, b: PhotoItem) => b.id - a.id));
+
   };
 
-  const addPhoto = async (photoData) => {
-    const photo = { id: Date.now(), ...photoData };
+  const addPhoto = async (photoData: PhotoData) => {
+      const photo: PhotoItem = {
+    ...photoData,
+    id: Date.now(),
+  };
+
     await storage.set(`photo:${tripId}:${photo.id}`, photo);
     await loadPhotos();
   };
 
-  const deletePhoto = async (photoId) => {
+  const deletePhoto = async (photoId: number) => {
+
     await deleteKey(`photo:${tripId}:${photoId}`);
     await loadPhotos();
   };
@@ -2180,7 +2550,8 @@ function PhotosTab({ tripId }) {
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-          {photos.map((photo) => (
+          {photos.map((photo: PhotoItem) => (
+
             <div
               key={photo.id}
               className="bg-white border-2 border-gray-200 rounded-lg overflow-hidden hover:border-purple-300 hover:shadow-2xl transition-all group"
@@ -2241,8 +2612,23 @@ function PhotosTab({ tripId }) {
 
 }
 
-function ScrapbookTab({ tripId }) {
-  const [entries, setEntries] = useState([]);
+export type ScrapbookEntry = {
+  id: number;
+  day: number;
+  title: string;
+  date: string;
+  content: string;
+};
+
+type ScrapbookTabProps = {
+  tripId: number;
+};
+
+
+function ScrapbookTab({ tripId }: ScrapbookTabProps) {
+
+  const [entries, setEntries] = useState<ScrapbookEntry[]>([]);
+
 
   useEffect(() => {
     loadEntries();
@@ -2250,7 +2636,8 @@ function ScrapbookTab({ tripId }) {
 
   const loadEntries = async () => {
     const result = await storage.list(`scrapbook:${tripId}:`);
-    const loadedEntries = [];
+    const loadedEntries: ScrapbookEntry[] = [];
+
 
     if (result && result.keys) {
       for (const key of result.keys) {
@@ -2261,7 +2648,10 @@ function ScrapbookTab({ tripId }) {
       }
     }
 
-    setEntries(loadedEntries.sort((a, b) => a.day - b.day));
+    setEntries(
+      loadedEntries.sort((a: ScrapbookEntry, b: ScrapbookEntry) => a.day - b.day)
+    );
+
   };
 
   return (
@@ -2278,7 +2668,8 @@ function ScrapbookTab({ tripId }) {
           <p className="text-gray-700">No scrapbook entries yet</p>
         </div>
       ) : (
-        entries.map((entry) => (
+        entries.map((entry: ScrapbookEntry) => (
+
           <div
             key={entry.id}
             className="bg-white border-2 rounded-lg overflow-hidden"
@@ -2298,17 +2689,24 @@ function ScrapbookTab({ tripId }) {
   );
 }
 
+export type StoredFlight = FlightData & { id: number };
+export type StoredHotel = HotelData & { id: number };
+export type StoredPacking = PackingData & { id: number; packed: boolean };
 
+type AdminTabProps = { tripId: number };
 
-function AdminTab({ tripId }) {
+function AdminTab({ tripId }: AdminTabProps) {
 
-  const [flights,setFlights]=useState([]);
-  const [hotels,setHotels]=useState([]);
-  const [packing,setPacking]=useState([]);
-  const [editingFlight,setEditingFlight]=useState(null);
-  const [editingHotel,setEditingHotel]=useState(null);
+  type AdminSubTab = "flights" | "hotels" | "packing";
 
-  const [activeSubTab,setActiveSubTab]=useState("flights");
+  const [flights, setFlights] = useState<StoredFlight[]>([]);
+  const [hotels, setHotels] = useState<StoredHotel[]>([]);
+  const [packing, setPacking] = useState<StoredPacking[]>([]);
+  const [editingFlight, setEditingFlight] = useState<StoredFlight | null>(null);
+  const [editingHotel, setEditingHotel] = useState<StoredHotel | null>(null);
+
+  const [activeSubTab, setActiveSubTab] = useState<AdminSubTab>("flights");
+
   const [showFlightDialog,setShowFlightDialog]=useState(false);
   const [showHotelDialog,setShowHotelDialog]=useState(false);
   const [showPackingDialog,setShowPackingDialog]=useState(false);
@@ -2319,7 +2717,8 @@ function AdminTab({ tripId }) {
 
   const loadAdminData=async()=>{
 
-    const load=async(prefix)=>{
+    const load = async <T,>(prefix: string): Promise<T[]> => {
+
       const result=await storage.list(`${prefix}:${tripId}:`);
       const arr=[];
 
@@ -2339,12 +2738,14 @@ function AdminTab({ tripId }) {
       return arr;
     };
 
-    setFlights(await load("flight"));
-    setHotels(await load("hotel"));
-    setPacking(await load("packing"));
+    setFlights(await load<StoredFlight>("flight"));
+    setHotels(await load<StoredHotel>("hotel"));
+    setPacking(await load<StoredPacking>("packing"));
+
   };
 
-  const addFlight = async (data) => {
+  const addFlight = async (data: FlightData) => {
+
 
     // If editing → keep same ID
     const flight = editingFlight
@@ -2372,7 +2773,8 @@ function AdminTab({ tripId }) {
 
 
 
-  const addHotel = async (data) => {
+  const addHotel = async (data: HotelData) => {
+
 
     const hotel = editingHotel
       ? { ...editingHotel, ...data }
@@ -2398,23 +2800,28 @@ function AdminTab({ tripId }) {
 
 
 
-  const addPackingItem=async(data)=>{
+  const addPackingItem = async (data: PackingData) => {
+
     const item={id:Date.now(),packed:false,...data};
     await storage.set(`packing:${tripId}:${item.id}`,item);
     await loadAdminData();
   };
 
-  const deleteFlight=async(id)=>{
+  const deleteFlight = async (id: number) => {
+
     await deleteKey(`flight:${tripId}:${id}`);
-    setFlights(prev=>prev.filter(f=>f.id!==id)); // instant UI update
+    setFlights(prev => prev.filter((f) => f.id !== id)); // instant UI update
   };
 
-  const deleteHotel=async(id)=>{
+  const deleteHotel = async (id: number) => {
+
     await deleteKey(`hotel:${tripId}:${id}`);
-    setHotels(prev=>prev.filter(h=>h.id!==id));
+    setHotels(prev => prev.filter((h) => h.id !== id));
+
   };
 
-  const togglePacked=async(id)=>{
+  const togglePacked = async (id: number) => {
+
     const item=packing.find(p=>p.id===id);
     if(!item)return;
     item.packed=!item.packed;
@@ -2422,8 +2829,9 @@ function AdminTab({ tripId }) {
     await loadAdminData();
   };
 
-  const toggleFlightStatus = async (flightId) => {
-    const flight = flights.find(f => f.id === flightId);
+  const toggleFlightStatus = async (flightId: number) => {
+
+    const flight = flights.find((f) => f.id === flightId);
     if (!flight) return;
 
     flight.status = "confirmed";
@@ -2446,8 +2854,10 @@ function AdminTab({ tripId }) {
     await loadAdminData();
   };
 
-  const toggleHotelStatus = async (hotelId) => {
-    const hotel = hotels.find(h => h.id === hotelId);
+  const toggleHotelStatus = async (hotelId: number) => {
+
+    const hotel = hotels.find((h) => h.id === hotelId);
+
     if (!hotel) return;
 
     // mark confirmed
@@ -2473,7 +2883,8 @@ function AdminTab({ tripId }) {
   };
 
   
-  const packedCount=packing.filter(p=>p.packed).length;
+  const packedCount = packing.filter((p) => p.packed).length;
+
 
   return(
 <div className="space-y-6">
@@ -2484,28 +2895,32 @@ function AdminTab({ tripId }) {
   </div>
 
   {/* SUBTABS */}
-  <div className="flex gap-2 border-b-2 border-gray-200">
-    {[
-      {id:"flights",label:"Flights",icon:Plane},
-      {id:"hotels",label:"Hotels",icon:Hotel},
-      {id:"packing",label:"Packing",icon:PackageCheck}
-    ].map(tab=>{
-      const Icon=tab.icon;
-      return(
-        <button key={tab.id}
-          onClick={()=>setActiveSubTab(tab.id)}
-          className={`flex items-center gap-2 px-4 py-3 border-b-4 ${
-            activeSubTab===tab.id
-              ?"border-gray-900 text-gray-900"
-              :"border-transparent text-gray-800 hover:text-gray-900"
-          }`}
-        >
-          <Icon size={18}/>
-          {tab.label}
-        </button>
-      );
-    })}
-  </div>
+    <div className="flex gap-2 border-b-2 border-gray-200">
+      {(
+        [
+          { id: "flights", label: "Flights", icon: Plane },
+          { id: "hotels", label: "Hotels", icon: Hotel },
+          { id: "packing", label: "Packing", icon: PackageCheck },
+        ] as { id: AdminSubTab; label: string; icon: any }[]
+      ).map((tab) => {
+        const Icon = tab.icon;
+        return (
+          <button
+            key={tab.id}
+            onClick={() => setActiveSubTab(tab.id)}
+            className={`flex items-center gap-2 px-4 py-3 border-b-4 ${
+              activeSubTab === tab.id
+                ? "border-gray-900 text-gray-900"
+                : "border-transparent text-gray-800 hover:text-gray-900"
+            }`}
+          >
+            <Icon size={18} />
+            {tab.label}
+          </button>
+        );
+      })}
+    </div>
+
 
 
 {/* ================= FLIGHTS ================= */}
@@ -2761,7 +3176,8 @@ className="w-4 h-4"
 
 {showFlightDialog && (
   <FlightDialog
-    initialData={editingFlight}
+    initialData={editingFlight ?? undefined}
+
     onClose={() => {
       setShowFlightDialog(false);
       setEditingFlight(null);
@@ -2776,7 +3192,7 @@ className="w-4 h-4"
 
 {showHotelDialog && (
   <HotelDialog
-    initialData={editingHotel}
+    initialData={editingHotel ?? undefined}
     onClose={() => {
       setShowHotelDialog(false);
       setEditingHotel(null);
