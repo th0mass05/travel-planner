@@ -13,13 +13,49 @@ import {
   Plus,
   Check,
   Star,
-  List,
   Utensils,
   ChevronLeft,
+  ExternalLink,
+  Link as LinkIcon,
+  ShoppingBag,
 } from "lucide-react";
 import { storage } from "../firebaseStore";
-import { db } from "../firebase";
-import { doc, setDoc, getDoc, onSnapshot } from "firebase/firestore";
+
+const deleteKey = async (key) => {
+  if (storage.delete) {
+    await storage.delete(key);
+  } else {
+    // Firebase fallback: overwrite with empty object instead of null
+    await storage.set(key, { __deleted: true });
+  }
+};
+
+
+
+const iconMap = {
+  flight: Plane,
+  hotel: Hotel,
+  eat: Utensils,
+  visit: MapPin,
+  activity: Clock,
+  custom: Star, // fallback for manual picks
+};
+
+
+// Helper to get all dates between start and end
+const getDatesInRange = (startDate, endDate) => {
+  const start = new Date(startDate);
+  const end = new Date(endDate);
+  const dates = [];
+
+  // Iterate from start to end date
+  let current = new Date(start);
+  while (current <= end) {
+    dates.push(new Date(current).toISOString().split("T")[0]);
+    current.setDate(current.getDate() + 1);
+  }
+  return dates;
+};
 
 // Dialog Components
 function PlaceDialog({ onClose, onAdd, type }) {
@@ -29,6 +65,7 @@ function PlaceDialog({ onClose, onAdd, type }) {
     address: "",
     rating: "",
     imageUrl: "",
+    link: "",
     visited: false,
   });
 
@@ -92,20 +129,36 @@ function PlaceDialog({ onClose, onAdd, type }) {
           </div>
           <div>
             <label className="block text-sm font-medium mb-1">
-              Rating (optional)
+              Website Link (optional)
             </label>
             <input
-              type="number"
-              step="0.1"
-              min="0"
-              max="5"
-              value={formData.rating}
+              type="url"
+              value={formData.link}
               onChange={(e) =>
-                setFormData({ ...formData, rating: e.target.value })
+                setFormData({ ...formData, link: e.target.value })
               }
               className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg focus:border-gray-900 outline-none"
-              placeholder="e.g., 4.5"
+              placeholder="https://..."
             />
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium mb-1">
+                Rating (optional)
+              </label>
+              <input
+                type="number"
+                step="0.1"
+                min="0"
+                max="5"
+                value={formData.rating}
+                onChange={(e) =>
+                  setFormData({ ...formData, rating: e.target.value })
+                }
+                className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg focus:border-gray-900 outline-none"
+                placeholder="e.g., 4.5"
+              />
+            </div>
           </div>
           <div>
             <label className="block text-sm font-medium mb-1">
@@ -246,15 +299,21 @@ function PhotoDialog({ onClose, onAdd }) {
   );
 }
 
-function FlightDialog({ onClose, onAdd }) {
-  const [formData, setFormData] = useState({
+function FlightDialog({ onClose, onAdd, initialData })
+ {
+  const [formData, setFormData] = useState(
+  initialData || {
     airline: "",
     flightNumber: "",
     departure: "",
     arrival: "",
     date: "",
     time: "",
-  });
+    link: "",
+    status: "potential",
+  }
+);
+
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
@@ -341,6 +400,59 @@ function FlightDialog({ onClose, onAdd }) {
               />
             </div>
           </div>
+          <div>
+            <label className="block text-sm font-medium mb-1">Price (optional)</label>
+            <input
+              type="text"
+              value={formData.price}
+              onChange={(e)=>
+                setFormData({...formData, price:e.target.value})
+              }
+              className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg"
+              placeholder="e.g., £650"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium mb-1">Details (optional)</label>
+            <textarea
+              value={formData.details}
+              onChange={(e)=>
+                setFormData({...formData, details:e.target.value})
+              }
+              className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg"
+              rows="2"
+              placeholder="Seat, baggage, terminal, notes..."
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium mb-1">
+              Booking Link (optional)
+            </label>
+            <input
+              type="url"
+              value={formData.link}
+              onChange={(e) =>
+                setFormData({ ...formData, link: e.target.value })
+              }
+              className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg focus:border-gray-900 outline-none"
+              placeholder="https://..."
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium mb-1">Status</label>
+            <select
+              value={formData.status}
+              onChange={(e) =>
+                setFormData({ ...formData, status: e.target.value })
+              }
+              className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg focus:border-gray-900 outline-none"
+            >
+              <option value="potential">Potential Option</option>
+              <option value="confirmed">Confirmed</option>
+            </select>
+          </div>
           <div className="flex gap-3 pt-4">
             <button
               onClick={() => onAdd(formData)}
@@ -361,14 +473,20 @@ function FlightDialog({ onClose, onAdd }) {
   );
 }
 
-function HotelDialog({ onClose, onAdd }) {
-  const [formData, setFormData] = useState({
+function HotelDialog({ onClose, onAdd, initialData })
+ {
+  const [formData, setFormData] = useState(
+  initialData || {
     name: "",
     address: "",
     checkIn: "",
     checkOut: "",
     confirmationNumber: "",
-  });
+    link: "",
+    status: "potential",
+  }
+);
+
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
@@ -438,6 +556,59 @@ function HotelDialog({ onClose, onAdd }) {
               className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg focus:border-gray-900 outline-none"
               placeholder="e.g., ABC123456"
             />
+          </div>
+          <div>
+            <label className="block text-sm font-medium mb-1">Price (optional)</label>
+            <input
+              type="text"
+              value={formData.price}
+              onChange={(e)=>
+                setFormData({...formData, price:e.target.value})
+              }
+              className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg"
+              placeholder="e.g., £1200 total"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium mb-1">Details (optional)</label>
+            <textarea
+              value={formData.details}
+              onChange={(e)=>
+                setFormData({...formData, details:e.target.value})
+              }
+              className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg"
+              rows="2"
+              placeholder="Room type, breakfast included, notes..."
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium mb-1">
+              Booking Link (optional)
+            </label>
+            <input
+              type="url"
+              value={formData.link}
+              onChange={(e) =>
+                setFormData({ ...formData, link: e.target.value })
+              }
+              className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg focus:border-gray-900 outline-none"
+              placeholder="https://..."
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium mb-1">Status</label>
+            <select
+              value={formData.status}
+              onChange={(e) =>
+                setFormData({ ...formData, status: e.target.value })
+              }
+              className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg focus:border-gray-900 outline-none"
+            >
+              <option value="potential">Potential Option</option>
+              <option value="confirmed">Confirmed</option>
+            </select>
           </div>
           <div className="flex gap-3 pt-4">
             <button
@@ -519,12 +690,109 @@ function PackingDialog({ onClose, onAdd }) {
   );
 }
 
+function ShoppingDialog({ onClose, onAdd }) {
+  const [formData, setFormData] = useState({
+    item: "",
+    category: "",
+    link: "",
+    notes: "",
+  });
+
+  const handleSubmit = () => {
+    if (!formData.item) return;
+    onAdd({
+      ...formData,
+      category: formData.category || "General", // Default if empty
+    });
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+      <div className="bg-white rounded-lg max-w-md w-full p-6">
+        <h3 className="text-2xl font-serif mb-4">Add Shopping Item</h3>
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium mb-1">Item Name</label>
+            <input
+              type="text"
+              value={formData.item}
+              onChange={(e) =>
+                setFormData({ ...formData, item: e.target.value })
+              }
+              className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg focus:border-gray-900 outline-none"
+              placeholder="e.g., Kapital T-shirt"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium mb-1">Category</label>
+            <input
+              type="text"
+              value={formData.category}
+              onChange={(e) =>
+                setFormData({ ...formData, category: e.target.value })
+              }
+              className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg focus:border-gray-900 outline-none"
+              placeholder="e.g., Clothing, Beauty, Souvenirs"
+            />
+            <p className="text-xs text-gray-500 mt-1">
+              Type a new category or use an existing one.
+            </p>
+          </div>
+          <div>
+            <label className="block text-sm font-medium mb-1">
+              Link (optional)
+            </label>
+            <input
+              type="url"
+              value={formData.link}
+              onChange={(e) =>
+                setFormData({ ...formData, link: e.target.value })
+              }
+              className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg focus:border-gray-900 outline-none"
+              placeholder="https://..."
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium mb-1">
+              Notes (optional)
+            </label>
+            <textarea
+              value={formData.notes}
+              onChange={(e) =>
+                setFormData({ ...formData, notes: e.target.value })
+              }
+              className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg focus:border-gray-900 outline-none"
+              rows="2"
+              placeholder="Size, color, store location..."
+            />
+          </div>
+          <div className="flex gap-3 pt-4">
+            <button
+              onClick={handleSubmit}
+              className="flex-1 px-4 py-3 bg-gray-900 text-white rounded-lg hover:bg-gray-800"
+            >
+              Add to List
+            </button>
+            <button
+              onClick={onClose}
+              className="px-4 py-3 bg-white border-2 border-gray-300 rounded-lg hover:border-gray-400"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function ActivityDialog({ onClose, onAdd }) {
   const [formData, setFormData] = useState({
     time: "",
     activity: "",
     location: "",
     notes: "",
+    iconType: "activity",
   });
 
   return (
@@ -567,6 +835,23 @@ function ActivityDialog({ onClose, onAdd }) {
               placeholder="Where?"
             />
           </div>
+          <div>
+            <label className="block text-sm font-medium mb-1">Icon</label>
+            <select
+              value={formData.iconType}
+              onChange={(e)=>
+                setFormData({...formData, iconType:e.target.value})
+              }
+              className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg"
+            >
+              <option value="activity">General Activity</option>
+              <option value="visit">Place to Visit</option>
+              <option value="eat">Restaurant / Food</option>
+              <option value="flight">Flight</option>
+              <option value="hotel">Hotel</option>
+            </select>
+          </div>
+
           <div>
             <label className="block text-sm font-medium mb-1">
               Notes (optional)
@@ -763,6 +1048,97 @@ function NewTripDialog({ onClose, onCreate }) {
     </div>
   );
 }
+
+function ConfirmToItineraryDialog({ onClose, onConfirm, title }) {
+  const [date, setDate] = useState("");
+  const [time, setTime] = useState("");
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+      <div className="bg-white rounded-lg max-w-sm w-full p-6">
+        <h3 className="text-xl font-serif mb-4">Confirm "{title}"</h3>
+
+        <div className="space-y-4">
+          <div>
+            <label className="text-sm font-medium">Date</label>
+            <input
+              type="date"
+              className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg"
+              value={date}
+              onChange={(e)=>setDate(e.target.value)}
+            />
+          </div>
+
+          <div>
+            <label className="text-sm font-medium">Time</label>
+            <input
+              type="time"
+              className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg"
+              value={time}
+              onChange={(e)=>setTime(e.target.value)}
+            />
+          </div>
+
+          <div className="flex gap-3 pt-2">
+            <button
+              onClick={()=>onConfirm(date,time)}
+              className="flex-1 bg-gray-900 text-white py-2 rounded-lg"
+            >
+              Confirm
+            </button>
+
+            <button
+              onClick={onClose}
+              className="px-4 py-2 border rounded-lg"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+
+const addToItineraryStorage = async (
+  tripId,
+  date,
+  time,
+  activity,
+  location,
+  notes = "",
+  iconType = "activity"
+) => {
+  if (!date) return;
+
+  const key = `itinerary:${tripId}:date:${date}`;
+
+  // load existing day (if any)
+  const existing = await storage.get(key);
+  let targetDay = null;
+
+  if (existing?.value) {
+    targetDay = JSON.parse(existing.value);
+  } else {
+    targetDay = { date, items: [] };
+  }
+
+  targetDay.items.push({
+    id: Date.now(),
+    time,
+    activity,
+    location,
+    notes,
+    iconType
+  });
+
+  targetDay.items.sort((a, b) => (a.time || "").localeCompare(b.time || ""));
+
+  await storage.set(key, targetDay);
+};
+
+
 
 export default function TravelJournal() {
   const [currentView, setCurrentView] = useState("home");
@@ -1044,11 +1420,12 @@ function TripView({ trip, onBack }) {
 
       <div className="bg-white border-b-2 border-gray-200 sticky top-0 z-10">
         <div className="max-w-7xl mx-auto px-8">
-          <div className="flex gap-8">
+          <div className="flex gap-8 overflow-x-auto">
             {[
               { id: "itinerary", label: "Itinerary", icon: Calendar },
               { id: "places-visit", label: "Places to Visit", icon: MapPin },
               { id: "places-eat", label: "Places to Eat", icon: Utensils },
+              { id: "shopping", label: "Shopping", icon: ShoppingBag },
               { id: "photos", label: "Photos", icon: Camera },
               { id: "scrapbook", label: "Scrapbook", icon: Sparkles },
               { id: "admin", label: "Admin", icon: PackageCheck },
@@ -1058,7 +1435,7 @@ function TripView({ trip, onBack }) {
                 <button
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id)}
-                  className={`flex items-center gap-2 px-4 py-4 border-b-4 transition-colors ${
+                  className={`flex items-center gap-2 px-4 py-4 border-b-4 transition-colors whitespace-nowrap ${
                     activeTab === tab.id
                       ? "border-gray-900 text-gray-900"
                       : "border-transparent text-gray-800 hover:text-gray-900"
@@ -1074,13 +1451,14 @@ function TripView({ trip, onBack }) {
       </div>
 
       <div className="max-w-7xl mx-auto px-8 py-8">
-        {activeTab === "itinerary" && <ItineraryTab tripId={trip.id} />}
+        {activeTab === "itinerary" && <ItineraryTab trip={trip} />}
         {activeTab === "places-visit" && (
           <PlacesTab tripId={trip.id} type="visit" />
         )}
         {activeTab === "places-eat" && (
           <PlacesTab tripId={trip.id} type="eat" />
         )}
+        {activeTab === "shopping" && <ShoppingTab tripId={trip.id} />}
         {activeTab === "photos" && <PhotosTab tripId={trip.id} />}
         {activeTab === "scrapbook" && <ScrapbookTab tripId={trip.id} />}
         {activeTab === "admin" && <AdminTab tripId={trip.id} />}
@@ -1089,57 +1467,114 @@ function TripView({ trip, onBack }) {
   );
 }
 
-function ItineraryTab({ tripId }) {
+function ItineraryTab({ trip }) {
   const [days, setDays] = useState([]);
-  const [currentDay, setCurrentDay] = useState(0);
+  const [currentDayIndex, setCurrentDayIndex] = useState(0);
   const [showAddDialog, setShowAddDialog] = useState(false);
 
   useEffect(() => {
     loadDays();
-  }, [tripId]);
+  }, [trip.id, trip.startDate, trip.endDate]);
 
   const loadDays = async () => {
-    const result = await storage.list(`itinerary:${tripId}:`);
-    const loadedDays = [];
+    const allDates = getDatesInRange(trip.startDate, trip.endDate);
 
-    if (result && result.keys) {
+    const result = await storage.list(`itinerary:${trip.id}:date:`);
+    const storedByDate = {};
+
+    if (result?.keys) {
       for (const key of result.keys) {
         const data = await storage.get(key);
-        if (data && data.value) {
-          loadedDays.push(JSON.parse(data.value));
+        if (data?.value) {
+          const parsed = JSON.parse(data.value);
+          storedByDate[parsed.date] = parsed;
         }
       }
     }
 
-    setDays(loadedDays.sort((a, b) => a.day - b.day));
+    const fullItinerary = allDates.map((date, index) => {
+      const dayNum = index + 1;
+      const stored = storedByDate[date];
+      return {
+        day: dayNum,
+        date,
+        items: stored?.items ?? [],
+      };
+    });
+
+    setDays(fullItinerary);
   };
 
+
   const addActivity = async (dayNum, activity) => {
-    const dayKey = `itinerary:${tripId}:day${dayNum}`;
-    let dayData = await storage.get(dayKey);
+    const dayData = days.find((d) => d.day === dayNum);
+    const date = dayData?.date;
+    if (!date) return;
 
-    if (!dayData || !dayData.value) {
-      dayData = { day: dayNum, date: "", items: [] };
-    } else {
-      dayData = JSON.parse(dayData.value);
-    }
+    const key = `itinerary:${trip.id}:date:${date}`;
 
-    dayData.items.push({ id: Date.now(), ...activity });
-    await storage.set(dayKey, dayData);
+    // Load existing stored data
+    const existing = await storage.get(key);
+    const parsed = existing?.value
+      ? JSON.parse(existing.value)
+      : { date, items: [] };
+
+    // Add the new activity
+    const updatedItems = [
+      ...(parsed.items || []),
+      {
+        id: Date.now(),
+        ...activity,
+        iconType: activity.iconType || "activity",
+      },
+    ];
+
+    // 🔥 SORT BY TIME (earliest first, no-time last)
+    updatedItems.sort((a, b) => {
+      const ta = a.time || "99:99";
+      const tb = b.time || "99:99";
+      return ta.localeCompare(tb);
+    });
+
+    const newDayData = {
+      date,
+      items: updatedItems,
+    };
+
+    await storage.set(key, newDayData);
     await loadDays();
   };
 
-  const currentDayData = days[currentDay] || { items: [] };
+
+
+  // Safe access to current day
+  const currentDayData = days[currentDayIndex] || {
+    day: 1,
+    date: "",
+    items: [],
+  };
+
+  const deleteActivity = async (date, activityId) => {
+    const key = `itinerary:${trip.id}:date:${date}`;
+    const existing = await storage.get(key);
+    if (!existing?.value) return;
+
+    const parsed = JSON.parse(existing.value);
+
+    parsed.items = parsed.items.filter(i => i.id !== activityId);
+
+    await storage.set(key, parsed);
+    await loadDays();
+  };
+
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-3xl font-serif text-gray-900">
-            Today's Itinerary
-          </h2>
+          <h2 className="text-3xl font-serif text-gray-900">Itinerary</h2>
           <p className="text-gray-800 mt-1">
-            {currentDayData.date} • Day {currentDay + 1}
+            {currentDayData.date} • Day {currentDayData.day}
           </p>
         </div>
         <div className="flex gap-3">
@@ -1153,18 +1588,22 @@ function ItineraryTab({ tripId }) {
         </div>
       </div>
 
+      {/* Scrollable Day Tabs */}
       <div className="flex gap-2 overflow-x-auto pb-2">
         {days.map((day, index) => (
           <button
             key={day.day}
-            onClick={() => setCurrentDay(index)}
+            onClick={() => setCurrentDayIndex(index)}
             className={`px-4 py-2 rounded-full border-2 transition-all whitespace-nowrap ${
-              currentDay === index
+              currentDayIndex === index
                 ? "bg-rose-500 text-white border-rose-500"
                 : "bg-white text-gray-700 border-gray-200 hover:border-rose-300"
             }`}
           >
             Day {day.day}
+            <span className="ml-2 text-xs opacity-70 block sm:inline sm:ml-2">
+              {day.date}
+            </span>
           </button>
         ))}
       </div>
@@ -1172,7 +1611,7 @@ function ItineraryTab({ tripId }) {
       {currentDayData.items.length === 0 ? (
         <div className="text-center py-20 bg-white rounded-lg border-2 border-dashed border-gray-300">
           <p className="text-gray-700 mb-4">
-            No activities planned for this day yet
+            No activities planned for Day {currentDayData.day}
           </p>
           <button
             onClick={() => setShowAddDialog(true)}
@@ -1183,35 +1622,66 @@ function ItineraryTab({ tripId }) {
         </div>
       ) : (
         <div className="space-y-4">
-          {currentDayData.items.map((item) => (
-            <div
-              key={item.id}
-              className="bg-white border-2 border-gray-200 rounded-lg p-6 hover:border-rose-300 hover:shadow-lg transition-all"
-            >
-              <div className="flex gap-4">
-                <div className="flex-shrink-0 w-20 text-center">
-                  <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-gradient-to-br from-rose-400 to-purple-400 text-white shadow-lg">
-                    <Clock size={24} />
+          {[...currentDayData.items]
+            .sort((a, b) => {
+              const ta = a.time || "99:99";
+              const tb = b.time || "99:99";
+              return ta.localeCompare(tb);
+            })
+            .map((item) => {
+              const Icon = iconMap[item.iconType] || Clock;
+
+              return (
+                <div
+                  key={item.id}
+                  className="bg-white border-2 border-gray-200 rounded-lg p-6 hover:border-rose-300 hover:shadow-lg transition-all"
+                >
+                  <div className="flex gap-4">
+                    
+                    {/* ICON + TIME */}
+                    <div className="flex-shrink-0 w-20 text-center">
+                      <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-gradient-to-br from-rose-400 to-purple-400 text-white shadow-lg">
+                        <Icon size={24} />
+                      </div>
+                      <p className="text-lg font-semibold mt-2">
+                        {item.time || "--:--"}
+                      </p>
+                    </div>
+
+                    {/* CONTENT */}
+                    <div className="flex-1">
+                      
+                      {/* TITLE ROW WITH DELETE */}
+                      <div className="flex items-start justify-between">
+                        <h3 className="text-2xl font-serif text-gray-800 mb-2">
+                          {item.activity}
+                        </h3>
+
+                        <button
+                          onClick={() =>
+                            deleteActivity(currentDayData.date, item.id)
+                          }
+                          className="text-red-500 hover:text-red-700 text-sm ml-4"
+                        >
+                          Delete
+                        </button>
+                      </div>
+
+                      <div className="flex items-center gap-2 text-gray-800 mb-2">
+                        <MapPin size={18} />
+                        <span className="text-lg">{item.location}</span>
+                      </div>
+
+                      {item.notes && (
+                        <p className="mt-3 text-gray-700 bg-amber-50 p-3 rounded-lg italic">
+                          {item.notes}
+                        </p>
+                      )}
+                    </div>
                   </div>
-                  <p className="text-lg font-semibold mt-2">{item.time}</p>
                 </div>
-                <div className="flex-1">
-                  <h3 className="text-2xl font-serif text-gray-800 mb-2">
-                    {item.activity}
-                  </h3>
-                  <div className="flex items-center gap-2 text-gray-800 mb-2">
-                    <MapPin size={18} />
-                    <span className="text-lg">{item.location}</span>
-                  </div>
-                  {item.notes && (
-                    <p className="mt-3 text-gray-700 bg-amber-50 p-3 rounded-lg italic">
-                      {item.notes}
-                    </p>
-                  )}
-                </div>
-              </div>
-            </div>
-          ))}
+              );
+            })}
         </div>
       )}
 
@@ -1219,18 +1689,21 @@ function ItineraryTab({ tripId }) {
         <ActivityDialog
           onClose={() => setShowAddDialog(false)}
           onAdd={(activity) => {
-            addActivity(currentDay + 1, activity);
+            addActivity(currentDayIndex + 1, activity);
             setShowAddDialog(false);
           }}
         />
       )}
     </div>
   );
+
 }
 
 function PlacesTab({ tripId, type }) {
   const [places, setPlaces] = useState([]);
   const [showAddDialog, setShowAddDialog] = useState(false);
+  const [confirmingPlace,setConfirmingPlace]=useState(null);
+
 
   useEffect(() => {
     loadPlaces();
@@ -1267,12 +1740,39 @@ function PlacesTab({ tripId, type }) {
     }
   };
 
+  const confirmPlace = async (place,date,time)=>{
+    await addToItineraryStorage(
+      tripId,
+      date,
+      time,
+      place.name,
+      place.address,
+      place.description || "",
+      type === "eat" ? "eat" : "visit"
+    );
+
+    place.confirmed = true;
+
+    await storage.set(`place:${tripId}:${type}:${place.id}`,place);
+
+    setConfirmingPlace(null);
+    await loadPlaces();
+  };
+
+
   const visitedCount = places.filter((p) => p.visited).length;
   const bgColor =
     type === "eat"
       ? "from-amber-100 to-rose-100"
       : "from-green-100 to-teal-100";
   const checkColor = type === "eat" ? "bg-amber-500" : "bg-green-500";
+
+  const deletePlace = async (placeId) => {
+    await deleteKey(`place:${tripId}:${type}:${placeId}`);
+    await loadPlaces();
+  };
+
+
 
   return (
     <div className="space-y-6">
@@ -1312,14 +1812,14 @@ function PlacesTab({ tripId, type }) {
           {places.map((place) => (
             <div
               key={place.id}
-              className={`border-2 rounded-lg overflow-hidden transition-all hover:shadow-xl ${
+              className={`border-2 rounded-lg overflow-hidden transition-all hover:shadow-xl relative ${
                 place.visited
                   ? `bg-gradient-to-br ${bgColor} border-gray-300`
                   : "bg-white border-gray-200"
               }`}
             >
               {place.imageUrl && (
-                <div className="relative h-48 overflow-hidden">
+                <div className="relative h-84 w-full overflow-hidden rounded-t-lg">
                   <img
                     src={place.imageUrl}
                     alt={place.name}
@@ -1341,17 +1841,30 @@ function PlacesTab({ tripId, type }) {
                   >
                     {place.name}
                   </h3>
-                  {place.rating && (
-                    <div className="flex items-center gap-1 px-2 py-1 bg-white rounded-lg border border-gray-200">
-                      <Star
-                        size={14}
-                        className="fill-amber-400 text-amber-400"
-                      />
-                      <span className="text-sm font-medium">
-                        {place.rating}
-                      </span>
-                    </div>
-                  )}
+                  <div className="flex gap-2">
+                    {place.link && (
+                      <a
+                        href={place.link}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center justify-center w-8 h-8 rounded-full bg-gray-100 hover:bg-gray-200 text-gray-600 transition-colors"
+                        title="Visit Website"
+                      >
+                        <ExternalLink size={14} />
+                      </a>
+                    )}
+                    {place.rating && (
+                      <div className="flex items-center gap-1 px-2 py-1 bg-white rounded-lg border border-gray-200 h-8">
+                        <Star
+                          size={14}
+                          className="fill-amber-400 text-amber-400"
+                        />
+                        <span className="text-sm font-medium">
+                          {place.rating}
+                        </span>
+                      </div>
+                    )}
+                  </div>
                 </div>
                 <p className="text-gray-700 mb-4 text-sm">
                   {place.description}
@@ -1360,27 +1873,38 @@ function PlacesTab({ tripId, type }) {
                   <MapPin size={16} className="flex-shrink-0 mt-0.5" />
                   <span className="text-xs">{place.address}</span>
                 </div>
-                <div className="flex items-center gap-2 pt-4 border-t border-gray-200">
-                  <input
-                    type="checkbox"
-                    id={`visited-${place.id}`}
-                    checked={place.visited}
-                    onChange={() => toggleVisited(place.id)}
-                    className="w-4 h-4 rounded border-gray-300"
-                  />
-                  <label
-                    htmlFor={`visited-${place.id}`}
-                    className="text-sm font-medium cursor-pointer"
+                <div className="flex items-center justify-between pt-4 border-t border-gray-200">
+
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={place.visited}
+                      onChange={()=>toggleVisited(place.id)}
+                      className="w-4 h-4"
+                    />
+                    <label className="text-sm">
+                      {place.visited ? "Visited" : "Mark visited"}
+                    </label>
+                  </div>
+
+                  {!place.confirmed && (
+                    <button
+                      onClick={()=>setConfirmingPlace(place)}
+                      className="px-3 py-1 text-sm bg-gray-900 text-white rounded"
+                    >
+                      Confirm
+                    </button>
+                  )}
+
+                  <button
+                    onClick={() => deletePlace(place.id)}
+                    className="px-3 py-1 text-sm border border-red-400 text-red-500 rounded hover:bg-red-50"
                   >
-                    {place.visited
-                      ? type === "eat"
-                        ? "Tried it!"
-                        : "Visited"
-                      : type === "eat"
-                        ? "Mark as tried"
-                        : "Mark as visited"}
-                  </label>
+                    Delete
+                  </button>
+
                 </div>
+
               </div>
             </div>
           ))}
@@ -1397,8 +1921,191 @@ function PlacesTab({ tripId, type }) {
           type={type}
         />
       )}
+      {confirmingPlace && (
+        <ConfirmToItineraryDialog
+          title={confirmingPlace.name}
+          onClose={()=>setConfirmingPlace(null)}
+          onConfirm={(date,time)=>confirmPlace(confirmingPlace,date,time)}
+        />
+      )}
     </div>
   );
+  
+}
+
+function ShoppingTab({ tripId }) {
+  const [items, setItems] = useState([]);
+  const [showAddDialog, setShowAddDialog] = useState(false);
+
+  useEffect(() => {
+    loadItems();
+  }, [tripId]);
+
+  const loadItems = async () => {
+    const result = await storage.list(`shopping:${tripId}:`);
+    const loadedItems = [];
+
+    if (result && result.keys) {
+      for (const key of result.keys) {
+        const data = await storage.get(key);
+        if (data && data.value) {
+          loadedItems.push(JSON.parse(data.value));
+        }
+      }
+    }
+    // Sort by id (created time)
+    setItems(loadedItems.sort((a, b) => b.id - a.id));
+  };
+
+  const addItem = async (itemData) => {
+    const newItem = { id: Date.now(), bought: false, ...itemData };
+    await storage.set(`shopping:${tripId}:${newItem.id}`, newItem);
+    await loadItems();
+  };
+
+  const toggleBought = async (itemId) => {
+    const item = items.find((i) => i.id === itemId);
+    if (item) {
+      item.bought = !item.bought;
+      await storage.set(`shopping:${tripId}:${itemId}`, item);
+      await loadItems();
+    }
+  };
+
+  // Group items by category
+  const categories = [...new Set(items.map((i) => i.category))].sort();
+  const boughtCount = items.filter((i) => i.bought).length;
+  const deleteItem = async (id) => {
+    await deleteKey(`shopping:${tripId}:${id}`);
+    await loadItems();
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-3xl font-serif text-gray-900">Shopping List</h2>
+          <p className="text-gray-800 mt-1">
+            {boughtCount} of {items.length} items acquired
+          </p>
+        </div>
+        <button
+          onClick={() => setShowAddDialog(true)}
+          className="px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800 flex items-center gap-2"
+        >
+          <Plus size={18} />
+          Add Item
+        </button>
+      </div>
+
+      {items.length === 0 ? (
+        <div className="bg-white border-2 border-dashed border-gray-300 rounded-lg p-12 text-center">
+          <div className="w-16 h-16 rounded-full bg-teal-100 flex items-center justify-center mb-4 mx-auto">
+            <ShoppingBag size={32} className="text-teal-600" />
+          </div>
+          <h3 className="text-xl font-semibold text-gray-800 mb-2">
+            Start Your Wishlist
+          </h3>
+          <p className="text-gray-800 mb-4">
+            Keep track of souvenirs, gifts, and essentials you want to buy.
+          </p>
+          <button
+            onClick={() => setShowAddDialog(true)}
+            className="px-6 py-3 bg-gray-900 text-white rounded-lg"
+          >
+            Add First Item
+          </button>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {categories.map((category) => (
+            <div
+              key={category}
+              className="bg-white border-2 border-gray-200 rounded-lg overflow-hidden h-fit"
+            >
+              <div className="bg-gradient-to-r from-teal-50 to-blue-50 px-6 py-4 border-b border-gray-100">
+                <h3 className="font-serif text-xl text-gray-900">{category}</h3>
+              </div>
+
+              <div className="p-4 space-y-3">
+                {items
+                  .filter((item) => item.category === category)
+                  .map((item) => (
+                    <div
+                      key={item.id}
+                      className={`group flex items-start gap-3 p-3 rounded-lg border transition-all ${
+                        item.bought
+                          ? "bg-gray-50 border-gray-200"
+                          : "bg-white border-gray-200 hover:border-teal-300 hover:shadow-sm"
+                      }`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={item.bought}
+                        onChange={() => toggleBought(item.id)}
+                        className="mt-1 w-4 h-4 rounded border-gray-300 text-teal-600 focus:ring-teal-500 cursor-pointer"
+                      />
+
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between gap-2">
+                          <span
+                            className={`font-medium truncate ${
+                              item.bought
+                                ? "line-through text-gray-500"
+                                : "text-gray-900"
+                            }`}
+                          >
+                            {item.item}
+                          </span>
+
+                          <div className="flex items-center gap-2">
+                            {item.link && (
+                              <a
+                                href={item.link}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-gray-400 hover:text-teal-600 transition-colors"
+                              >
+                                <ExternalLink size={14} />
+                              </a>
+                            )}
+
+                            {/* DELETE BUTTON */}
+                            <button
+                              onClick={() => deleteItem(item.id)}
+                              className="text-red-500 hover:text-red-700 text-xs"
+                            >
+                              Delete
+                            </button>
+                          </div>
+                        </div>
+
+                        {item.notes && (
+                          <p className="text-sm text-gray-600 mt-1 break-words">
+                            {item.notes}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {showAddDialog && (
+        <ShoppingDialog
+          onClose={() => setShowAddDialog(false)}
+          onAdd={(data) => {
+            addItem(data);
+            setShowAddDialog(false);
+          }}
+        />
+      )}
+    </div>
+  );
+
 }
 
 function PhotosTab({ tripId }) {
@@ -1430,6 +2137,12 @@ function PhotosTab({ tripId }) {
     await storage.set(`photo:${tripId}:${photo.id}`, photo);
     await loadPhotos();
   };
+
+  const deletePhoto = async (photoId) => {
+    await deleteKey(`photo:${tripId}:${photoId}`);
+    await loadPhotos();
+  };
+
 
   return (
     <div className="space-y-6">
@@ -1472,17 +2185,22 @@ function PhotosTab({ tripId }) {
               key={photo.id}
               className="bg-white border-2 border-gray-200 rounded-lg overflow-hidden hover:border-purple-300 hover:shadow-2xl transition-all group"
             >
-              <div className="relative aspect-square overflow-hidden">
+              <div className="relative h-64 w-full overflow-hidden rounded-t-lg">
                 <img
                   src={photo.url}
                   alt={photo.caption}
-                  className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
+                  className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
                 />
               </div>
-              <div className="p-4">
+
+
+
+
+              <div className="p-4 flex flex-col">
                 <p className="font-medium text-gray-800 mb-2">
                   {photo.caption}
                 </p>
+
                 <div className="space-y-1 text-sm text-gray-800">
                   <div className="flex items-center gap-2">
                     <Calendar size={14} />
@@ -1492,6 +2210,16 @@ function PhotosTab({ tripId }) {
                     <MapPin size={14} />
                     <span>{photo.location}</span>
                   </div>
+                </div>
+
+                {/* DELETE BUTTON */}
+                <div className="flex justify-end mt-4">
+                  <button
+                    onClick={() => deletePhoto(photo.id)}
+                    className="text-sm text-red-500 hover:text-red-700"
+                  >
+                    Delete
+                  </button>
                 </div>
               </div>
             </div>
@@ -1510,6 +2238,7 @@ function PhotosTab({ tripId }) {
       )}
     </div>
   );
+
 }
 
 function ScrapbookTab({ tripId }) {
@@ -1546,66 +2275,21 @@ function ScrapbookTab({ tripId }) {
 
       {entries.length === 0 ? (
         <div className="bg-gradient-to-br from-purple-50 to-pink-50 border-2 border-dashed border-gray-300 rounded-lg p-12 text-center">
-          <div className="w-16 h-16 rounded-full bg-purple-100 flex items-center justify-center mb-4 mx-auto">
-            <Sparkles size={32} className="text-purple-600" />
-          </div>
-          <h3 className="text-xl font-semibold text-gray-800 mb-2">
-            Create Today's Entry
-          </h3>
-          <p className="text-gray-800 mb-4">
-            Document your experiences and memories from today's adventures
-          </p>
+          <p className="text-gray-700">No scrapbook entries yet</p>
         </div>
       ) : (
         entries.map((entry) => (
           <div
             key={entry.id}
-            className="bg-gradient-to-br from-white to-amber-50/30 border-2 rounded-lg overflow-hidden"
+            className="bg-white border-2 rounded-lg overflow-hidden"
           >
-            <div className="bg-gradient-to-r from-rose-500 to-purple-500 px-6 py-4">
-              <div className="flex items-center justify-between text-white">
-                <div className="flex items-center gap-3">
-                  <div className="w-12 h-12 rounded-full bg-white/20 flex items-center justify-center font-bold text-2xl">
-                    {entry.day}
-                  </div>
-                  <div>
-                    <h3 className="text-2xl font-serif">{entry.title}</h3>
-                    <div className="flex items-center gap-2 mt-1 opacity-90">
-                      <Calendar size={14} />
-                      <span className="text-sm">{entry.date}</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
+            <div className="px-6 py-4 bg-gradient-to-r from-rose-500 to-purple-500 text-white">
+              <h3 className="text-2xl font-serif">{entry.title}</h3>
+              <p className="text-sm opacity-80">{entry.date}</p>
             </div>
-            <div className="p-6 space-y-6">
-              <div className="prose prose-lg max-w-none">
-                <p className="text-gray-700 leading-relaxed font-serif italic">
-                  "{entry.content}"
-                </p>
-              </div>
-              {entry.locations && entry.locations.length > 0 && (
-                <div className="border-t border-gray-200 pt-4">
-                  <div className="flex items-start gap-2">
-                    <MapPin size={18} className="text-rose-500 mt-1" />
-                    <div>
-                      <h4 className="font-semibold text-gray-800 mb-2">
-                        Locations Visited
-                      </h4>
-                      <div className="flex flex-wrap gap-2">
-                        {entry.locations.map((loc, idx) => (
-                          <span
-                            key={idx}
-                            className="px-3 py-1 bg-white border border-gray-200 rounded-full text-sm"
-                          >
-                            {loc}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
+
+            <div className="p-6">
+              <p className="text-gray-700 italic">{entry.content}</p>
             </div>
           </div>
         ))
@@ -1614,356 +2298,509 @@ function ScrapbookTab({ tripId }) {
   );
 }
 
+
+
 function AdminTab({ tripId }) {
-  const [flights, setFlights] = useState([]);
-  const [hotels, setHotels] = useState([]);
-  const [packing, setPacking] = useState([]);
-  const [activeSubTab, setActiveSubTab] = useState("flights");
-  const [showFlightDialog, setShowFlightDialog] = useState(false);
-  const [showHotelDialog, setShowHotelDialog] = useState(false);
-  const [showPackingDialog, setShowPackingDialog] = useState(false);
 
-  useEffect(() => {
+  const [flights,setFlights]=useState([]);
+  const [hotels,setHotels]=useState([]);
+  const [packing,setPacking]=useState([]);
+  const [editingFlight,setEditingFlight]=useState(null);
+  const [editingHotel,setEditingHotel]=useState(null);
+
+  const [activeSubTab,setActiveSubTab]=useState("flights");
+  const [showFlightDialog,setShowFlightDialog]=useState(false);
+  const [showHotelDialog,setShowHotelDialog]=useState(false);
+  const [showPackingDialog,setShowPackingDialog]=useState(false);
+
+  useEffect(()=>{
     loadAdminData();
-  }, [tripId]);
+  },[tripId]);
 
-  const loadAdminData = async () => {
-    const flightsResult = await storage.list(`flight:${tripId}:`);
-    const loadedFlights = [];
-    if (flightsResult && flightsResult.keys) {
-      for (const key of flightsResult.keys) {
-        const data = await storage.get(key);
-        if (data && data.value) loadedFlights.push(JSON.parse(data.value));
-      }
-    }
-    setFlights(loadedFlights);
+  const loadAdminData=async()=>{
 
-    const hotelsResult = await storage.list(`hotel:${tripId}:`);
-    const loadedHotels = [];
-    if (hotelsResult && hotelsResult.keys) {
-      for (const key of hotelsResult.keys) {
-        const data = await storage.get(key);
-        if (data && data.value) loadedHotels.push(JSON.parse(data.value));
-      }
-    }
-    setHotels(loadedHotels);
+    const load=async(prefix)=>{
+      const result=await storage.list(`${prefix}:${tripId}:`);
+      const arr=[];
 
-    const packingResult = await storage.list(`packing:${tripId}:`);
-    const loadedPacking = [];
-    if (packingResult && packingResult.keys) {
-      for (const key of packingResult.keys) {
-        const data = await storage.get(key);
-        if (data && data.value) loadedPacking.push(JSON.parse(data.value));
+      if(result?.keys){
+        for(const key of result.keys){
+          const data=await storage.get(key);
+
+          // 🔥 ignore deleted / empty docs
+          if(data?.value){
+            try{
+              const parsed=JSON.parse(data.value);
+              if(parsed && parsed.id) arr.push(parsed);
+            }catch{}
+          }
+        }
       }
-    }
-    setPacking(loadedPacking);
+      return arr;
+    };
+
+    setFlights(await load("flight"));
+    setHotels(await load("hotel"));
+    setPacking(await load("packing"));
   };
 
-  const addFlight = async (flightData) => {
-    const flight = { id: Date.now(), ...flightData };
+  const addFlight = async (data) => {
+
+    // If editing → keep same ID
+    const flight = editingFlight
+      ? { ...editingFlight, ...data }
+      : { id: Date.now(), ...data };
+
     await storage.set(`flight:${tripId}:${flight.id}`, flight);
-    await loadAdminData();
-  };
 
-  const addHotel = async (hotelData) => {
-    const hotel = { id: Date.now(), ...hotelData };
-    await storage.set(`hotel:${tripId}:${hotel.id}`, hotel);
-    await loadAdminData();
-  };
-
-  const addPackingItem = async (itemData) => {
-    const item = { id: Date.now(), packed: false, ...itemData };
-    await storage.set(`packing:${tripId}:${item.id}`, item);
-    await loadAdminData();
-  };
-
-  const togglePacked = async (itemId) => {
-    const item = packing.find((p) => p.id === itemId);
-    if (item) {
-      item.packed = !item.packed;
-      await storage.set(`packing:${tripId}:${itemId}`, item);
-      await loadAdminData();
+    // itinerary logic unchanged
+    if (flight.status === "confirmed" && flight.date && flight.time) {
+      await addToItineraryStorage(
+        tripId,
+        flight.date,
+        flight.time,
+        `Flight ${flight.airline} ${flight.flightNumber}`,
+        `${flight.departure} → ${flight.arrival}`,
+        "",
+        "flight"
+      );
     }
+
+    setEditingFlight(null);
+    await loadAdminData();
   };
 
-  const packedCount = packing.filter((p) => p.packed).length;
 
-  return (
-    <div className="space-y-6">
-      <div>
-        <h2 className="text-3xl font-serif text-gray-900">
-          Trip Administration
-        </h2>
-        <p className="text-gray-800 mt-1">
-          All your important trip details in one place
-        </p>
-      </div>
 
-      <div className="flex gap-2 border-b-2 border-gray-200">
-        {[
-          { id: "flights", label: "Flights", icon: Plane },
-          { id: "hotels", label: "Hotels", icon: Hotel },
-          { id: "packing", label: "Packing", icon: PackageCheck },
-        ].map((tab) => {
-          const Icon = tab.icon;
-          return (
-            <button
-              key={tab.id}
-              onClick={() => setActiveSubTab(tab.id)}
-              className={`flex items-center gap-2 px-4 py-3 border-b-4 transition-colors ${
-                activeSubTab === tab.id
-                  ? "border-gray-900 text-gray-900"
-                  : "border-transparent text-gray-800 hover:text-gray-900"
-              }`}
-            >
-              <Icon size={18} />
-              <span>{tab.label}</span>
-            </button>
-          );
-        })}
-      </div>
+  const addHotel = async (data) => {
 
-      {activeSubTab === "flights" && (
-        <div className="space-y-4">
-          <div className="flex justify-end">
-            <button
-              onClick={() => setShowFlightDialog(true)}
-              className="px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800 flex items-center gap-2"
-            >
-              <Plus size={18} />
-              Add Flight
-            </button>
-          </div>
-          {flights.length === 0 ? (
-            <div className="text-center py-12 bg-white rounded-lg border-2 border-dashed border-gray-300">
-              <p className="text-gray-700 mb-4">No flights added yet</p>
-              <button
-                onClick={() => setShowFlightDialog(true)}
-                className="px-6 py-3 bg-gray-900 text-white rounded-lg"
-              >
-                Add Your First Flight
-              </button>
-            </div>
-          ) : (
-            flights.map((flight) => (
-              <div
-                key={flight.id}
-                className="bg-white border-2 border-gray-200 rounded-lg overflow-hidden"
-              >
-                <div className="bg-gradient-to-r from-blue-50 to-purple-50 px-6 py-4">
-                  <div className="flex items-center gap-3">
-                    <div className="p-2 bg-blue-100 rounded-lg">
-                      <Plane size={24} className="text-blue-600" />
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className="font-semibold text-lg">
-                        {flight.airline} {flight.flightNumber}
-                      </span>
-                      <span className="px-3 py-1 bg-white rounded-full text-sm border border-gray-200">
-                        {flight.departure} → {flight.arrival}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-                <div className="p-6 grid grid-cols-2 gap-6">
-                  <div className="flex items-center gap-3">
-                    <Calendar size={18} className="text-gray-600" />
-                    <div>
-                      <p className="text-sm text-gray-800">Date</p>
-                      <p className="font-semibold">{flight.date}</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <Clock size={18} className="text-gray-600" />
-                    <div>
-                      <p className="text-sm text-gray-800">Time</p>
-                      <p className="font-semibold">{flight.time}</p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            ))
-          )}
-        </div>
-      )}
+    const hotel = editingHotel
+      ? { ...editingHotel, ...data }
+      : { id: Date.now(), ...data };
 
-      {activeSubTab === "hotels" && (
-        <div className="space-y-4">
-          <div className="flex justify-end">
-            <button
-              onClick={() => setShowHotelDialog(true)}
-              className="px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800 flex items-center gap-2"
-            >
-              <Plus size={18} />
-              Add Hotel
-            </button>
-          </div>
-          {hotels.length === 0 ? (
-            <div className="text-center py-12 bg-white rounded-lg border-2 border-dashed border-gray-300">
-              <p className="text-gray-700 mb-4">No hotels added yet</p>
-              <button
-                onClick={() => setShowHotelDialog(true)}
-                className="px-6 py-3 bg-gray-900 text-white rounded-lg"
-              >
-                Add Your First Hotel
-              </button>
-            </div>
-          ) : (
-            hotels.map((hotel) => (
-              <div
-                key={hotel.id}
-                className="bg-white border-2 border-gray-200 rounded-lg overflow-hidden"
-              >
-                <div className="bg-gradient-to-r from-amber-50 to-rose-50 px-6 py-4">
-                  <div className="flex items-center gap-3">
-                    <div className="p-2 bg-amber-100 rounded-lg">
-                      <Hotel size={24} className="text-amber-600" />
-                    </div>
-                    <span className="font-semibold text-lg">{hotel.name}</span>
-                  </div>
-                </div>
-                <div className="p-6 space-y-4">
-                  <div className="flex items-start gap-3">
-                    <MapPin size={18} className="text-gray-600 mt-0.5" />
-                    <div>
-                      <p className="text-sm text-gray-800">Address</p>
-                      <p className="font-medium">{hotel.address}</p>
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-3 gap-4 pt-4 border-t border-gray-200">
-                    <div>
-                      <p className="text-sm text-gray-800">Check-in</p>
-                      <p className="font-semibold text-green-600">
-                        {hotel.checkIn}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-sm text-gray-800">Check-out</p>
-                      <p className="font-semibold text-red-600">
-                        {hotel.checkOut}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-sm text-gray-800">Confirmation</p>
-                      <p className="font-mono font-semibold text-sm">
-                        {hotel.confirmationNumber}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            ))
-          )}
-        </div>
-      )}
+    await storage.set(`hotel:${tripId}:${hotel.id}`, hotel);
 
-      {activeSubTab === "packing" && (
-        <div className="bg-white border-2 border-gray-200 rounded-lg overflow-hidden">
-          <div className="bg-gradient-to-r from-purple-50 to-pink-50 px-6 py-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-purple-100 rounded-lg">
-                  <PackageCheck size={24} className="text-purple-600" />
-                </div>
-                <span className="font-semibold text-lg">Packing List</span>
-              </div>
-              <div className="flex items-center gap-3">
-                <span className="px-4 py-1 bg-white rounded-full text-sm border border-gray-200 font-medium">
-                  {packedCount} / {packing.length} packed
-                </span>
-                <button
-                  onClick={() => setShowPackingDialog(true)}
-                  className="px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800 flex items-center gap-2"
-                >
-                  <Plus size={18} />
-                  Add Item
-                </button>
-              </div>
-            </div>
-          </div>
-          <div className="p-6">
-            {packing.length === 0 ? (
-              <div className="text-center py-12 text-gray-700">
-                <p className="mb-4">No packing items yet</p>
-                <button
-                  onClick={() => setShowPackingDialog(true)}
-                  className="px-6 py-3 bg-gray-900 text-white rounded-lg"
-                >
-                  Add First Item
-                </button>
-              </div>
-            ) : (
-              <div className="space-y-6">
-                {Array.from(new Set(packing.map((p) => p.category))).map(
-                  (category) => (
-                    <div key={category}>
-                      <h3 className="text-lg font-semibold text-gray-800 mb-3">
-                        {category}
-                      </h3>
-                      <div className="space-y-2 ml-6">
-                        {packing
-                          .filter((p) => p.category === category)
-                          .map((item) => (
-                            <div
-                              key={item.id}
-                              className={`flex items-center gap-3 p-3 rounded-lg border transition-all ${
-                                item.packed
-                                  ? "bg-green-50 border-green-200"
-                                  : "bg-white border-gray-200 hover:border-purple-300"
-                              }`}
-                            >
-                              <input
-                                type="checkbox"
-                                id={`pack-${item.id}`}
-                                checked={item.packed}
-                                onChange={() => togglePacked(item.id)}
-                                className="w-4 h-4 rounded border-gray-300"
-                              />
-                              <label
-                                htmlFor={`pack-${item.id}`}
-                                className={`flex-1 cursor-pointer ${item.packed ? "line-through text-gray-700" : "text-gray-800"}`}
-                              >
-                                {item.item}
-                              </label>
-                            </div>
-                          ))}
-                      </div>
-                    </div>
-                  ),
-                )}
-              </div>
-            )}
-          </div>
-        </div>
-      )}
+    if (hotel.status === "confirmed" && hotel.checkIn) {
+      await addToItineraryStorage(
+        tripId,
+        hotel.checkIn,
+        "15:00",
+        `Check-in: ${hotel.name}`,
+        hotel.address,
+        "",
+        "hotel"
+      );
+    }
 
-      {showFlightDialog && (
-        <FlightDialog
-          onClose={() => setShowFlightDialog(false)}
-          onAdd={(data) => {
-            addFlight(data);
-            setShowFlightDialog(false);
-          }}
-        />
-      )}
-      {showHotelDialog && (
-        <HotelDialog
-          onClose={() => setShowHotelDialog(false)}
-          onAdd={(data) => {
-            addHotel(data);
-            setShowHotelDialog(false);
-          }}
-        />
-      )}
-      {showPackingDialog && (
-        <PackingDialog
-          onClose={() => setShowPackingDialog(false)}
-          onAdd={(data) => {
-            addPackingItem(data);
-            setShowPackingDialog(false);
-          }}
-        />
-      )}
+    setEditingHotel(null);
+    await loadAdminData();
+  };
+
+
+
+  const addPackingItem=async(data)=>{
+    const item={id:Date.now(),packed:false,...data};
+    await storage.set(`packing:${tripId}:${item.id}`,item);
+    await loadAdminData();
+  };
+
+  const deleteFlight=async(id)=>{
+    await deleteKey(`flight:${tripId}:${id}`);
+    setFlights(prev=>prev.filter(f=>f.id!==id)); // instant UI update
+  };
+
+  const deleteHotel=async(id)=>{
+    await deleteKey(`hotel:${tripId}:${id}`);
+    setHotels(prev=>prev.filter(h=>h.id!==id));
+  };
+
+  const togglePacked=async(id)=>{
+    const item=packing.find(p=>p.id===id);
+    if(!item)return;
+    item.packed=!item.packed;
+    await storage.set(`packing:${tripId}:${id}`,item);
+    await loadAdminData();
+  };
+
+  const toggleFlightStatus = async (flightId) => {
+    const flight = flights.find(f => f.id === flightId);
+    if (!flight) return;
+
+    flight.status = "confirmed";
+
+    await storage.set(`flight:${tripId}:${flightId}`, flight);
+
+    // 🔥 ADD TO ITINERARY WHEN CONFIRMED
+    if (flight.date && flight.time) {
+      await addToItineraryStorage(
+        tripId,
+        flight.date,
+        flight.time,
+        `Flight ${flight.airline} ${flight.flightNumber}`,
+        `${flight.departure} → ${flight.arrival}`,
+        "",
+        "flight"
+      );
+    }
+
+    await loadAdminData();
+  };
+
+  const toggleHotelStatus = async (hotelId) => {
+    const hotel = hotels.find(h => h.id === hotelId);
+    if (!hotel) return;
+
+    // mark confirmed
+    hotel.status = "confirmed";
+
+    // save updated hotel
+    await storage.set(`hotel:${tripId}:${hotelId}`, hotel);
+
+    // 🔥 ADD CHECK-IN TO ITINERARY
+    if (hotel.checkIn) {
+      await addToItineraryStorage(
+        tripId,
+        hotel.checkIn,
+        "15:00",                      // default check-in time
+        `Check-in: ${hotel.name}`,    // activity title
+        hotel.address || "",          // location
+        "",                           // notes
+        "hotel"                       // iconType
+      );
+    }
+
+    await loadAdminData();
+  };
+
+  
+  const packedCount=packing.filter(p=>p.packed).length;
+
+  return(
+<div className="space-y-6">
+
+  <div>
+    <h2 className="text-3xl font-serif text-gray-900">Trip Administration</h2>
+    <p className="text-gray-800 mt-1">All your important trip details in one place</p>
+  </div>
+
+  {/* SUBTABS */}
+  <div className="flex gap-2 border-b-2 border-gray-200">
+    {[
+      {id:"flights",label:"Flights",icon:Plane},
+      {id:"hotels",label:"Hotels",icon:Hotel},
+      {id:"packing",label:"Packing",icon:PackageCheck}
+    ].map(tab=>{
+      const Icon=tab.icon;
+      return(
+        <button key={tab.id}
+          onClick={()=>setActiveSubTab(tab.id)}
+          className={`flex items-center gap-2 px-4 py-3 border-b-4 ${
+            activeSubTab===tab.id
+              ?"border-gray-900 text-gray-900"
+              :"border-transparent text-gray-800 hover:text-gray-900"
+          }`}
+        >
+          <Icon size={18}/>
+          {tab.label}
+        </button>
+      );
+    })}
+  </div>
+
+
+{/* ================= FLIGHTS ================= */}
+{activeSubTab==="flights"&&(
+<div className="space-y-4">
+
+<div className="flex justify-end">
+<button
+onClick={()=>setShowFlightDialog(true)}
+className="px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800 flex items-center gap-2"
+>
+<Plus size={18}/> Add Flight
+</button>
+</div>
+
+{flights.length===0?(
+<div className="text-center py-12 bg-white rounded-lg border-2 border-dashed border-gray-300">
+<p className="text-gray-700">No flights added yet</p>
+</div>
+):(
+
+<div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+{flights.map(f=>(
+<div key={f.id}
+className="bg-white border-2 border-gray-200 rounded-lg p-6 hover:border-blue-300 hover:shadow-lg transition-all">
+
+<div className="flex items-start justify-between">
+
+  <div>
+    <h3 className="text-xl font-serif text-gray-800">
+      {f.airline} {f.flightNumber}
+    </h3>
+
+    <p className="text-gray-700 mt-1">
+      {f.departure} → {f.arrival}
+    </p>
+
+    <div className="text-sm text-gray-600 mt-2 space-y-1">
+
+      {f.date && <div>Date: {f.date}</div>}
+      {f.time && <div>Time: {f.time}</div>}
+      {f.price && <div className="font-medium">Price: {f.price}</div>}
+      {f.details && <div className="text-gray-500">{f.details}</div>}
+
     </div>
-  );
+
+  </div>
+
+  <div className="flex flex-col items-end gap-2">
+
+    {/* ✅ CONFIRM BUTTON */}
+    {f.status !== "confirmed" && (
+      <button
+        onClick={() => toggleFlightStatus(f.id)}
+        className="px-3 py-1 bg-amber-500 text-white rounded text-sm hover:bg-amber-600"
+      >
+        Confirm
+      </button>
+    )}
+    <button
+      onClick={()=>{
+        setEditingFlight(f);
+        setShowFlightDialog(true);
+      }}
+      className="text-blue-600 hover:text-blue-800 text-sm"
+    >
+    Edit
+    </button>
+
+    {/* DELETE */}
+    <button
+      onClick={()=>deleteFlight(f.id)}
+      className="text-red-500 hover:text-red-700 text-sm"
+    >
+      Delete
+    </button>
+
+  </div>
+
+</div>
+
+
+</div>
+))}
+</div>
+
+)}
+
+</div>
+)}
+
+
+{/* ================= HOTELS ================= */}
+{activeSubTab==="hotels"&&(
+<div className="space-y-4">
+
+<div className="flex justify-end">
+<button
+onClick={()=>setShowHotelDialog(true)}
+className="px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800 flex items-center gap-2"
+>
+<Plus size={18}/> Add Hotel
+</button>
+</div>
+
+{hotels.length===0?(
+<div className="text-center py-12 bg-white rounded-lg border-2 border-dashed border-gray-300">
+<p className="text-gray-700">No hotels added yet</p>
+</div>
+):(
+
+<div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+{hotels.map(h=>(
+<div key={h.id}
+className="bg-white border-2 border-gray-200 rounded-lg p-6 hover:border-amber-300 hover:shadow-lg transition-all">
+
+<div className="flex items-start justify-between">
+
+  <div>
+    <h3 className="text-xl font-serif text-gray-800">
+      {h.name}
+    </h3>
+
+    {h.address && (
+      <p className="text-gray-700 mt-1">{h.address}</p>
+    )}
+
+    <div className="text-sm text-gray-600 mt-2 space-y-1">
+
+      {h.checkIn && <div>Check-in: {h.checkIn}</div>}
+      {h.checkOut && <div>Check-out: {h.checkOut}</div>}
+      {h.price && <div className="font-medium">Price: {h.price}</div>}
+      {h.details && <div className="text-gray-500">{h.details}</div>}
+
+    </div>
+
+  </div>
+
+  <div className="flex flex-col items-end gap-2">
+
+    {/* ✅ CONFIRM BUTTON */}
+    {h.status !== "confirmed" && (
+      <button
+        onClick={() => toggleHotelStatus(h.id)}
+        className="px-3 py-1 bg-amber-500 text-white rounded text-sm hover:bg-amber-600"
+      >
+        Confirm
+      </button>
+    )}
+    <button
+      onClick={()=>{
+        setEditingHotel(h);
+        setShowHotelDialog(true);
+      }}
+      className="text-blue-600 hover:text-blue-800 text-sm"
+    >
+    Edit
+    </button>
+
+    <button
+      onClick={()=>deleteHotel(h.id)}
+      className="text-red-500 hover:text-red-700 text-sm"
+    >
+      Delete
+    </button>
+
+  </div>
+
+</div>
+
+
+</div>
+))}
+</div>
+
+)}
+
+</div>
+)}
+
+
+{/* ================= PACKING ================= */}
+{activeSubTab==="packing"&&(
+
+<div className="space-y-6">
+
+<div className="flex justify-between items-center">
+<div className="font-medium">
+{packedCount}/{packing.length} packed
+</div>
+
+<button
+onClick={()=>setShowPackingDialog(true)}
+className="px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800 flex items-center gap-2"
+>
+<Plus size={18}/> Add Item
+</button>
+</div>
+
+
+{packing.length===0?(
+<div className="text-center py-12 bg-white rounded-lg border-2 border-dashed border-gray-300">
+<p className="text-gray-700">No packing items yet</p>
+</div>
+):(
+
+Array.from(new Set(packing.map(p=>p.category))).map(category=>(
+<div key={category}
+className="bg-white border-2 border-gray-200 rounded-lg overflow-hidden">
+
+<div className="bg-gray-50 px-6 py-3 border-b border-gray-200">
+<h3 className="font-serif text-lg text-gray-900">{category}</h3>
+</div>
+
+<div className="p-4 space-y-2">
+
+{packing
+.filter(p=>p.category===category)
+.map(item=>(
+<div key={item.id}
+className={`flex items-center gap-3 p-3 rounded-lg border ${
+item.packed
+? "bg-gray-50 border-gray-200"
+: "bg-white border-gray-200 hover:border-purple-300"
+}`}
+>
+
+<input
+type="checkbox"
+checked={item.packed}
+onChange={()=>togglePacked(item.id)}
+className="w-4 h-4"
+/>
+
+<span className={item.packed?"line-through text-gray-500":"text-gray-800"}>
+{item.item}
+</span>
+
+</div>
+))}
+
+</div>
+
+</div>
+))
+
+)}
+
+</div>
+
+)}
+{/* ===== DIALOGS ===== */}
+
+{showFlightDialog && (
+  <FlightDialog
+    initialData={editingFlight}
+    onClose={() => {
+      setShowFlightDialog(false);
+      setEditingFlight(null);
+    }}
+    onAdd={(data) => {
+      addFlight(data);
+      setShowFlightDialog(false);
+    }}
+  />
+)}
+
+
+{showHotelDialog && (
+  <HotelDialog
+    initialData={editingHotel}
+    onClose={() => {
+      setShowHotelDialog(false);
+      setEditingHotel(null);
+    }}
+    onAdd={(data) => {
+      addHotel(data);
+      setShowHotelDialog(false);
+    }}
+  />
+)}
+
+
+{showPackingDialog && (
+  <PackingDialog
+    onClose={() => setShowPackingDialog(false)}
+    onAdd={(data) => {
+      addPackingItem(data);
+      setShowPackingDialog(false);
+    }}
+  />
+)}
+
+</div>
+);
+
 }
+
