@@ -8,9 +8,10 @@ import { db } from "../firebase";   // adjust path if needed
 import {doc, getDoc, setDoc} from "firebase/firestore";
 import useUserName from "./hooks/useUserName";
 import CreatorBadge from "./hooks/CreatorBadge";
+import { formatDistanceToNow } from "date-fns";
 
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   Calendar,
   MapPin,
@@ -28,9 +29,12 @@ import {
   ExternalLink,
   Link as LinkIcon,
   ShoppingBag,
+  Wallet,
+  Train,
 } from "lucide-react";
 import { storage } from "../firebaseStore";
 import { exp } from "firebase/firestore/pipelines";
+import { actionAsyncStorage } from "next/dist/server/app-render/action-async-storage.external";
 
 const deleteKey = async (key: string) => {
   try {
@@ -49,6 +53,30 @@ const deleteKey = async (key: string) => {
 };
 
 
+export type TransportData = {
+  type: string;
+  code?: string;
+  departure: string;
+  arrival: string;
+  date?: string;
+  time?: string;
+  price?: string;
+  link?: string;
+  details?: string;
+  status?: "potential" | "confirmed";
+
+};
+
+
+export type StoredTransport = TransportData & {
+  id:number;
+  createdByUid?:string|null;
+  createdAt?:string;
+  cost?:string;
+  paidBy?:{uid:string,amount:number}[];
+};
+
+
 export type PlaceType = "eat" | "visit";
 
 export type PlaceData = {
@@ -63,7 +91,7 @@ export type PlaceData = {
 
   visited: boolean;
   confirmed?: boolean;
-
+  createdAt?: string;        // ISO date string
   createdByUid?: string | null;
 };
 
@@ -93,6 +121,7 @@ export type FlightData = {
 
   price?: string;
   details?: string;
+  createdAt?: string;
   createdByUid?: string | null;
 
 };
@@ -111,6 +140,7 @@ export type HotelData = {
   price?: string;      // NEW
   details?: string;    // NEW
   createdByUid?: string | null;
+  createdAt?: string;
 
 };
 
@@ -119,6 +149,8 @@ export type PackingData = {
   category: string;
   item: string;
   packed?: boolean;
+  createdByUid?: string | null;
+  createdAt?: string;
 };
 
 export type ShoppingData = {
@@ -129,6 +161,7 @@ export type ShoppingData = {
   link?: string;
   notes?: string;
   createdByUid?: string | null;
+  createdAt?: string;
 };
 
 
@@ -138,6 +171,7 @@ export type ActivityData = {
   location: string;
   notes?: string;
   iconType: string;
+  createdAt?: string;
 };
 
 export type View = "home" | "trip";
@@ -172,7 +206,9 @@ const iconMap = {
   eat: Utensils,
   visit: MapPin,
   activity: Clock,
-  custom: Star, // fallback for manual picks
+  custom: Star,
+  transport: Train,
+   // fallback for manual picks
 };
 
 
@@ -499,7 +535,8 @@ function FlightDialog({ onClose, onAdd, initialData }: FlightDialogProps) {
       link: "",
       status: "potential",
       price: "",
-      details: ""
+      details: "",
+      createdAt: new Date().toISOString(),
     }
   );
 
@@ -683,6 +720,7 @@ function HotelDialog({ onClose, onAdd, initialData }: HotelDialogProps) {
       status: "potential",
       price: "",      // NEW
       details: "",    // NEW
+      createdAt: new Date().toISOString(),
     }
   );
 
@@ -840,6 +878,7 @@ function PackingDialog({ onClose, onAdd }: PackingDialogProps) {
   const [formData, setFormData] = useState<PackingData>({
     category: "Clothing",
     item: "",
+    createdAt: new Date().toISOString(),
   });
 
   return (
@@ -908,6 +947,7 @@ function ShoppingDialog({ onClose, onAdd }: ShoppingDialogProps) {
     category: "",
     link: "",
     notes: "",
+    createdAt: new Date().toISOString(),
   });
 
   const handleSubmit = () => {
@@ -1010,6 +1050,7 @@ function ActivityDialog({ onClose, onAdd }: ActivityDialogProps) {
     location: "",
     notes: "",
     iconType: "activity",
+    createdAt: new Date().toISOString(),
   });
 
   return (
@@ -1353,7 +1394,7 @@ function ConfirmToItineraryDialog({
 }
 
 
-type IconType = "activity" | "visit" | "eat" | "flight" | "hotel";
+type IconType = "activity" | "visit" | "eat" | "flight" | "hotel" | "transport";
 
 type ItineraryItem = {
   id: number;
@@ -1363,6 +1404,7 @@ type ItineraryItem = {
   notes: string;
   iconType: IconType;
   createdByUid?: string | null;
+  createdAt?: string;
 };
 
 type ItineraryDay = {
@@ -1438,11 +1480,13 @@ function FlightCard({
             {flight.airline} {flight.flightNumber}
           </h3>
 
-          {creatorName && (
+          {flight.createdAt && (
             <div className="text-xs text-gray-500 mt-1">
-              Added by {creatorName}
+              Added by {creatorName || "Unknown"} •{" "}
+              {formatDistanceToNow(new Date(flight.createdAt), { addSuffix: true })}
             </div>
           )}
+
 
           <p className="text-gray-700 mt-1">
             {flight.departure} → {flight.arrival}
@@ -1926,11 +1970,67 @@ type TabId =
   | "shopping"
   | "photos"
   | "scrapbook"
-  | "admin";
+  | "admin"
+  | "budget";
 
 
 function TripView({ trip, onBack }: TripViewProps) {
   const [activeTab, setActiveTab] = useState<TabId>("itinerary");
+  const [summary, setSummary] = useState({
+    flights: 0,
+    hotels: 0,
+    activities: 0,
+    places: 0,
+    photos: 0
+  });
+  const loadSummary = async () => {
+
+    const count = async (prefix: string) => {
+      const res = await storage.list(prefix);
+      return res?.keys?.length || 0;
+    };
+
+    const flightCount = await count(`flight:${trip.id}:`);
+    const hotelCount = await count(`hotel:${trip.id}:`);
+    const photoCount = await count(`photo:${trip.id}:`);
+
+    // places = eat + visit
+    const eatCount = await count(`place:${trip.id}:eat:`);
+    const visitCount = await count(`place:${trip.id}:visit:`);
+
+    // activities = sum of all itinerary days
+    const itineraryRes = await storage.list(`itinerary:${trip.id}:date:`);
+    let activityCount = 0;
+
+    if (itineraryRes?.keys) {
+      for (const key of itineraryRes.keys) {
+        const data = await storage.get(key);
+        if (data?.value) {
+          const parsed = JSON.parse(data.value);
+          activityCount += parsed.items?.length || 0;
+        }
+      }
+    }
+
+    setSummary({
+      flights: flightCount,
+      hotels: hotelCount,
+      activities: activityCount,
+      places: eatCount + visitCount,
+      photos: photoCount
+    });
+  };
+  useEffect(() => {
+    loadSummary();
+  }, [trip.id]);
+  const dayCount =
+    Math.ceil(
+      (new Date(trip.endDate).getTime() -
+      new Date(trip.startDate).getTime())
+      / (1000 * 60 * 60 * 24)
+    ) + 1;
+
+
   const tabs: { id: TabId; label: string; icon: any }[] = [
     { id: "itinerary", label: "Itinerary", icon: Calendar },
     { id: "places-visit", label: "Places to Visit", icon: MapPin },
@@ -1939,6 +2039,7 @@ function TripView({ trip, onBack }: TripViewProps) {
     { id: "photos", label: "Photos", icon: Camera },
     { id: "scrapbook", label: "Scrapbook", icon: Sparkles },
     { id: "admin", label: "Admin", icon: PackageCheck },
+    { id: "budget", label: "Budget", icon: Wallet },
   ];
   return (
     <div className="min-h-screen bg-[#f5f1e8]">
@@ -1965,14 +2066,39 @@ function TripView({ trip, onBack }: TripViewProps) {
                 />
               )}
             </div>
+
             <div>
-              <h1 className="text-4xl font-serif text-gray-900">
+              <h1 className="text-4xl font-serif text-gray-900 leading-tight">
                 {trip.destination} Trip {trip.year}
               </h1>
-              <p className="text-gray-800 italic mt-2">
-                {trip.startDate} - {trip.endDate}
+
+              <p className="text-gray-600 mt-1 font-light tracking-wide">
+                {trip.startDate} — {trip.endDate}
               </p>
+              <div className="mt-3 text-sm text-gray-600 font-medium tracking-wide">
+
+                <span>{dayCount} days</span>
+
+                <span className="mx-2 text-gray-300">•</span>
+                <span>{summary.flights} flights</span>
+
+                <span className="mx-2 text-gray-300">•</span>
+                <span>{summary.hotels} hotels</span>
+
+                <span className="mx-2 text-gray-300">•</span>
+                <span>{summary.activities} activities</span>
+
+                <span className="mx-2 text-gray-300">•</span>
+                <span>{summary.places} places</span>
+
+                <span className="mx-2 text-gray-300">•</span>
+                <span>{summary.photos} photos</span>
+
+              </div>
+
             </div>
+            
+
           </div>
         </div>
       </div>
@@ -2014,6 +2140,7 @@ function TripView({ trip, onBack }: TripViewProps) {
         {activeTab === "photos" && <PhotosTab tripId={trip.id} />}
         {activeTab === "scrapbook" && <ScrapbookTab tripId={trip.id} />}
         {activeTab === "admin" && <AdminTab tripId={trip.id} />}
+        {activeTab === "budget" && <BudgetTab tripId={trip.id} />}
       </div>
     </div>
   );
@@ -2091,6 +2218,7 @@ function ItineraryTab({ trip }: ItineraryTabProps) {
       time: activity.time || "",
       createdByUid: auth.currentUser?.uid || null,
       iconType: (activity.iconType ?? "activity") as IconType,
+      createdAt: new Date().toISOString(),
     };
 
     const updatedItems = [
@@ -2229,7 +2357,15 @@ function ItineraryTab({ trip }: ItineraryTabProps) {
                           {item.activity}
                         </h3>
 
-                        <CreatorBadge uid={item.createdByUid}/>
+                        <div className="flex flex-col items-end text-right">
+                          <CreatorBadge uid={item.createdByUid}/>
+                          {item.createdAt && (
+                            <span className="text-xs text-gray-400">
+                              {formatDistanceToNow(new Date(item.createdAt), { addSuffix: true })}
+                            </span>
+                          )}
+                        </div>
+
 
 
                         <button
@@ -2276,6 +2412,12 @@ function ItineraryTab({ trip }: ItineraryTabProps) {
 
 export type StoredPlace = PlaceData & {
   id: number;
+  createdByUid?: string | null;
+  createdAt?: string;
+  cost?: number;
+  paidBy?: {
+    uid: string;
+    amount: number;}[]
 };
 
 
@@ -2290,6 +2432,8 @@ function PlacesTab({ tripId, type }: PlacesTabProps) {
 
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [confirmingPlace, setConfirmingPlace] = useState<StoredPlace | null>(null);
+  const [costDialogPlace, setCostDialogPlace] = useState<StoredPlace | null>(null);
+
 
 
 
@@ -2318,22 +2462,39 @@ function PlacesTab({ tripId, type }: PlacesTabProps) {
   };
 
   const addPlace = async (placeData: Omit<PlaceData, "id">) => {
-    const place: PlaceData = { ...placeData, id: Date.now(), createdByUid: auth.currentUser?.uid || null };
+    const place: PlaceData = {
+      ...placeData,
+      id: Date.now(),
+      createdByUid: auth.currentUser?.uid || null,
+      createdAt: new Date().toISOString(),
+    };
+
 
     await storage.set(`place:${tripId}:${type}:${place.id}`, place);
     await loadPlaces();
   };
 
 
-  const toggleVisited = async (placeId: number) => {
+  const handleVisitedToggle = async (place: StoredPlace) => {
 
-    const place = places.find((p) => p.id === placeId);
-    if (place) {
-      place.visited = !place.visited;
-      await storage.set(`place:${tripId}:${type}:${placeId}`, place);
+    // ===== UNVISIT =====
+    if (place.visited) {
+
+      const updated = { ...place, visited:false };
+      delete updated.cost;
+      delete updated.paidBy;
+
+      await storage.set(`place:${tripId}:${type}:${place.id}`, updated);
       await loadPlaces();
+      return;
     }
+
+    // ===== VISIT =====
+    // open cost dialog FIRST
+    setCostDialogPlace(place);
   };
+
+
 
   const confirmPlace = async (
       place: StoredPlace,
@@ -2442,7 +2603,15 @@ function PlacesTab({ tripId, type }: PlacesTabProps) {
                   >
                     {place.name}
                   </h3>
-                  <CreatorBadge uid={place.createdByUid}/>
+                  <div className="flex flex-col items-end text-right">
+                    <CreatorBadge uid={place.createdByUid}/>
+                    {place.createdAt && (
+                      <span className="text-xs text-gray-400">
+                        {formatDistanceToNow(new Date(place.createdAt), { addSuffix: true })}
+                      </span>
+                    )}
+                  </div>
+
                   <div className="flex gap-2">
                     {place.link && (
                       <a
@@ -2481,7 +2650,8 @@ function PlacesTab({ tripId, type }: PlacesTabProps) {
                     <input
                       type="checkbox"
                       checked={place.visited}
-                      onChange={()=>toggleVisited(place.id)}
+                      onChange={()=>handleVisitedToggle(place)}
+
                       className="w-4 h-4"
                     />
                     <label className="text-sm">
@@ -2532,6 +2702,37 @@ function PlacesTab({ tripId, type }: PlacesTabProps) {
           }
         />
       )}
+      {costDialogPlace && (
+        <CostDialog
+          item={{ item: costDialogPlace.name }}
+          tripId={tripId}
+          onClose={()=>setCostDialogPlace(null)}
+          onSave={async(cost, paidBy)=>{
+
+            const updated: StoredPlace = {
+              ...costDialogPlace!,
+              visited: true,
+              cost: Number(cost),   // ⭐ FIX HERE
+              paidBy
+            };
+
+            await storage.set(
+              `place:${tripId}:${type}:${costDialogPlace!.id}`,
+              updated
+            );
+
+            // open confirm dialog AFTER cost save
+            setConfirmingPlace(updated);
+
+            setCostDialogPlace(null);
+            await loadPlaces();
+          }}
+
+
+        />
+      )}
+
+
 
     </div>
   );
@@ -2543,27 +2744,103 @@ type ShoppingTabProps = {
 };
 
 
-function ShoppingTab({ tripId }: ShoppingTabProps) {
+// 1. Define the simple dialog component (Paste this right above ShoppingTab or inside it)
+function SimpleCostDialog({
+  itemName,
+  onClose,
+  onSave
+}: {
+  itemName: string;
+  onClose: () => void;
+  onSave: (amount: number) => void;
+}) {
+  const [cost, setCost] = useState("");
 
+  const handleSave = () => {
+    // Basic validation to ensure we save a number
+    const val = parseFloat(cost);
+    if (!isNaN(val)) {
+      onSave(val);
+    } else {
+      // If empty or invalid, just close or save 0 depending on preference
+      // Here we'll treat empty as cancel or 0
+      onSave(0);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+      <div className="bg-white rounded-xl shadow-xl w-[400px] p-6 space-y-4 animate-in fade-in zoom-in duration-200">
+        
+        <div>
+          <h3 className="text-xl font-serif text-gray-900">Item Acquired</h3>
+          <p className="text-gray-500 text-sm mt-1">
+            How much did you spend on <span className="font-semibold text-gray-900">{itemName}</span>?
+          </p>
+        </div>
+
+        <div className="relative">
+          <span className="absolute left-3 top-2.5 text-gray-500">£</span>
+          <input
+            type="number"
+            autoFocus
+            placeholder="0.00"
+            value={cost}
+            onChange={(e) => setCost(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") handleSave();
+              if (e.key === "Escape") onClose();
+            }}
+            className="w-full border-2 border-gray-200 rounded-lg pl-8 pr-3 py-2 text-lg focus:border-gray-900 outline-none transition-colors"
+          />
+        </div>
+
+        <div className="flex justify-end gap-3 pt-2">
+          <button
+            onClick={onClose}
+            className="px-4 py-2 bg-white border-2 border-gray-200 text-gray-700 rounded-lg hover:border-gray-300 transition-colors"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleSave}
+            className="px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition-colors"
+          >
+            Save
+          </button>
+        </div>
+
+      </div>
+    </div>
+  );
+}
+
+// 2. The Updated ShoppingTab
+function ShoppingTab({ tripId }: { tripId: number }) {
   type ShoppingItem = ShoppingData & {
     id: number;
     bought: boolean;
+    cost?: number; 
+    createdByUid?: string | null;
+    createdAt?: string;
   };
 
   const [items, setItems] = useState<ShoppingItem[]>([]);
-
-
-
   const [showAddDialog, setShowAddDialog] = useState(false);
+  
+  // Track which item we are currently marking as bought
+  const [buyingItem, setBuyingItem] = useState<ShoppingItem | null>(null);
 
   useEffect(() => {
     loadItems();
   }, [tripId]);
 
   const loadItems = async () => {
-    const result = await storage.list(`shopping:${tripId}:`);
-    const loadedItems: ShoppingItem[] = [];
+    const user = auth.currentUser;
+    if (!user) return;
 
+    const result = await storage.list(`shopping:${tripId}:user:${user.uid}:`);
+    const loadedItems: ShoppingItem[] = [];
 
     if (result && result.keys) {
       for (const key of result.keys) {
@@ -2573,47 +2850,84 @@ function ShoppingTab({ tripId }: ShoppingTabProps) {
         }
       }
     }
-    // Sort by id (created time)
     setItems(loadedItems.sort((a, b) => b.id - a.id));
   };
 
   const addItem = async (itemData: ShoppingData) => {
+    const user = auth.currentUser;
+    if (!user) return;
 
-        const newItem: ShoppingItem = {
+    const newItem: ShoppingItem = {
       ...itemData,
       id: Date.now(),
       bought: false,
-      createdByUid: auth.currentUser?.uid || null,
+      createdByUid: user.uid,
+      createdAt: new Date().toISOString(),
     };
 
-    await storage.set(`shopping:${tripId}:${newItem.id}`, newItem);
+    await storage.set(
+      `shopping:${tripId}:user:${user.uid}:${newItem.id}`,
+      newItem
+    );
     await loadItems();
   };
 
-  const toggleBought = async (itemId: number) => {
+  const deleteItem = async (id: number) => {
+    const user = auth.currentUser;
+    if (!user) return;
+    await deleteKey(`shopping:${tripId}:user:${user.uid}:${id}`);
+    await loadItems();
+  };
 
-    const item = items.find((i) => i.id === itemId);
-    if (item) {
-      item.bought = !item.bought;
-      await storage.set(`shopping:${tripId}:${itemId}`, item);
+  const handleToggleClick = async (item: ShoppingItem) => {
+    const user = auth.currentUser;
+    if (!user) return;
+
+    // If currently bought -> Unbuy immediately (remove cost)
+    if (item.bought) {
+      const updated = { ...item, bought: false };
+      delete updated.cost;
+
+      await storage.set(
+        `shopping:${tripId}:user:${user.uid}:${item.id}`,
+        updated
+      );
       await loadItems();
+    } else {
+      // If currently NOT bought -> Open the Simple Cost Dialog
+      setBuyingItem(item);
     }
+  };
+
+  const saveCost = async (amount: number) => {
+    if (!buyingItem) return;
+    const user = auth.currentUser;
+    if (!user) return;
+
+    const updated: ShoppingItem = {
+      ...buyingItem,
+      bought: true,
+      cost: amount
+    };
+
+    await storage.set(
+      `shopping:${tripId}:user:${user.uid}:${buyingItem.id}`,
+      updated
+    );
+    
+    setBuyingItem(null);
+    await loadItems();
   };
 
   // Group items by category
   const categories = [...new Set(items.map((i) => i.category))].sort();
   const boughtCount = items.filter((i) => i.bought).length;
-  const deleteItem = async (id: number) => {
-
-    await deleteKey(`shopping:${tripId}:${id}`);
-    await loadItems();
-  };
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-3xl font-serif text-gray-900">Shopping List</h2>
+          <h2 className="text-3xl font-serif text-gray-900">My Shopping List</h2>
           <p className="text-gray-800 mt-1">
             {boughtCount} of {items.length} items acquired
           </p>
@@ -2633,10 +2947,10 @@ function ShoppingTab({ tripId }: ShoppingTabProps) {
             <ShoppingBag size={32} className="text-teal-600" />
           </div>
           <h3 className="text-xl font-semibold text-gray-800 mb-2">
-            Start Your Wishlist
+            Personal Wishlist
           </h3>
           <p className="text-gray-800 mb-4">
-            Keep track of souvenirs, gifts, and essentials you want to buy.
+            Items you add here are private and only appear in your personal budget.
           </p>
           <button
             onClick={() => setShowAddDialog(true)}
@@ -2671,7 +2985,7 @@ function ShoppingTab({ tripId }: ShoppingTabProps) {
                       <input
                         type="checkbox"
                         checked={item.bought}
-                        onChange={() => toggleBought(item.id)}
+                        onChange={() => handleToggleClick(item)}
                         className="mt-1 w-4 h-4 rounded border-gray-300 text-teal-600 focus:ring-teal-500 cursor-pointer"
                       />
 
@@ -2686,9 +3000,15 @@ function ShoppingTab({ tripId }: ShoppingTabProps) {
                           >
                             {item.item}
                           </span>
-                          <CreatorBadge uid={item.createdByUid}/>
-
+                          
                           <div className="flex items-center gap-2">
+                            {/* Show cost if bought */}
+                            {item.bought && item.cost !== undefined && (
+                                <span className="text-xs font-semibold text-teal-700 bg-teal-100 px-2 py-0.5 rounded">
+                                    {item.cost === 0 ? "Free" : `£${item.cost}`}
+                                </span>
+                            )}
+
                             {item.link && (
                               <a
                                 href={item.link}
@@ -2699,8 +3019,6 @@ function ShoppingTab({ tripId }: ShoppingTabProps) {
                                 <ExternalLink size={14} />
                               </a>
                             )}
-
-                            {/* DELETE BUTTON */}
                             <button
                               onClick={() => deleteItem(item.id)}
                               className="text-red-500 hover:text-red-700 text-xs"
@@ -2733,10 +3051,184 @@ function ShoppingTab({ tripId }: ShoppingTabProps) {
           }}
         />
       )}
+
+      {buyingItem && (
+        <SimpleCostDialog
+          itemName={buyingItem.item}
+          onClose={() => setBuyingItem(null)}
+          onSave={saveCost}
+        />
+      )}
     </div>
   );
-
 }
+
+
+function CostDialog({
+  item,
+  tripId,
+  onClose,
+  onSave
+}:{
+  item:{ item:string },
+  tripId:number,
+  onClose:()=>void,
+  onSave:(cost:string, paidBy:{uid:string,amount:number}[])=>void
+}){
+  const [noCost,setNoCost] = useState(false);
+
+  const [cost,setCost]=useState("");
+  const [members,setMembers]=useState<string[]>([]);
+  const [selected,setSelected]=useState<string[]>([]);
+  const [mode,setMode]=useState<"equal"|"custom">("equal");
+  const [custom,setCustom]=useState<Record<string,string>>({});
+
+  useEffect(()=>{
+    const load=async()=>{
+      const t=await storage.get(`trip:${tripId}`);
+      if(t?.value){
+        const trip=JSON.parse(t.value);
+        setMembers(trip.members||[]);
+      }
+    };
+    load();
+  },[tripId]);
+
+  const toggle=(uid:string)=>{
+    setSelected(s=>s.includes(uid)?s.filter(u=>u!==uid):[...s,uid]);
+  };
+
+  const save = async () => {
+
+    if(!noCost && !cost) return;
+
+    const numericCost = noCost ? 0 : Number(cost || 0);
+
+    let paidBy:{uid:string;amount:number}[] = [];
+
+    if(!noCost){
+
+      if(mode==="equal"){
+
+        const each = numericCost / selected.length;
+
+        paidBy = selected.map(uid=>({
+          uid,
+          amount:each
+        }));
+
+      }else{
+
+        paidBy = selected.map(uid=>({
+          uid,
+          amount:Number(custom[uid] || 0)
+        }));
+
+      }
+
+    }
+
+    await onSave(
+      String(numericCost),
+      paidBy
+    );
+
+  };
+
+
+  return(
+  <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+    <div className="bg-white rounded-xl shadow-xl w-[460px] p-6 space-y-5">
+      
+      <h3 className="text-xl font-serif">Add cost</h3>
+      <label className="flex items-center gap-2 text-sm font-medium">
+        <input
+          type="checkbox"
+          checked={noCost}
+          onChange={(e)=>setNoCost(e.target.checked)}
+        />
+        No cost
+      </label>
+
+
+      <input
+        type="number"
+        placeholder="Total cost"
+        value={noCost ? "0" : cost}
+        disabled={noCost}
+        onChange={e=>setCost(e.target.value)}
+        className="w-full border-2 rounded-lg px-3 py-2 disabled:bg-gray-100"
+      />
+
+      
+      {!noCost && (
+            <div>
+
+        <p className="font-medium mb-2">Who paid?</p>
+        <div className="space-y-1">
+          {members.map(uid=>(
+            <label key={uid} className="flex gap-2 items-center">
+              <input
+                type="checkbox"
+                checked={selected.includes(uid)}
+                onChange={()=>toggle(uid)}
+              />
+              <CreatorBadge uid={uid}/>
+            </label>
+          ))}
+        </div>
+
+        <button
+          className="text-sm text-blue-600 mt-1"
+          onClick={()=>setSelected(members)}
+        >
+          Select all
+        </button>
+      </div>)}
+
+      {!noCost && (
+          <div>
+
+        <p className="font-medium mb-1">Split</p>
+
+        <label className="mr-3">
+          <input type="radio" checked={mode==="equal"} onChange={()=>setMode("equal")} />
+          Equal
+        </label>
+
+        <label>
+          <input type="radio" checked={mode==="custom"} onChange={()=>setMode("custom")} />
+          Custom
+        </label>
+      </div>)}
+
+      {!noCost && mode==="custom" && (
+        <div className="space-y-2">
+          {selected.map(uid=>(
+            <div key={uid} className="flex justify-between items-center">
+              <CreatorBadge uid={uid}/>
+              <input
+                type="number"
+                value={custom[uid]||""}
+                onChange={e=>setCustom({...custom,[uid]:e.target.value})}
+                className="border rounded px-2 py-1 w-24"
+              />
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div className="flex justify-end gap-2">
+        <button onClick={onClose} className="border px-4 py-2 rounded">Cancel</button>
+        <button onClick={save} className="bg-gray-900 text-white px-4 py-2 rounded">Save</button>
+      </div>
+
+    </div>
+  </div>
+  );
+}
+
+
 
 type PhotosTabProps = {
   tripId: number;
@@ -2746,6 +3238,8 @@ type PhotosTabProps = {
 function PhotosTab({ tripId }: PhotosTabProps) {
   type PhotoItem = PhotoData & {
     id: number;
+    createdByUid?: string | null;
+    createdAt?: string;
   };
   const [photos, setPhotos] = useState<PhotoItem[]>([]);
 
@@ -2778,6 +3272,7 @@ function PhotosTab({ tripId }: PhotosTabProps) {
     ...photoData,
     id: Date.now(),
       createdByUid: auth.currentUser?.uid || null,
+      createdAt: new Date().toISOString(),
   };
 
     await storage.set(`photo:${tripId}:${photo.id}`, photo);
@@ -2984,11 +3479,13 @@ function HotelCard({
             {hotel.name}
           </h3>
 
-          {creatorName && (
+          {hotel.createdAt && (
             <div className="text-xs text-gray-500 mt-1">
-              Added by {creatorName}
+              Added by {creatorName || "Unknown"} •{" "}
+              {formatDistanceToNow(new Date(hotel.createdAt), { addSuffix: true })}
             </div>
           )}
+
 
           {hotel.address && (
             <p className="text-gray-700 mt-1">{hotel.address}</p>
@@ -3051,8 +3548,15 @@ export type StoredPacking = PackingData & { id: number; packed: boolean };
 type AdminTabProps = { tripId: number };
 
 function AdminTab({ tripId }: AdminTabProps) {
-  
-  type AdminSubTab = "flights" | "hotels" | "packing";
+  const [costDialogFlight,setCostDialogFlight]=useState<StoredFlight|null>(null);
+  const [costDialogHotel,setCostDialogHotel]=useState<StoredHotel|null>(null);
+  const [transports,setTransports]=useState<StoredTransport[]>([]);
+  const [editingTransport,setEditingTransport]=useState<StoredTransport|null>(null);
+  const [showTransportDialog,setShowTransportDialog]=useState(false);
+  const [costDialogTransport,setCostDialogTransport]=useState<StoredTransport|null>(null);
+
+  type AdminSubTab = "flights" | "hotels" | "transport" | "packing";
+
   const [inviteEmail, setInviteEmail] = useState("");
   type PackingMode = "shared" | "personal";
 
@@ -3099,6 +3603,8 @@ function AdminTab({ tripId }: AdminTabProps) {
 
     setFlights(await load<StoredFlight>("flight"));
     setHotels(await load<StoredHotel>("hotel"));
+    setTransports(await load<StoredTransport>("transport"));
+
     const user = auth.currentUser;
     if(!user) return;
 
@@ -3122,7 +3628,9 @@ function AdminTab({ tripId }: AdminTabProps) {
       : {
           id: Date.now(),
           ...data,
-          createdByUid: user?.uid || null
+          createdByUid: user?.uid || null,
+          createdAt : new Date().toISOString(),
+
         };
 
 
@@ -3174,7 +3682,8 @@ function AdminTab({ tripId }: AdminTabProps) {
       : {
           id: Date.now(),
           ...data,
-          createdByUid: user?.uid || null
+          createdByUid: user?.uid || null,
+          createdAt : new Date().toISOString(),
         };
 
 
@@ -3215,13 +3724,47 @@ function AdminTab({ tripId }: AdminTabProps) {
     await loadAdminData();
   };
 
+  const addTransport = async (data: TransportData) => {
+
+    const user = auth.currentUser;
+
+    const transport = editingTransport
+      ? { ...editingTransport, ...data }
+      : {
+          id: Date.now(),
+          ...data,
+          createdByUid: user?.uid || null,
+          createdAt: new Date().toISOString(),
+        };
+
+    await storage.set(`transport:${tripId}:${transport.id}`, transport);
+
+    setEditingTransport(null);
+    await loadAdminData();
+  };
+
+  const deleteTransport = async(id:number)=>{
+    await deleteKey(`transport:${tripId}:${id}`);
+    setTransports(prev=>prev.filter(t=>t.id!==id));
+  };
+
+  const confirmTransport = (t:StoredTransport)=>{
+    setCostDialogTransport(t);
+  };
+
 
 
   const addPackingItem = async (data: PackingData) => {
-
-    const item={id:Date.now(),packed:false,...data};
     const user = auth.currentUser;
     if(!user) return;
+
+    const item = {
+        id: Date.now(),
+        packed:false,
+        ...data,
+        createdByUid: user?.uid || null,
+        createdAt: new Date().toISOString()
+     };
 
     const key =
       packingMode === "shared"
@@ -3358,7 +3901,9 @@ function AdminTab({ tripId }: AdminTabProps) {
   <div>
     <h2 className="text-3xl font-serif text-gray-900">Trip Administration</h2>
     <p className="text-gray-800 mt-1">All your important trip details in one place</p>
+    
   </div>
+  <p className="text-gray-800 mt-1">Invite people to your trip!</p>
   <div className="bg-white border-2 rounded-lg p-4 flex gap-2">
     <input
       type="email"
@@ -3419,6 +3964,7 @@ function AdminTab({ tripId }: AdminTabProps) {
         [
           { id: "flights", label: "Flights", icon: Plane },
           { id: "hotels", label: "Hotels", icon: Hotel },
+          { id: "transport", label: "Other Transport", icon: Train },
           { id: "packing", label: "Packing", icon: PackageCheck },
         ] as { id: AdminSubTab; label: string; icon: any }[]
       ).map((tab) => {
@@ -3466,7 +4012,7 @@ className="px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800 flex it
   <FlightCard
     key={f.id}
     flight={f}
-    onConfirm={()=>toggleFlightStatus(f.id)}
+    onConfirm={()=>setCostDialogFlight(f)}
     onEdit={()=>{
       setEditingFlight(f);
       setShowFlightDialog(true);
@@ -3507,7 +4053,7 @@ className="px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800 flex it
   <HotelCard
     key={h.id}
     hotel={h}
-    onConfirm={()=>toggleHotelStatus(h.id)}
+    onConfirm={()=>setCostDialogHotel(h)}
     onEdit={()=>{
       setEditingHotel(h);
       setShowHotelDialog(true);
@@ -3518,6 +4064,99 @@ className="px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800 flex it
 
 </div>
 
+)}
+
+</div>
+)}
+
+{activeSubTab==="transport"&&(
+<div className="space-y-4">
+
+<div className="flex justify-end">
+<button
+onClick={()=>setShowTransportDialog(true)}
+className="px-4 py-2 bg-gray-900 text-white rounded-lg flex items-center gap-2"
+>
+<Plus size={18}/> Add Transport
+</button>
+</div>
+
+{transports.length===0?(
+<div className="text-center py-12 bg-white rounded-lg border-2 border-dashed border-gray-300">
+<p className="text-gray-700">No transport added yet</p>
+</div>
+):(
+
+<div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+
+{transports.map(t=>(
+
+<div key={t.id}
+className="bg-white border-2 border-gray-200 rounded-lg p-6">
+
+<div className="flex justify-between">
+
+<div>
+<h3 className="text-xl font-serif">
+{t.type} {t.code||""}
+</h3>
+
+<p className="text-gray-700 mt-1">
+{t.departure} → {t.arrival}
+</p>
+
+<div className="text-sm text-gray-600 mt-2 space-y-1">
+{t.date && <div>Date: {t.date}</div>}
+{t.time && <div>Time: {t.time}</div>}
+{t.price && <div>Price: {t.price}</div>}
+</div>
+</div>
+
+<div className="flex flex-col gap-2">
+
+{t.status!=="confirmed" && (
+<button
+onClick={()=>confirmTransport(t)}
+className="px-3 py-1 bg-amber-500 text-white rounded text-sm"
+>
+Confirm
+</button>
+)}
+
+{t.link && (
+<button
+onClick={()=>window.open(t.link,"_blank")}
+className="px-3 py-1 bg-blue-600 text-white rounded text-sm"
+>
+Open Booking
+</button>
+)}
+
+<button
+onClick={()=>{
+setEditingTransport(t);
+setShowTransportDialog(true);
+}}
+className="text-blue-600 text-sm"
+>
+Edit
+</button>
+
+<button
+onClick={()=>deleteTransport(t.id)}
+className="text-red-500 text-sm"
+>
+Delete
+</button>
+
+</div>
+
+</div>
+</div>
+
+))}
+
+</div>
 )}
 
 </div>
@@ -3653,6 +4292,21 @@ item.packed
   />
 )}
 
+{showTransportDialog && (
+  <TransportDialog
+    initialData={editingTransport ?? undefined}
+    onClose={()=>{
+      setShowTransportDialog(false);
+      setEditingTransport(null);
+    }}
+    onAdd={(data)=>{
+      addTransport(data);
+      setShowTransportDialog(false);
+    }}
+  />
+)}
+
+
 
 {showPackingDialog && (
   <PackingDialog
@@ -3663,9 +4317,989 @@ item.packed
     }}
   />
 )}
+{costDialogFlight && (
+  <CostDialog
+    item={{ item: `${costDialogFlight.airline} ${costDialogFlight.flightNumber}` }}
+    tripId={tripId}
+    onClose={()=>setCostDialogFlight(null)}
+    onSave={async(cost,paidBy)=>{
+
+      const updated={
+        ...costDialogFlight,
+        status:"confirmed",
+        cost,
+        paidBy
+      };
+
+      await storage.set(`flight:${tripId}:${updated.id}`,updated);
+
+      // itinerary add (your existing logic)
+      if(updated.date && updated.time){
+        await addToItineraryStorage(
+          tripId,
+          updated.date,
+          updated.time,
+          `Flight ${updated.airline} ${updated.flightNumber}`,
+          `${updated.departure} → ${updated.arrival}`,
+          "",
+          "flight"
+        );
+      }
+
+      if(updated.returnDate){
+        await addToItineraryStorage(
+          tripId,
+          updated.returnDate,
+          updated.returnTime || "",
+          `Return Flight ${updated.airline} ${updated.flightNumber}`,
+          `${updated.arrival} → ${updated.departure}`,
+          "",
+          "flight"
+        );
+      }
+
+      setCostDialogFlight(null);
+      await loadAdminData();
+    }}
+  />
+)}
+{costDialogHotel && (
+  <CostDialog
+    item={{ item: costDialogHotel.name }}
+    tripId={tripId}
+    onClose={()=>setCostDialogHotel(null)}
+    onSave={async(cost,paidBy)=>{
+
+      const updated={
+        ...costDialogHotel,
+        status:"confirmed",
+        cost,
+        paidBy
+      };
+
+      await storage.set(`hotel:${tripId}:${updated.id}`,updated);
+
+      if(updated.checkIn){
+        await addToItineraryStorage(
+          tripId,
+          updated.checkIn,
+          "15:00",
+          `Check-in: ${updated.name}`,
+          updated.address || "",
+          "",
+          "hotel"
+        );
+      }
+
+      if(updated.checkOut){
+        await addToItineraryStorage(
+          tripId,
+          updated.checkOut,
+          "11:00",
+          `Check-out: ${updated.name}`,
+          updated.address || "",
+          "",
+          "hotel"
+        );
+      }
+
+      setCostDialogHotel(null);
+      await loadAdminData();
+    }}
+  />
+)}
+{costDialogTransport && (
+  <CostDialog
+    item={{ item:`${costDialogTransport.type} ${costDialogTransport.code||""}` }}
+    tripId={tripId}
+    onClose={()=>setCostDialogTransport(null)}
+    onSave={async(cost,paidBy)=>{
+
+      const updated={
+        ...costDialogTransport,
+        status:"confirmed",
+        cost,
+        paidBy
+      };
+
+      await storage.set(`transport:${tripId}:${updated.id}`,updated);
+
+      // add to itinerary
+      if(updated.date && updated.time){
+        await addToItineraryStorage(
+          tripId,
+          updated.date,
+          updated.time,
+          `${updated.type} ${updated.code||""}`,
+          `${updated.departure} → ${updated.arrival}`,
+          "",
+          "transport"
+        );
+      }
+
+      setCostDialogTransport(null);
+      await loadAdminData();
+    }}
+  />
+)}
+
+
+
 
 </div>
 );
 
 }
 
+function BudgetTab({ tripId }: { tripId: number }) {
+  type BudgetLimits = {
+    total: number;
+    accommodation: number;
+    travel: number;
+    food: number;
+    shopping: number;
+    miscellaneous: number;
+    other: number;
+  };
+
+  const [limits, setLimits] = useState<BudgetLimits>({
+    total: 0,
+    accommodation: 0,
+    travel: 0,
+    food: 0,
+    shopping: 0,
+    miscellaneous: 0,
+    other: 0,
+  });
+
+  const [editingBudget, setEditingBudget] = useState(false);
+  const [showExpenseDialog, setShowExpenseDialog] = useState(false);
+
+  type BudgetMode = "shared" | "mine";
+  const [mode, setMode] = useState<BudgetMode>("shared");
+
+  type BudgetItem = {
+    label: string;
+    amount: number;
+  };
+
+  type BudgetCategory = {
+    total: number;
+    items: BudgetItem[];
+  };
+  
+  type BudgetState = {
+    accommodation: BudgetCategory;
+    travel: BudgetCategory;
+    food: BudgetCategory;
+    shopping: BudgetCategory;
+    miscellaneous: BudgetCategory;
+    other: BudgetCategory;
+  };
+
+  const [budget, setBudget] = useState<BudgetState>({
+    accommodation: { total: 0, items: [] },
+    travel: { total: 0, items: [] },
+    food: { total: 0, items: [] },
+    shopping: { total: 0, items: [] },
+    miscellaneous: { total: 0, items: [] },
+    other: { total: 0, items: [] },
+  });
+
+  const myUid = auth.currentUser?.uid;
+
+  // ✅ FIX 1: Robust price parser that handles Numbers AND Strings
+  const parsePrice = (p?: string | number) => {
+    if (typeof p === "number") return p;
+    if (!p) return 0;
+    // robustly handle string inputs like "£1,200.00" or "$500"
+    return Number(String(p).replace(/[^\d.]/g, "")) || 0;
+  };
+
+  const getMyShare = (cost: string | number, paidBy?: { uid: string; amount: number }[]) => {
+    // If we have explicit split data, use that
+    if (paidBy && myUid) {
+      const me = paidBy.find((p) => p.uid === myUid);
+      return me?.amount || 0;
+    }
+    // Fallback: if no split data, parse the full cost
+    return parsePrice(cost);
+  };
+
+  const loadLimits = async () => {
+    try {
+      const snap = await storage.get(`budgetLimits:${tripId}:${mode}`);
+      if (snap?.value) {
+        setLimits(JSON.parse(snap.value));
+      } else {
+        // Reset limits if none found
+        setLimits({
+          total: 0,
+          accommodation: 0,
+          travel: 0,
+          food: 0,
+          shopping: 0,
+          miscellaneous: 0,
+          other: 0,
+        });
+      }
+    } catch (e) {
+      console.error("Error loading limits", e);
+    }
+  };
+
+  const loadBudget = async () => {
+    try {
+      const newBudget: BudgetState = {
+        accommodation: { total: 0, items: [] },
+        travel: { total: 0, items: [] },
+        food: { total: 0, items: [] },
+        shopping: { total: 0, items: [] },
+        miscellaneous: { total: 0, items: [] },
+        other: { total: 0, items: [] },
+      };
+
+      const addItem = (
+        cat: keyof typeof newBudget,
+        label: string,
+        cost: string | number,
+        paidBy?: any
+      ) => {
+        let amount = 0;
+
+        if (mode === "mine") {
+          // If viewing "Mine", only show what *I* paid
+          if (!myUid) return;
+          if (paidBy && Array.isArray(paidBy)) {
+             const me = paidBy.find((p: any) => p.uid === myUid);
+             if (me) amount = me.amount;
+          } 
+        } else {
+          // If viewing "Shared", show total cost
+          amount = parsePrice(cost);
+        }
+
+        if (amount > 0) {
+          newBudget[cat].total += amount;
+          newBudget[cat].items.push({ label, amount });
+        }
+      };
+
+      // ... [Keep Hotels, Flights, Transport sections exactly as they were] ...
+      // (I have omitted them here for brevity, but keep them in your code)
+      
+      // --- HOTELS ---
+      const hotelRes = await storage.list(`hotel:${tripId}:`);
+      if (hotelRes?.keys) {
+        for (const key of hotelRes.keys) {
+          const d = await storage.get(key);
+          if (d?.value) {
+            const h = JSON.parse(d.value);
+            if (h.status === "confirmed") {
+              addItem("accommodation", h.name || "Hotel", h.cost ?? h.price, h.paidBy);
+            }
+          }
+        }
+      }
+
+      // --- FLIGHTS ---
+      const flightRes = await storage.list(`flight:${tripId}:`);
+      if (flightRes?.keys) {
+        for (const key of flightRes.keys) {
+          const d = await storage.get(key);
+          if (d?.value) {
+            const f = JSON.parse(d.value);
+            if (f.status === "confirmed") {
+              addItem("travel", `${f.airline} ${f.flightNumber}`, f.cost ?? f.price, f.paidBy);
+            }
+          }
+        }
+      }
+      
+      // --- TRANSPORT ---
+      const transportRes = await storage.list(`transport:${tripId}:`);
+      if (transportRes?.keys) {
+        for (const key of transportRes.keys) {
+          const d = await storage.get(key);
+          if (d?.value) {
+            const t = JSON.parse(d.value);
+            if (t.status === "confirmed") {
+              addItem("travel", `${t.type} ${t.code || ""}`, t.cost ?? t.price, t.paidBy);
+            }
+          }
+        }
+      }
+
+      // 🔥 UPDATED SHOPPING SECTION 🔥
+      // Only load shopping if looking at "My Spending"
+      if (mode === "mine" && myUid) {
+        // Look for keys specific to this user: shopping:tripId:user:UID:
+        const shopRes = await storage.list(`shopping:${tripId}:user:${myUid}:`);
+        
+        if (shopRes?.keys) {
+          for (const key of shopRes.keys) {
+            const d = await storage.get(key);
+            if (d?.value) {
+              const s = JSON.parse(d.value);
+              // Only include if bought and has a cost
+              if (s.bought && s.cost) {
+                  // Direct add to budget (bypassing addItem split logic because it's 100% yours)
+                  newBudget.shopping.total += Number(s.cost);
+                  newBudget.shopping.items.push({ 
+                    label: s.item, 
+                    amount: Number(s.cost) 
+                  });
+              }
+            }
+          }
+        }
+      }
+
+      // ... [Keep Places and Manual Expenses sections exactly as they were] ...
+      // --- PLACES (Eat) ---
+      const eatRes = await storage.list(`place:${tripId}:eat:`);
+      if (eatRes?.keys) {
+        for (const key of eatRes.keys) {
+          const d = await storage.get(key);
+          if (d?.value) {
+            const p = JSON.parse(d.value);
+            if (p.visited && (p.cost || p.price)) {
+              addItem("food", p.name, p.cost || p.price, p.paidBy);
+            }
+          }
+        }
+      }
+
+      // --- PLACES (Visit) ---
+      const visitRes = await storage.list(`place:${tripId}:visit:`);
+      if (visitRes?.keys) {
+        for (const key of visitRes.keys) {
+          const d = await storage.get(key);
+          if (d?.value) {
+            const p = JSON.parse(d.value);
+            if (p.visited && (p.cost || p.price)) {
+              addItem("other", p.name, p.cost || p.price, p.paidBy);
+            }
+          }
+        }
+      }
+
+      // --- MANUAL EXPENSES (Shared) ---
+      if (mode === "shared") {
+        const sharedRes = await storage.list(`expense:${tripId}:shared:`);
+        if (sharedRes?.keys) {
+          for (const key of sharedRes.keys) {
+            const d = await storage.get(key);
+            if (d?.value) {
+              const e = JSON.parse(d.value);
+              addItem((e.category as keyof BudgetState) || "other", e.label, e.amount, e.paidBy);
+            }
+          }
+        }
+      }
+
+      // --- MANUAL EXPENSES (Personal) ---
+      if (mode === "mine" && myUid) {
+        const myRes = await storage.list(`expense:${tripId}:user:${myUid}:`);
+        if (myRes?.keys) {
+          for (const key of myRes.keys) {
+            const d = await storage.get(key);
+            if (d?.value) {
+              const e = JSON.parse(d.value);
+              addItem((e.category as keyof BudgetState) || "other", e.label, e.amount);
+            }
+          }
+        }
+      }
+
+      setBudget(newBudget);
+    } catch (err) {
+      console.error("Budget calculation failed:", err);
+    }
+  };
+
+  useEffect(() => {
+    loadBudget();
+    loadLimits();
+  }, [tripId, mode]);
+
+  const saveLimits = async (newLimits: BudgetLimits) => {
+    setLimits(newLimits);
+    await storage.set(`budgetLimits:${tripId}:${mode}`, newLimits);
+  };
+
+  const totalSpent = Object.values(budget).reduce((a, b) => a + b.total, 0);
+  const totalRemaining = limits.total - totalSpent;
+
+  return (
+    <div className="space-y-6">
+      <h2 className="text-3xl font-serif text-gray-900">Budget</h2>
+
+      <div className="flex gap-2 mb-4">
+        <button
+          onClick={() => setMode("shared")}
+          className={`px-3 py-1 rounded ${
+            mode === "shared" ? "bg-gray-900 text-white" : "bg-gray-200"
+          }`}
+        >
+          Trip Budget
+        </button>
+
+        <button
+          onClick={() => setMode("mine")}
+          className={`px-3 py-1 rounded ${
+            mode === "mine" ? "bg-gray-900 text-white" : "bg-gray-200"
+          }`}
+        >
+          My Spending
+        </button>
+      </div>
+
+      <div className="flex gap-2">
+        <button
+          onClick={() => setShowExpenseDialog(true)}
+          className="px-4 py-2 bg-gray-900 text-white rounded-lg"
+        >
+          Add Expense
+        </button>
+
+        <button
+          onClick={() => setEditingBudget((v) => !v)}
+          className="px-4 py-2 border rounded-lg"
+        >
+          {editingBudget ? "Done" : "Modify Budget"}
+        </button>
+      </div>
+
+      {!editingBudget && limits.total > 0 && (
+        <div className="bg-gray-50 border rounded-lg p-4 text-sm flex justify-between">
+          <span>Total budget</span>
+          <span>
+            £{limits.total.toFixed(2)}
+            <span className="text-gray-500 ml-2">
+              Remaining £{totalRemaining.toFixed(2)}
+            </span>
+          </span>
+        </div>
+      )}
+
+      {editingBudget && (
+        <div className="bg-white border-2 rounded-lg p-4 space-y-3">
+          <div className="font-semibold">Budget Limits</div>
+
+          <div className="flex justify-between items-center">
+            <span>Total budget</span>
+            <input
+              type="number"
+              value={limits.total}
+              onChange={(e) =>
+                saveLimits({ ...limits, total: Number(e.target.value) })
+              }
+              className="w-32 border rounded px-2 py-1 text-right"
+            />
+          </div>
+
+          {Object.keys(budget).map((cat) => (
+            <div key={cat} className="flex justify-between items-center">
+              <span>{cat[0].toUpperCase() + cat.slice(1)}</span>
+
+              <input
+                type="number"
+                value={limits[cat as keyof BudgetLimits]}
+                onChange={(e) =>
+                  saveLimits({
+                    ...limits,
+                    [cat]: Number(e.target.value),
+                  })
+                }
+                className="w-32 border rounded px-2 py-1 text-right"
+              />
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div className="bg-white border-2 rounded-lg p-6 space-y-6">
+        {Object.entries(budget).map(([name, data]) => (
+          <div key={name}>
+            <Row
+              label={name[0].toUpperCase() + name.slice(1)}
+              value={data.total}
+            />
+
+            {data.items.map((i, idx) => (
+              <div
+                key={idx}
+                className="ml-6 text-sm text-gray-600 flex justify-between"
+              >
+                <span>{i.label}</span>
+                <span>£{i.amount.toFixed(2)}</span>
+              </div>
+            ))}
+          </div>
+        ))}
+        {showExpenseDialog && (
+          <ExpenseDialog
+            mode={mode}
+            tripId={tripId}
+            onClose={() => setShowExpenseDialog(false)}
+            onSave={async () => {
+              setShowExpenseDialog(false);
+              await loadBudget();
+            }}
+          />
+        )}
+
+        <hr />
+
+        <Row
+          label="Total"
+          value={Object.values(budget).reduce((a, b) => a + b.total, 0)}
+        />
+      </div>
+    </div>
+  );
+}
+
+function Row({label,value}:{label:string,value:number}){
+  return(
+    <div className="flex justify-between">
+      <span>{label}</span>
+      <span>£{value.toFixed(2)}</span>
+    </div>
+  )
+}
+
+function Category({
+  title,
+  items
+}:{title:string,items:{label:string,value:number}[]}){
+
+  const total=items.reduce((s,i)=>s+i.value,0);
+
+  if(items.length===0){
+    return(
+      <div>
+        <div className="flex justify-between font-semibold">
+          <span>{title}</span>
+          <span>£0.00</span>
+        </div>
+      </div>
+    );
+  }
+
+  return(
+    <div className="space-y-2">
+
+      <div className="flex justify-between font-semibold text-lg">
+        <span>{title}</span>
+        <span>£{total.toFixed(2)}</span>
+      </div>
+
+      <div className="pl-4 space-y-1 text-sm text-gray-700">
+
+        {items.map((i,idx)=>(
+          <div key={idx} className="flex justify-between">
+            <span>{i.label}</span>
+            <span>£{i.value.toFixed(2)}</span>
+          </div>
+        ))}
+
+      </div>
+
+    </div>
+  );
+}
+
+function ExpenseDialog({
+  mode,
+  tripId,
+  onClose,
+  onSave
+}:{
+  mode:"shared"|"mine";
+  tripId:number;
+  onClose:()=>void;
+  onSave:()=>void;
+}){
+
+  const [label,setLabel]=useState("");
+  const [amount,setAmount]=useState("");
+  const [category,setCategory]=useState("other");
+
+  const [members,setMembers]=useState<{uid:string,name:string}[]>([]);
+  const [selected,setSelected]=useState<string[]>([]);
+  const [splitMode,setSplitMode]=useState<"equal"|"custom">("equal");
+  const [custom,setCustom]=useState<Record<string,string>>({});
+
+  // LOAD MEMBERS ONLY FOR SHARED MODE
+  useEffect(()=>{
+
+    const loadMembers=async()=>{
+
+      if(mode!=="shared") return;
+
+      const tripDoc=await storage.get(`trip:${tripId}`);
+      if(!tripDoc?.value) return;
+
+      const trip=JSON.parse(tripDoc.value);
+      const memberIds=trip.members || [];
+
+      const result=[];
+
+      for(const uid of memberIds){
+
+        const userSnap = await getDoc(doc(db,"users",uid));
+
+        if(userSnap.exists()){
+          const data=userSnap.data();
+          result.push({
+            uid,
+            name: data.name || data.displayName || data.email || "User"
+          });
+        }else{
+          result.push({uid,name:"User"});
+        }
+
+      }
+
+      setMembers(result);
+      setSelected(memberIds);   // default: everyone selected
+    };
+
+    loadMembers();
+
+  },[mode,tripId]);
+    const handleSave=async()=>{
+
+    if(!label || !amount) return;
+
+    let paidBy:any[]|undefined=undefined;
+
+    if(mode==="shared"){
+
+      const total=Number(amount);
+
+      if(splitMode==="equal"){
+
+        const each=total/selected.length;
+
+        paidBy=selected.map(uid=>({
+          uid,
+          amount:each
+        }));
+
+      }else{
+
+        paidBy=selected.map(uid=>({
+          uid,
+          amount:Number(custom[uid]||0)
+        }));
+      }
+    }
+
+    const expense={
+      id:Date.now(),
+      label,
+      amount,
+      category,
+      paidBy,
+      createdByUid:auth.currentUser?.uid || null,
+      createdAt:new Date().toISOString(),
+      type:"manualExpense"
+    };
+
+    const key=
+      mode==="shared"
+        ? `expense:${tripId}:shared:${expense.id}`
+        : `expense:${tripId}:user:${auth.currentUser?.uid}:${expense.id}`;
+
+    await storage.set(key,expense);
+
+    onSave();
+  };
+    return(
+  <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+
+    <div className="bg-white rounded-xl shadow-xl w-[480px] p-6 space-y-4">
+
+      <h3 className="text-xl font-serif">Add Expense</h3>
+
+      <input
+        placeholder="What was it?"
+        value={label}
+        onChange={e=>setLabel(e.target.value)}
+        className="w-full border-2 rounded-lg px-3 py-2"
+      />
+
+      <select
+        value={category}
+        onChange={e=>setCategory(e.target.value)}
+        className="w-full border-2 rounded-lg px-3 py-2"
+      >
+        <option value="accommodation">Accommodation</option>
+        <option value="travel">Travel</option>
+        <option value="food">Food</option>
+        <option value="shopping">Shopping</option>
+        <option value="miscellaneous">Miscellaneous</option>
+        <option value="other">Other</option>
+      </select>
+
+      <input
+        type="number"
+        placeholder="Cost"
+        value={amount}
+        onChange={e=>setAmount(e.target.value)}
+        className="w-full border-2 rounded-lg px-3 py-2"
+      />
+      {mode==="shared" && members.length>0 && (
+
+<div className="space-y-3 border-t pt-4">
+
+  <div className="text-sm font-medium">Who paid?</div>
+
+  <div className="flex flex-wrap gap-2">
+    {members.map(m=>(
+      <label key={m.uid} className="flex items-center gap-1 text-sm">
+        <input
+          type="checkbox"
+          checked={selected.includes(m.uid)}
+          onChange={()=>{
+            setSelected(prev =>
+              prev.includes(m.uid)
+                ? prev.filter(u=>u!==m.uid)
+                : [...prev,m.uid]
+            );
+          }}
+        />
+        {m.name}
+      </label>
+    ))}
+  </div>
+
+  <div className="flex gap-2 pt-2">
+
+    <button
+      onClick={()=>setSplitMode("equal")}
+      className={`px-3 py-1 rounded ${
+        splitMode==="equal" ? "bg-gray-900 text-white":"bg-gray-200"
+      }`}
+    >
+      Split equally
+    </button>
+
+    <button
+      onClick={()=>setSplitMode("custom")}
+      className={`px-3 py-1 rounded ${
+        splitMode==="custom" ? "bg-gray-900 text-white":"bg-gray-200"
+      }`}
+    >
+      Custom split
+    </button>
+
+  </div>
+
+  {splitMode==="custom" && selected.map(uid=>{
+    const m=members.find(x=>x.uid===uid);
+    return(
+      <div key={uid} className="flex justify-between items-center">
+        <span className="text-sm">{m?.name}</span>
+
+        <input
+          type="number"
+          placeholder="0"
+          value={custom[uid]||""}
+          onChange={e=>
+            setCustom(c=>({...c,[uid]:e.target.value}))
+          }
+          className="w-24 border rounded px-2 py-1 text-sm"
+        />
+      </div>
+    );
+  })}
+
+</div>
+
+)}
+  <div className="flex justify-end gap-2 pt-3">
+
+<button onClick={onClose} className="px-4 py-2 border rounded-lg">
+Cancel
+</button>
+
+<button onClick={handleSave} className="px-4 py-2 bg-gray-900 text-white rounded-lg">
+Save
+</button>
+
+</div>
+
+</div>
+</div>
+);
+}
+function TransportDialog({
+  initialData,
+  onClose,
+  onAdd
+}:{
+  initialData?:TransportData;
+  onClose:()=>void;
+  onAdd:(data:TransportData)=>void;
+}){
+
+  const [type,setType]=useState(initialData?.type || "");
+  const [code,setCode]=useState(initialData?.code || "");
+  const [departure,setDeparture]=useState(initialData?.departure || "");
+  const [arrival,setArrival]=useState(initialData?.arrival || "");
+  const [date,setDate]=useState(initialData?.date || "");
+  const [time,setTime]=useState(initialData?.time || "");
+  const [price,setPrice]=useState(initialData?.price || "");
+  const [link,setLink]=useState(initialData?.link || "");
+  const [details,setDetails]=useState(initialData?.details || "");
+  const [status,setStatus]=useState<"potential"|"confirmed">(initialData?.status || "potential");
+
+
+  const handleSave=()=>{
+
+    if(!type || !departure || !arrival){
+      alert("Please fill transport type, departure and arrival");
+      return;
+    }
+
+    onAdd({
+      type,
+      code,
+      departure,
+      arrival,
+      date,
+      time,
+      price,
+      link,
+      details,
+      status
+    });
+  };
+
+  return(
+    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+
+      <div className="bg-white rounded-xl shadow-xl w-[520px] max-h-[90vh] overflow-y-auto p-6 space-y-4">
+
+        <h3 className="text-2xl font-serif">
+          {initialData ? "Edit Transport" : "Add Transport"}
+        </h3>
+
+        {/* TYPE */}
+        <input
+          placeholder="Transport type (Train, Coach, Ferry...)"
+          value={type}
+          onChange={e=>setType(e.target.value)}
+          className="w-full border-2 rounded-lg px-3 py-2"
+        />
+
+        {/* CODE */}
+        <input
+          placeholder="Number / Code (optional)"
+          value={code}
+          onChange={e=>setCode(e.target.value)}
+          className="w-full border-2 rounded-lg px-3 py-2"
+        />
+
+        {/* ROUTE */}
+        <div className="grid grid-cols-2 gap-3">
+
+          <input
+            placeholder="Departure"
+            value={departure}
+            onChange={e=>setDeparture(e.target.value)}
+            className="border-2 rounded-lg px-3 py-2"
+          />
+
+          <input
+            placeholder="Arrival"
+            value={arrival}
+            onChange={e=>setArrival(e.target.value)}
+            className="border-2 rounded-lg px-3 py-2"
+          />
+
+        </div>
+
+        {/* DATE + TIME */}
+        <div className="grid grid-cols-2 gap-3">
+
+          <input
+            type="date"
+            value={date}
+            onChange={e=>setDate(e.target.value)}
+            className="border-2 rounded-lg px-3 py-2"
+          />
+
+          <input
+            type="time"
+            value={time}
+            onChange={e=>setTime(e.target.value)}
+            className="border-2 rounded-lg px-3 py-2"
+          />
+
+        </div>
+
+        {/* PRICE */}
+        <input
+          type="number"
+          placeholder="Price"
+          value={price}
+          onChange={e=>setPrice(e.target.value)}
+          className="w-full border-2 rounded-lg px-3 py-2"
+        />
+
+        {/* BOOKING LINK */}
+        <input
+          placeholder="Booking link (optional)"
+          value={link}
+          onChange={e=>setLink(e.target.value)}
+          className="w-full border-2 rounded-lg px-3 py-2"
+        />
+
+        {/* DETAILS */}
+        <textarea
+          placeholder="Details / notes"
+          value={details}
+          onChange={e=>setDetails(e.target.value)}
+          className="w-full border-2 rounded-lg px-3 py-2"
+        />
+
+        {/* STATUS */}
+        <select
+          value={status}
+          onChange={e=>setStatus(e.target.value as "potential"|"confirmed")}
+          className="w-full border-2 rounded-lg px-3 py-2"
+        >
+          <option value="potential">Potential option</option>
+          <option value="confirmed">Confirmed</option>
+        </select>
+
+
+        {/* BUTTONS */}
+        <div className="flex justify-end gap-2 pt-3">
+
+          <button
+            onClick={onClose}
+            className="px-4 py-2 border rounded-lg"
+          >
+            Cancel
+          </button>
+
+          <button
+            onClick={handleSave}
+            className="px-4 py-2 bg-gray-900 text-white rounded-lg"
+          >
+            Save
+          </button>
+
+        </div>
+
+      </div>
+
+    </div>
+  );
+}
