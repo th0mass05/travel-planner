@@ -5,6 +5,10 @@ import { auth } from "../firebase";   // adjust path if needed
 import { signOut } from "firebase/auth";
 import { collection, getDocs } from "firebase/firestore";
 import { db } from "../firebase";   // adjust path if needed
+import {doc, getDoc, setDoc} from "firebase/firestore";
+import useUserName from "./hooks/useUserName";
+import CreatorBadge from "./hooks/CreatorBadge";
+
 
 import React, { useState, useEffect } from "react";
 import {
@@ -59,6 +63,8 @@ export type PlaceData = {
 
   visited: boolean;
   confirmed?: boolean;
+
+  createdByUid?: string | null;
 };
 
 
@@ -67,6 +73,7 @@ export type PhotoData = {
   caption: string;
   date: string;        // yyyy-mm-dd
   location: string;
+  createdByUid?: string | null;
 };
 
 export type FlightData = {
@@ -86,6 +93,8 @@ export type FlightData = {
 
   price?: string;
   details?: string;
+  createdByUid?: string | null;
+
 };
 
 
@@ -101,6 +110,8 @@ export type HotelData = {
   status: "potential" | "confirmed";
   price?: string;      // NEW
   details?: string;    // NEW
+  createdByUid?: string | null;
+
 };
 
 
@@ -117,6 +128,7 @@ export type ShoppingData = {
   category: string;
   link?: string;
   notes?: string;
+  createdByUid?: string | null;
 };
 
 
@@ -149,6 +161,7 @@ type TripData = TripFormData & {
   createdAt: string;
   ownerId: string;
   members: string[];
+  createdByUid?: string | null;
   
 };
 
@@ -1349,6 +1362,7 @@ type ItineraryItem = {
   location: string;
   notes: string;
   iconType: IconType;
+  createdByUid?: string | null;
 };
 
 type ItineraryDay = {
@@ -1398,11 +1412,96 @@ const addToItineraryStorage = async (
 };
 
 
+function FlightCard({
+  flight,
+  onConfirm,
+  onEdit,
+  onDelete
+}:{
+  flight: StoredFlight;
+  onConfirm: ()=>void;
+  onEdit: ()=>void;
+  onDelete: ()=>void;
+}){
+
+  const creatorName = useUserName(flight.createdByUid);
+
+  return (
+    <div
+      className="bg-white border-2 border-gray-200 rounded-lg p-6 hover:border-blue-300 hover:shadow-lg transition-all"
+    >
+
+      <div className="flex items-start justify-between">
+
+        <div>
+          <h3 className="text-xl font-serif text-gray-800">
+            {flight.airline} {flight.flightNumber}
+          </h3>
+
+          {creatorName && (
+            <div className="text-xs text-gray-500 mt-1">
+              Added by {creatorName}
+            </div>
+          )}
+
+          <p className="text-gray-700 mt-1">
+            {flight.departure} → {flight.arrival}
+          </p>
+
+          <div className="text-sm text-gray-600 mt-2 space-y-1">
+            {flight.date && <div>Date: {flight.date}</div>}
+            {flight.time && <div>Time: {flight.time}</div>}
+            {flight.price && <div className="font-medium">Price: {flight.price}</div>}
+            {flight.details && <div className="text-gray-500">{flight.details}</div>}
+          </div>
+        </div>
+
+        <div className="flex flex-col items-end gap-2">
+
+          {flight.status !== "confirmed" && (
+            <button
+              onClick={onConfirm}
+              className="px-3 py-1 bg-amber-500 text-white rounded text-sm hover:bg-amber-600"
+            >
+              Confirm
+            </button>
+          )}
+
+          {flight.link && (
+            <button
+              onClick={()=>window.open(flight.link,"_blank")}
+              className="px-3 py-1 bg-blue-600 text-white rounded text-sm hover:bg-blue-700"
+            >
+              Open Booking
+            </button>
+          )}
+
+          <button
+            onClick={onEdit}
+            className="text-blue-600 hover:text-blue-800 text-sm"
+          >
+            Edit
+          </button>
+
+          <button
+            onClick={onDelete}
+            className="text-red-500 hover:text-red-700 text-sm"
+          >
+            Delete
+          </button>
+
+        </div>
+
+      </div>
+
+    </div>
+  );
+}
 
 
 export default function TravelJournal() {
   const router = useRouter();
-
+  const [displayName, setDisplayName] = useState("");
   const [currentView, setCurrentView] = useState("home");
   const [selectedTrip, setSelectedTrip] = useState<TripData | null>(null);
   const [trips, setTrips] = useState<TripData[]>([]);
@@ -1426,6 +1525,25 @@ export default function TravelJournal() {
 
     return unsub;
   }, []);
+
+  useEffect(() => {
+    const unsub = onAuthStateChanged(auth, async (user) => {
+      if (!user) return;
+
+      try {
+        const snap = await getDoc(doc(db, "users", user.uid));
+        if (snap.exists()) {
+          setDisplayName(snap.data().name || "");
+        }
+      } catch (e) {
+        console.error("Failed to load display name", e);
+      }
+    });
+
+    return unsub;
+  }, []);
+
+
   const loadTrips = async (uid: string) => {
     setLoading(true);
 
@@ -1476,6 +1594,7 @@ export default function TravelJournal() {
       ownerId: user.uid,
       members: [user.uid],
       createdAt: new Date().toISOString(),
+      createdByUid: user.uid,
     };
 
     await storage.set(`trip:${trip.id}`, trip);
@@ -1520,14 +1639,52 @@ export default function TravelJournal() {
       <div>
 
       {/* Logout button top right */}
-      <div className="flex justify-end p-4">
+      <div className="flex justify-end items-center gap-2 p-4">
+
+        <input
+          value={displayName}
+          onChange={(e)=>setDisplayName(e.target.value)}
+          placeholder="Your name"
+          className="border px-3 py-2 rounded-lg"
+        />
+
+        <button
+          onClick={async ()=>{
+            const user = auth.currentUser;
+            if(!user) return;
+
+            try{
+              await setDoc(
+                doc(db,"users",user.uid),
+                {
+                  email:user.email,
+                  name:displayName
+                },
+                {merge:true}
+              );
+
+              alert("Name saved ✔");   // 👈 ADD THIS
+
+            }catch(e){
+              console.error("Failed to save name",e);
+              alert("Failed to save name");
+            }
+          }}
+
+          className="px-3 py-2 bg-gray-900 text-white rounded-lg"
+        >
+          Save name
+        </button>
+
         <button
           onClick={handleLogout}
           className="px-4 py-2 border-2 border-gray-300 rounded-lg hover:border-gray-400"
         >
           Log out
         </button>
+
       </div>
+
       <HomePage
         trips={trips}
         loading={loading}
@@ -1932,6 +2089,7 @@ function ItineraryTab({ trip }: ItineraryTabProps) {
       location: activity.location,
       notes: activity.notes || "",
       time: activity.time || "",
+      createdByUid: auth.currentUser?.uid || null,
       iconType: (activity.iconType ?? "activity") as IconType,
     };
 
@@ -2067,9 +2225,12 @@ function ItineraryTab({ trip }: ItineraryTabProps) {
                       
                       {/* TITLE ROW WITH DELETE */}
                       <div className="flex items-start justify-between">
-                        <h3 className="text-2xl font-serif text-gray-800 mb-2">
+                        <h3 className="text-2xl font-serif text-gray-800 mb-1">
                           {item.activity}
                         </h3>
+
+                        <CreatorBadge uid={item.createdByUid}/>
+
 
                         <button
                           onClick={() =>
@@ -2157,7 +2318,7 @@ function PlacesTab({ tripId, type }: PlacesTabProps) {
   };
 
   const addPlace = async (placeData: Omit<PlaceData, "id">) => {
-    const place: PlaceData = { ...placeData, id: Date.now() };
+    const place: PlaceData = { ...placeData, id: Date.now(), createdByUid: auth.currentUser?.uid || null };
 
     await storage.set(`place:${tripId}:${type}:${place.id}`, place);
     await loadPlaces();
@@ -2281,6 +2442,7 @@ function PlacesTab({ tripId, type }: PlacesTabProps) {
                   >
                     {place.name}
                   </h3>
+                  <CreatorBadge uid={place.createdByUid}/>
                   <div className="flex gap-2">
                     {place.link && (
                       <a
@@ -2421,6 +2583,7 @@ function ShoppingTab({ tripId }: ShoppingTabProps) {
       ...itemData,
       id: Date.now(),
       bought: false,
+      createdByUid: auth.currentUser?.uid || null,
     };
 
     await storage.set(`shopping:${tripId}:${newItem.id}`, newItem);
@@ -2523,6 +2686,7 @@ function ShoppingTab({ tripId }: ShoppingTabProps) {
                           >
                             {item.item}
                           </span>
+                          <CreatorBadge uid={item.createdByUid}/>
 
                           <div className="flex items-center gap-2">
                             {item.link && (
@@ -2613,6 +2777,7 @@ function PhotosTab({ tripId }: PhotosTabProps) {
       const photo: PhotoItem = {
     ...photoData,
     id: Date.now(),
+      createdByUid: auth.currentUser?.uid || null,
   };
 
     await storage.set(`photo:${tripId}:${photo.id}`, photo);
@@ -2683,6 +2848,7 @@ function PhotosTab({ tripId }: PhotosTabProps) {
                 <p className="font-medium text-gray-800 mb-2">
                   {photo.caption}
                 </p>
+                <CreatorBadge uid={photo.createdByUid}/>
 
                 <div className="space-y-1 text-sm text-gray-800">
                   <div className="flex items-center gap-2">
@@ -2793,6 +2959,91 @@ function ScrapbookTab({ tripId }: ScrapbookTabProps) {
   );
 }
 
+function HotelCard({
+  hotel,
+  onConfirm,
+  onEdit,
+  onDelete
+}:{
+  hotel: StoredHotel;
+  onConfirm: ()=>void;
+  onEdit: ()=>void;
+  onDelete: ()=>void;
+}){
+
+  const creatorName = useUserName(hotel.createdByUid);
+
+  return (
+    <div
+      className="bg-white border-2 border-gray-200 rounded-lg p-6 hover:border-amber-300 hover:shadow-lg transition-all"
+    >
+      <div className="flex items-start justify-between">
+
+        <div>
+          <h3 className="text-xl font-serif text-gray-800">
+            {hotel.name}
+          </h3>
+
+          {creatorName && (
+            <div className="text-xs text-gray-500 mt-1">
+              Added by {creatorName}
+            </div>
+          )}
+
+          {hotel.address && (
+            <p className="text-gray-700 mt-1">{hotel.address}</p>
+          )}
+
+          <div className="text-sm text-gray-600 mt-2 space-y-1">
+            {hotel.checkIn && <div>Check-in: {hotel.checkIn}</div>}
+            {hotel.checkOut && <div>Check-out: {hotel.checkOut}</div>}
+            {hotel.price && <div className="font-medium">Price: {hotel.price}</div>}
+            {hotel.details && <div className="text-gray-500">{hotel.details}</div>}
+          </div>
+        </div>
+
+        <div className="flex flex-col items-end gap-2">
+
+          {hotel.status !== "confirmed" && (
+            <button
+              onClick={onConfirm}
+              className="px-3 py-1 bg-amber-500 text-white rounded text-sm hover:bg-amber-600"
+            >
+              Confirm
+            </button>
+          )}
+
+          {hotel.link && (
+            <button
+              onClick={()=>window.open(hotel.link,"_blank")}
+              className="px-3 py-1 bg-blue-600 text-white rounded text-sm hover:bg-blue-700"
+            >
+              Open Booking
+            </button>
+          )}
+
+          <button
+            onClick={onEdit}
+            className="text-blue-600 hover:text-blue-800 text-sm"
+          >
+            Edit
+          </button>
+
+          <button
+            onClick={onDelete}
+            className="text-red-500 hover:text-red-700 text-sm"
+          >
+            Delete
+          </button>
+
+        </div>
+
+      </div>
+    </div>
+  );
+}
+
+
 export type StoredFlight = FlightData & { id: number };
 export type StoredHotel = HotelData & { id: number };
 export type StoredPacking = PackingData & { id: number; packed: boolean };
@@ -2803,6 +3054,9 @@ function AdminTab({ tripId }: AdminTabProps) {
   
   type AdminSubTab = "flights" | "hotels" | "packing";
   const [inviteEmail, setInviteEmail] = useState("");
+  type PackingMode = "shared" | "personal";
+
+  const [packingMode, setPackingMode] = useState<PackingMode>("shared");
 
   const [flights, setFlights] = useState<StoredFlight[]>([]);
   const [hotels, setHotels] = useState<StoredHotel[]>([]);
@@ -2818,7 +3072,7 @@ function AdminTab({ tripId }: AdminTabProps) {
 
   useEffect(()=>{
     loadAdminData();
-  },[tripId]);
+  },[tripId, packingMode]);
 
   const loadAdminData=async()=>{
 
@@ -2845,17 +3099,32 @@ function AdminTab({ tripId }: AdminTabProps) {
 
     setFlights(await load<StoredFlight>("flight"));
     setHotels(await load<StoredHotel>("hotel"));
-    setPacking(await load<StoredPacking>("packing"));
+    const user = auth.currentUser;
+    if(!user) return;
+
+    const prefix =
+      packingMode === "shared"
+        ? `packing:${tripId}:shared`
+        : `packing:${tripId}:user:${user.uid}`;
+
+    setPacking(await load<StoredPacking>(prefix));
+
 
   };
 
   const addFlight = async (data: FlightData) => {
 
 
-    // If editing → keep same ID
+    const user = auth.currentUser;
+
     const flight = editingFlight
       ? { ...editingFlight, ...data }
-      : { id: Date.now(), ...data };
+      : {
+          id: Date.now(),
+          ...data,
+          createdByUid: user?.uid || null
+        };
+
 
     await storage.set(`flight:${tripId}:${flight.id}`, flight);
 
@@ -2898,9 +3167,16 @@ function AdminTab({ tripId }: AdminTabProps) {
   const addHotel = async (data: HotelData) => {
 
 
+    const user = auth.currentUser;
+
     const hotel = editingHotel
       ? { ...editingHotel, ...data }
-      : { id: Date.now(), ...data };
+      : {
+          id: Date.now(),
+          ...data,
+          createdByUid: user?.uid || null
+        };
+
 
     await storage.set(`hotel:${tripId}:${hotel.id}`, hotel);
 
@@ -2944,7 +3220,16 @@ function AdminTab({ tripId }: AdminTabProps) {
   const addPackingItem = async (data: PackingData) => {
 
     const item={id:Date.now(),packed:false,...data};
-    await storage.set(`packing:${tripId}:${item.id}`,item);
+    const user = auth.currentUser;
+    if(!user) return;
+
+    const key =
+      packingMode === "shared"
+        ? `packing:${tripId}:shared:${item.id}`
+        : `packing:${tripId}:user:${user.uid}:${item.id}`;
+
+    await storage.set(key,item);
+
     await loadAdminData();
   };
 
@@ -2966,7 +3251,16 @@ function AdminTab({ tripId }: AdminTabProps) {
     const item=packing.find(p=>p.id===id);
     if(!item)return;
     item.packed=!item.packed;
-    await storage.set(`packing:${tripId}:${id}`,item);
+    const user = auth.currentUser;
+    if(!user) return;
+
+    const key =
+      packingMode === "shared"
+        ? `packing:${tripId}:shared:${id}`
+        : `packing:${tripId}:user:${user.uid}:${id}`;
+
+    await storage.set(key,item);
+
     await loadAdminData();
   };
 
@@ -2993,6 +3287,25 @@ function AdminTab({ tripId }: AdminTabProps) {
     }
 
     await loadAdminData();
+  };
+  const deletePackingItem = async (id: number) => {
+
+    const user = auth.currentUser;
+    if (!user) return;
+
+    const confirmed = confirm("Delete this packing item?");
+    if (!confirmed) return;
+
+    const key =
+      packingMode === "shared"
+        ? `packing:${tripId}:shared:${id}`
+        : `packing:${tripId}:user:${user.uid}:${id}`;
+
+    await deleteKey(key);
+
+    // instant UI update (optional but nice)
+    setPacking(prev => prev.filter(p => p.id !== id));
+
   };
 
   const toggleHotelStatus = async (hotelId: number) => {
@@ -3150,77 +3463,18 @@ className="px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800 flex it
 
 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
 {flights.map(f=>(
-<div key={f.id}
-className="bg-white border-2 border-gray-200 rounded-lg p-6 hover:border-blue-300 hover:shadow-lg transition-all">
-
-<div className="flex items-start justify-between">
-
-  <div>
-    <h3 className="text-xl font-serif text-gray-800">
-      {f.airline} {f.flightNumber}
-    </h3>
-
-    <p className="text-gray-700 mt-1">
-      {f.departure} → {f.arrival}
-    </p>
-
-    <div className="text-sm text-gray-600 mt-2 space-y-1">
-
-      {f.date && <div>Date: {f.date}</div>}
-      {f.time && <div>Time: {f.time}</div>}
-      {f.price && <div className="font-medium">Price: {f.price}</div>}
-      {f.details && <div className="text-gray-500">{f.details}</div>}
-
-    </div>
-
-  </div>
-
-  <div className="flex flex-col items-end gap-2">
-
-    {/* ✅ CONFIRM BUTTON */}
-    {f.status !== "confirmed" && (
-      <button
-        onClick={() => toggleFlightStatus(f.id)}
-        className="px-3 py-1 bg-amber-500 text-white rounded text-sm hover:bg-amber-600"
-      >
-        Confirm
-      </button>
-    )}
-
-    {f.link && (
-        <button
-          onClick={() => window.open(f.link, "_blank")}
-          className="px-3 py-1 bg-blue-600 text-white rounded text-sm hover:bg-blue-700"
-        >
-          Open Booking
-        </button>
-      )}
-
-    <button
-      onClick={()=>{
-        setEditingFlight(f);
-        setShowFlightDialog(true);
-      }}
-      className="text-blue-600 hover:text-blue-800 text-sm"
-    >
-    Edit
-    </button>
-
-    {/* DELETE */}
-    <button
-      onClick={()=>deleteFlight(f.id)}
-      className="text-red-500 hover:text-red-700 text-sm"
-    >
-      Delete
-    </button>
-
-  </div>
-
-</div>
-
-
-</div>
+  <FlightCard
+    key={f.id}
+    flight={f}
+    onConfirm={()=>toggleFlightStatus(f.id)}
+    onEdit={()=>{
+      setEditingFlight(f);
+      setShowFlightDialog(true);
+    }}
+    onDelete={()=>deleteFlight(f.id)}
+  />
 ))}
+
 </div>
 
 )}
@@ -3250,75 +3504,18 @@ className="px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800 flex it
 
 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
 {hotels.map(h=>(
-<div key={h.id}
-className="bg-white border-2 border-gray-200 rounded-lg p-6 hover:border-amber-300 hover:shadow-lg transition-all">
-
-<div className="flex items-start justify-between">
-
-  <div>
-    <h3 className="text-xl font-serif text-gray-800">
-      {h.name}
-    </h3>
-
-    {h.address && (
-      <p className="text-gray-700 mt-1">{h.address}</p>
-    )}
-
-    <div className="text-sm text-gray-600 mt-2 space-y-1">
-
-      {h.checkIn && <div>Check-in: {h.checkIn}</div>}
-      {h.checkOut && <div>Check-out: {h.checkOut}</div>}
-      {h.price && <div className="font-medium">Price: {h.price}</div>}
-      {h.details && <div className="text-gray-500">{h.details}</div>}
-
-    </div>
-
-  </div>
-
-  <div className="flex flex-col items-end gap-2">
-
-    {/* ✅ CONFIRM BUTTON */}
-    {h.status !== "confirmed" && (
-      <button
-        onClick={() => toggleHotelStatus(h.id)}
-        className="px-3 py-1 bg-amber-500 text-white rounded text-sm hover:bg-amber-600"
-      >
-        Confirm
-      </button>
-    )}
-    {h.link && (
-        <button
-          onClick={() => window.open(h.link, "_blank")}
-          className="px-3 py-1 bg-blue-600 text-white rounded text-sm hover:bg-blue-700"
-        >
-          Open Booking
-        </button>
-      )}
-
-    <button
-      onClick={()=>{
-        setEditingHotel(h);
-        setShowHotelDialog(true);
-      }}
-      className="text-blue-600 hover:text-blue-800 text-sm"
-    >
-    Edit
-    </button>
-
-    <button
-      onClick={()=>deleteHotel(h.id)}
-      className="text-red-500 hover:text-red-700 text-sm"
-    >
-      Delete
-    </button>
-
-  </div>
-
-</div>
-
-
-</div>
+  <HotelCard
+    key={h.id}
+    hotel={h}
+    onConfirm={()=>toggleHotelStatus(h.id)}
+    onEdit={()=>{
+      setEditingHotel(h);
+      setShowHotelDialog(true);
+    }}
+    onDelete={()=>deleteHotel(h.id)}
+  />
 ))}
+
 </div>
 
 )}
@@ -3335,6 +3532,25 @@ className="bg-white border-2 border-gray-200 rounded-lg p-6 hover:border-amber-3
 <div className="flex justify-between items-center">
 <div className="font-medium">
 {packedCount}/{packing.length} packed
+</div>
+<div className="flex gap-2 mb-4">
+  <button
+    onClick={()=>setPackingMode("shared")}
+    className={`px-3 py-1 rounded ${
+      packingMode==="shared" ? "bg-gray-900 text-white" : "bg-gray-200"
+    }`}
+  >
+    Shared List
+  </button>
+
+  <button
+    onClick={()=>setPackingMode("personal")}
+    className={`px-3 py-1 rounded ${
+      packingMode==="personal" ? "bg-gray-900 text-white" : "bg-gray-200"
+    }`}
+  >
+    My List
+  </button>
 </div>
 
 <button
@@ -3374,15 +3590,23 @@ item.packed
 >
 
 <input
-type="checkbox"
-checked={item.packed}
-onChange={()=>togglePacked(item.id)}
-className="w-4 h-4"
+  type="checkbox"
+  checked={item.packed}
+  onChange={()=>togglePacked(item.id)}
+  className="w-4 h-4"
 />
 
-<span className={item.packed?"line-through text-gray-500":"text-gray-800"}>
-{item.item}
+<span className={item.packed?"line-through text-gray-500":"text-gray-800 flex-1"}>
+  {item.item}
 </span>
+
+<button
+  onClick={()=>deletePackingItem(item.id)}
+  className="text-red-500 hover:text-red-700 text-xs"
+>
+  Delete
+</button>
+
 
 </div>
 ))}
