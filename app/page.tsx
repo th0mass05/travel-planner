@@ -5,11 +5,11 @@ import { auth } from "../firebase";   // adjust path if needed
 import { signOut } from "firebase/auth";
 import { collection, getDocs } from "firebase/firestore";
 import { db } from "../firebase";   // adjust path if needed
-import {doc, getDoc, setDoc} from "firebase/firestore";
+import { doc, getDoc, setDoc, onSnapshot } from "firebase/firestore";
 import useUserName from "./hooks/useUserName";
 import CreatorBadge from "./hooks/CreatorBadge";
 import { formatDistanceToNow } from "date-fns";
-
+import emailjs from "@emailjs/browser";
 
 import React, { useState, useEffect, useRef } from "react";
 import {
@@ -31,10 +31,41 @@ import {
   ShoppingBag,
   Wallet,
   Train,
+  FileText, // Add this
+  Download, // Add this
+  Trash2,   // Add this (optional, for cleaner delete icons)
+  Bell,
+  BellOff,
 } from "lucide-react";
 import { storage } from "../firebaseStore";
 import { exp } from "firebase/firestore/pipelines";
 import { actionAsyncStorage } from "next/dist/server/app-render/action-async-storage.external";
+
+// Helper to generate a "Add to Google Calendar" URL
+const createGoogleCalendarLink = (
+  activity: string,
+  location: string,
+  note: string,
+  date: string,
+  time: string
+) => {
+  // Format: YYYYMMDDTHHMMSS
+  // Simple concatenation assuming local time (floating time)
+  const cleanDate = date.replace(/-/g, "");
+  const cleanTime = time ? time.replace(/:/g, "") + "00" : "090000";
+  
+  const startDateTime = `${cleanDate}T${cleanTime}`;
+  
+  // Calculate end time (default +1 hour)
+  let endHour = parseInt(cleanTime.substring(0, 2)) + 1;
+  const endDateTime = `${cleanDate}T${endHour.toString().padStart(2, "0")}${cleanTime.substring(2)}`;
+
+  const details = encodeURIComponent(`${note}\n\nAdded via Travel Journal`);
+  const text = encodeURIComponent(activity);
+  const loc = encodeURIComponent(location);
+
+  return `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${text}&dates=${startDateTime}/${endDateTime}&details=${details}&location=${loc}`;
+};
 
 const deleteKey = async (key: string) => {
   try {
@@ -67,12 +98,23 @@ export type TransportData = {
 
 };
 
+export type DocumentData = {
+  id: number;
+  name: string;
+  category: "Tickets" | "Reservations" | "Insurance" | "ID" | "Other";
+  fileUrl: string;      // Base64 string of the file
+  fileName: string;     // Original filename (e.g., "flight-ticket.pdf")
+  fileType: string;     // MIME type (e.g., "application/pdf")
+  createdByUid?: string | null;
+  createdAt?: string;
+};
 
 export type StoredTransport = TransportData & {
   id:number;
   createdByUid?:string|null;
   createdAt?:string;
   cost?:string;
+  price?: string | number; 
   paidBy?:{uid:string,amount:number}[];
 };
 
@@ -190,13 +232,25 @@ type TripFormData = {
   bgGradient: string;
 };
 
+// Add this near your other types
+export type TripSegment = {
+  id: string;
+  location: string;
+  startDate: string; // "YYYY-MM-DD"
+  endDate: string;   // "YYYY-MM-DD"
+  color: string;     // e.g., "bg-blue-100"
+};
+
+// Update TripData
 type TripData = TripFormData & {
   id: number;
   createdAt: string;
   ownerId: string;
   members: string[];
   createdByUid?: string | null;
-  
+  segments?: TripSegment[];
+  invites?: string[]; // ⭐ NEW: Stores emails of invited people
+  isPendingInvite?: boolean; // ⭐ NEW: Local helper flag for UI
 };
 
 
@@ -1424,10 +1478,9 @@ const addToItineraryStorage = async (
 ): Promise<void> => {
   if (!date) return;
 
+  // 1. Save to Database (Standard Logic)
   const key = `itinerary:${tripId}:date:${date}`;
-
   const existing = await storage.get(key);
-
   let targetDay: ItineraryDay;
 
   if (existing?.value) {
@@ -1436,21 +1489,80 @@ const addToItineraryStorage = async (
     targetDay = { day: 0, date, items: [] };
   }
 
-  targetDay.items.push({
+  const newItem = {
     id: Date.now(),
     time,
     activity,
     location,
     notes,
     iconType
-  });
+  };
 
-  // 🔥 FIXES a & b implicit any errors
+  targetDay.items.push(newItem);
   targetDay.items.sort((a: ItineraryItem, b: ItineraryItem) =>
     (a.time || "").localeCompare(b.time || "")
   );
 
   await storage.set(key, targetDay);
+
+  // ---------------------------------------------------------
+  // 2. ⭐ NEW: Notification Trigger Logic
+  // ---------------------------------------------------------
+  // ... inside addToItineraryStorage ...
+
+  // 2. ⭐ REAL Notification Trigger Logic
+  try {
+    // A. Fetch Subscribers
+    const snap = await storage.get(`settings:${tripId}:notifications`);
+    if (snap?.value) {
+      const settings = JSON.parse(snap.value);
+      
+      // B. Filter: Who wants emails?
+      const recipients = Object.values(settings)
+        .filter((u: any) => u.enabled && u.email)
+        .map((u: any) => u.email);
+
+      if (recipients.length > 0) {
+        // C. Generate Calendar Link
+        const calendarLink = createGoogleCalendarLink(
+           activity, 
+           location, 
+           notes, 
+           date, 
+           time
+        );
+
+        // D. Prepare the message for the template
+        const templateParams = {
+          subject: `New Activity: ${activity} in ${location}`,
+          message: `
+            Hey! A new activity has been added to the trip.
+            
+            What: ${activity}
+            When: ${date} at ${time}
+            Where: ${location}
+            
+            Add to Google Calendar:
+            ${calendarLink}
+          `,
+          to_email: recipients.join(","), // EmailJS will send to comma-separated list
+        };
+
+        // E. SEND REAL EMAIL 🚀
+        // Replace these strings with your actual IDs from Step 1
+        const SERVICE_ID = "service_b2fw42k";   // e.g. "service_x9..."
+        const TEMPLATE_ID = "template_3khbgqf"; // e.g. "template_a5..."
+        const PUBLIC_KEY = "rOp_TDdIEYOIqxNii";   // e.g. "user_123..."
+
+        await emailjs.send(SERVICE_ID, TEMPLATE_ID, templateParams, PUBLIC_KEY);
+        
+        console.log("✅ Email sent successfully to:", recipients);
+        
+      }
+    }
+  } catch (err) {
+    console.error("Failed to send email:", err);
+  }
 };
 
 
@@ -1459,85 +1571,56 @@ function FlightCard({
   onConfirm,
   onEdit,
   onDelete
-}:{
+}: {
   flight: StoredFlight;
-  onConfirm: ()=>void;
-  onEdit: ()=>void;
-  onDelete: ()=>void;
-}){
-
-  const creatorName = useUserName(flight.createdByUid);
-
+  onConfirm: () => void;
+  onEdit: () => void;
+  onDelete: () => void;
+}) {
   return (
-    <div
-      className="bg-white border-2 border-gray-200 rounded-lg p-6 hover:border-blue-300 hover:shadow-lg transition-all"
-    >
-
-      <div className="flex items-start justify-between">
-
+    <div className="bg-white border border-gray-200 rounded-lg p-5 shadow-sm hover:shadow-md transition-shadow relative flex flex-col h-full">
+      <div className="flex justify-between items-start mb-2">
         <div>
-          <h3 className="text-xl font-serif text-gray-800">
-            {flight.airline} {flight.flightNumber}
-          </h3>
-
-          {flight.createdAt && (
-            <div className="text-xs text-gray-500 mt-1">
-              Added by {creatorName || "Unknown"} •{" "}
-              {formatDistanceToNow(new Date(flight.createdAt), { addSuffix: true })}
-            </div>
-          )}
-
-
-          <p className="text-gray-700 mt-1">
-            {flight.departure} → {flight.arrival}
-          </p>
-
-          <div className="text-sm text-gray-600 mt-2 space-y-1">
-            {flight.date && <div>Date: {flight.date}</div>}
-            {flight.time && <div>Time: {flight.time}</div>}
-            {flight.price && <div className="font-medium">Price: {flight.price}</div>}
-            {flight.details && <div className="text-gray-500">{flight.details}</div>}
-          </div>
+          <h4 className="text-lg font-bold text-gray-900">{flight.airline}</h4>
+          <p className="text-gray-600 text-sm font-medium">{flight.flightNumber}</p>
         </div>
-
-        <div className="flex flex-col items-end gap-2">
-
-          {flight.status !== "confirmed" && (
-            <button
-              onClick={onConfirm}
-              className="px-3 py-1 bg-amber-500 text-white rounded text-sm hover:bg-amber-600"
-            >
-              Confirm
-            </button>
-          )}
-
-          {flight.link && (
-            <button
-              onClick={()=>window.open(flight.link,"_blank")}
-              className="px-3 py-1 bg-blue-600 text-white rounded text-sm hover:bg-blue-700"
-            >
-              Open Booking
-            </button>
-          )}
-
+        {flight.status !== "confirmed" ? (
           <button
-            onClick={onEdit}
-            className="text-blue-600 hover:text-blue-800 text-sm"
+            onClick={(e) => { e.stopPropagation(); onConfirm(); }}
+            className="bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold px-3 py-1.5 rounded"
           >
-            Edit
+            Confirm
           </button>
-
-          <button
-            onClick={onDelete}
-            className="text-red-500 hover:text-red-700 text-sm"
-          >
-            Delete
-          </button>
-
-        </div>
-
+        ) : (
+          <span className="bg-green-100 text-green-800 text-xs font-bold px-2 py-1 rounded">
+            Confirmed
+          </span>
+        )}
       </div>
 
+      <div className="flex-1 space-y-1 mb-4">
+        <p className="text-gray-800 text-sm">{flight.departure} ➝ {flight.arrival}</p>
+        <p className="text-gray-500 text-xs">
+          {flight.date} {flight.time && `@ ${flight.time}`}
+        </p>
+        {flight.price && <p className="text-gray-700 text-sm font-medium">Price: {flight.price}</p>}
+        {flight.details && <p className="text-gray-500 text-xs mt-2">{flight.details}</p>}
+      </div>
+
+      <div className="flex justify-end gap-3 text-xs font-medium border-t pt-3 mt-auto">
+        <button 
+          onClick={(e) => { e.stopPropagation(); onEdit(); }} 
+          className="text-blue-600 hover:text-blue-800"
+        >
+          Edit
+        </button>
+        <button 
+          onClick={(e) => { e.stopPropagation(); onDelete(); }} 
+          className="text-red-500 hover:text-red-700"
+        >
+          Delete
+        </button>
+      </div>
     </div>
   );
 }
@@ -1590,31 +1673,33 @@ export default function TravelJournal() {
 
   const loadTrips = async (uid: string) => {
     setLoading(true);
+    const userEmail = auth.currentUser?.email;
 
     try {
-      // 🔥 IMPORTANT: list ALL trips, not just user's prefix
-      const result = await storage.list("trip:");
-
+      // 🚀 OPTIMIZATION: Fetch ALL trips in 1 single request
+      // This uses the 'getAll' helper we added to firebaseStore.ts earlier
+      const allTrips = await storage.getAll<TripData>("trip:");
+      
       const loadedTrips: TripData[] = [];
 
-      if (result?.keys) {
-        for (const key of result.keys) {
+      // Process in memory (Instant)
+      allTrips.forEach((trip) => {
+         // Ensure trip data is valid
+         if (!trip || !trip.id) return;
 
-          const data = await storage.get(key);
+         // 1. Is user a full member?
+         const isMember = trip.ownerId === uid || trip.members?.includes(uid);
+         
+         // 2. Is user invited?
+         const isInvited = userEmail && trip.invites?.includes(userEmail);
 
-          if (data?.value) {
-            const trip: TripData = JSON.parse(data.value);
-
-            // ⭐ SHOW IF OWNER OR MEMBER
-            if (
-              trip.ownerId === uid ||
-              trip.members?.includes(uid)
-            ) {
-              loadedTrips.push(trip);
-            }
-          }
-        }
-      }
+         if (isMember) {
+           loadedTrips.push(trip);
+         } else if (isInvited) {
+           // Add to list with pending flag
+           loadedTrips.push({ ...trip, isPendingInvite: true });
+         }
+      });
 
       setTrips(loadedTrips.sort((a, b) => b.id - a.id));
 
@@ -1626,8 +1711,37 @@ export default function TravelJournal() {
   };
 
 
+  const handleRespondToInvite = async (trip: TripData, accept: boolean) => {
+    const user = auth.currentUser;
+    if (!user || !user.email) return;
 
+    try {
+      // 1. Fetch fresh trip data
+      const tripSnap = await storage.get(`trip:${trip.id}`);
+      if (!tripSnap?.value) return;
+      const currentTrip = JSON.parse(tripSnap.value);
 
+      // 2. Remove email from 'invites'
+      const newInvites = (currentTrip.invites || []).filter((e: string) => e !== user.email);
+      
+      let updatedTrip = { ...currentTrip, invites: newInvites };
+
+      // 3. If accepted, add UID to 'members'
+      if (accept) {
+        const newMembers = [...(currentTrip.members || []), user.uid];
+        updatedTrip = { ...updatedTrip, members: newMembers };
+      }
+
+      // 4. Save
+      await storage.set(`trip:${trip.id}`, updatedTrip);
+
+      // 5. Reload UI
+      await loadTrips(user.uid);
+      
+    } catch (err) {
+      console.error("Failed to respond to invite", err);
+    }
+  };
   const createTrip = async (tripData: TripFormData): Promise<TripData> => {
     const user = auth.currentUser;
     if (!user) throw new Error("Not logged in");
@@ -1719,7 +1833,7 @@ export default function TravelJournal() {
         >
           Save name
         </button>
-
+          
         <button
           onClick={handleLogout}
           className="px-4 py-2 border-2 border-gray-300 rounded-lg hover:border-gray-400"
@@ -1738,6 +1852,7 @@ export default function TravelJournal() {
         }}
         onCreateTrip={createTrip}
         onDeleteTrip={deleteTrip}
+        onRespondInvite={handleRespondToInvite}
       />
 
 
@@ -1766,9 +1881,9 @@ type HomePageProps = {
   loading: boolean;
   onSelectTrip: (trip: TripData) => void;
   onCreateTrip: (trip: TripFormData) => Promise<TripData>;
-  onDeleteTrip: (tripId: number) => void;   // NEW
+  onDeleteTrip: (tripId: number) => void;
+  onRespondInvite: (trip: TripData, accept: boolean) => void; // ⭐ NEW PROP
 };
-
 
 function HomePage({
   trips,
@@ -1776,14 +1891,28 @@ function HomePage({
   onSelectTrip,
   onCreateTrip,
   onDeleteTrip,
+  onRespondInvite, // ⭐ NEW
 }: HomePageProps) {
-  const [filter, setFilter] = useState("all");
+  
+  // Add 'invited' to the filter list
+  const [filter, setFilter] = useState("all"); 
   const [showNewTripDialog, setShowNewTripDialog] = useState(false);
 
+  // ⭐ UPDATED FILTER LOGIC
   const filteredTrips = trips.filter((trip) => {
+    if (filter === "invited") {
+      return trip.isPendingInvite; // Only show pending invites
+    }
+    
+    // For other tabs, HIDE pending invites
+    if (trip.isPendingInvite) return false;
+
     if (filter === "all") return true;
     return trip.status === filter;
   });
+
+  // Calculate invite count for the badge
+  const inviteCount = trips.filter(t => t.isPendingInvite).length;
 
   const handleCreateTrip = async (data: TripFormData) => {
     await onCreateTrip(data);
@@ -1792,42 +1921,31 @@ function HomePage({
 
   return (
     <div className="min-h-screen bg-[#f5f1e8]">
+      {/* ... Header (Keep same) ... */}
       <div className="bg-[#f5f1e8] border-b border-[#d4c5a0] py-16 px-8">
-        <div className="max-w-7xl mx-auto text-center">
-          <div className="inline-block px-4 py-2 border-2 border-[#8b7355] mb-6">
-            <span className="text-[#8b7355] text-sm font-medium">
-              ✈️ MY TRAVEL JOURNALS
-            </span>
-          </div>
-          <h1 className="text-6xl font-serif text-gray-900 mb-4">
-            Travel Chronicles
-          </h1>
-          <p className="text-gray-800 text-lg mb-8">
-            Collecting memories from around the world, one journey at a time.
-          </p>
-          <div className="flex gap-4 justify-center">
-            <button
+        <div className="max-w-[90%] mx-auto text-center">
+             {/* ... (Keep existing header content) ... */}
+             <h1 className="text-6xl font-serif text-gray-900 mb-4">Travel Chronicles</h1>
+             <p className="text-gray-800 text-lg mb-8">Collecting memories from around the world.</p>
+             <button
               onClick={() => setShowNewTripDialog(true)}
-              className="px-6 py-3 bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition-colors flex items-center gap-2"
+              className="mx-auto px-6 py-3 bg-gray-900 text-white rounded-lg flex items-center gap-2"
             >
-              <Plus size={20} />
-              Add New Journey
+              <Plus size={20} /> Add New Journey
             </button>
-            <button className="px-6 py-3 bg-white border-2 border-gray-300 rounded-lg hover:border-gray-400 transition-colors flex items-center gap-2">
-              🎒 Browse Memories
-            </button>
-          </div>
         </div>
       </div>
 
-      <div className="max-w-7xl mx-auto px-8 py-12">
+      <div className="max-w-[90%] mx-auto px-8 py-12">
         <div className="flex items-center justify-between mb-8">
           <div>
             <h2 className="text-3xl font-serif text-gray-900">My Journeys</h2>
             <p className="text-gray-800 italic">
-              {trips.length} adventures collected
+              {trips.filter(t => !t.isPendingInvite).length} adventures collected
             </p>
           </div>
+          
+          {/* ⭐ UPDATED FILTER BUTTONS */}
           <div className="flex gap-2">
             {["all", "upcoming", "ongoing", "completed"].map((f) => (
               <button
@@ -1842,24 +1960,31 @@ function HomePage({
                 {f}
               </button>
             ))}
+
+            {/* ⭐ INVITED TAB */}
+            <button
+               onClick={() => setFilter("invited")}
+               className={`px-4 py-2 rounded-lg border-2 transition-colors flex items-center gap-2 ${
+                 filter === "invited"
+                   ? "bg-gray-900 text-white border-gray-900"
+                   : "bg-white border-gray-300 hover:border-gray-400"
+               }`}
+             >
+               Invited
+               {inviteCount > 0 && (
+                 <span className="bg-red-500 text-white text-xs font-bold px-1.5 py-0.5 rounded-full">
+                   {inviteCount}
+                 </span>
+               )}
+            </button>
           </div>
         </div>
 
         {loading ? (
-          <div className="text-center py-20 text-gray-700">
-            Loading your journeys...
-          </div>
+          <div className="text-center py-20 text-gray-700">Loading...</div>
         ) : filteredTrips.length === 0 ? (
           <div className="text-center py-20">
-            <p className="text-gray-700 mb-4">
-              No journeys yet. Start your first adventure!
-            </p>
-            <button
-              onClick={() => setShowNewTripDialog(true)}
-              className="px-6 py-3 bg-gray-900 text-white rounded-lg hover:bg-gray-800"
-            >
-              Create Your First Trip
-            </button>
+            <p className="text-gray-700 mb-4">No journeys found in this category.</p>
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -1867,8 +1992,14 @@ function HomePage({
               <TripCard
                 key={trip.id}
                 trip={trip}
-                onClick={() => onSelectTrip(trip)}
+                // If invited, disable clicking to open trip (force accept/decline)
+                onClick={() => !trip.isPendingInvite && onSelectTrip(trip)}
                 onDelete={() => onDeleteTrip(trip.id)}
+                
+                // Pass invite props
+                isInvited={trip.isPendingInvite}
+                onAccept={() => onRespondInvite(trip, true)}
+                onDecline={() => onRespondInvite(trip, false)}
               />
             ))}
           </div>
@@ -1888,11 +2019,14 @@ function HomePage({
 type TripCardProps = {
   trip: TripData;
   onClick: () => void;
-  onDelete: () => void;   // NEW
+  onDelete: () => void;
+  // ⭐ NEW PROPS
+  isInvited?: boolean;
+  onAccept?: () => void;
+  onDecline?: () => void;
 };
 
-
-function TripCard({ trip, onClick, onDelete }: TripCardProps) {
+function TripCard({ trip, onClick, onDelete, isInvited, onAccept, onDecline }: TripCardProps) {
   const statusColors: Record<TripStatus, string> = {
     upcoming: "bg-amber-100 text-amber-800",
     ongoing: "bg-green-100 text-green-800",
@@ -1902,7 +2036,9 @@ function TripCard({ trip, onClick, onDelete }: TripCardProps) {
   return (
     <div
       onClick={onClick}
-      className="bg-white border-2 border-gray-200 rounded-lg overflow-hidden hover:border-gray-400 hover:shadow-xl transition-all cursor-pointer group"
+      className={`bg-white border-2 border-gray-200 rounded-lg overflow-hidden transition-all group relative ${
+        !isInvited ? "hover:border-gray-400 hover:shadow-xl cursor-pointer" : ""
+      }`}
     >
       <div className="relative h-48 overflow-hidden">
         {trip.imageUrl ? (
@@ -1916,24 +2052,26 @@ function TripCard({ trip, onClick, onDelete }: TripCardProps) {
             className={`w-full h-full bg-gradient-to-br ${trip.bgGradient || "from-blue-400 to-purple-400"}`}
           />
         )}
+        
         <div className="absolute top-4 left-4">
-          <div className="bg-[#f5f1e8] px-3 py-1 rounded shadow-lg">
-            <span
-              className={`px-2 py-1 rounded text-xs font-medium ${statusColors[trip.status] || statusColors.upcoming}`}
-            >
-              {trip.status || "Upcoming"}
-            </span>
-          </div>
-        </div>
-        <div className="absolute top-4 right-4 bg-[#f5f1e8] px-3 py-2 rounded shadow-lg">
-          <span className="text-sm">📍</span>
+          {isInvited ? (
+             // ⭐ SHOW "INVITED" BADGE
+             <div className="bg-blue-600 text-white px-3 py-1 rounded shadow-lg text-xs font-bold uppercase tracking-wide">
+               Invited
+             </div>
+          ) : (
+             <div className="bg-[#f5f1e8] px-3 py-1 rounded shadow-lg">
+                <span className={`px-2 py-1 rounded text-xs font-medium ${statusColors[trip.status]}`}>
+                  {trip.status || "Upcoming"}
+                </span>
+             </div>
+          )}
         </div>
       </div>
+
       <div className="p-6">
         <div className="flex items-baseline gap-3 mb-2">
-          <h3 className="text-2xl font-serif text-gray-900">
-            {trip.destination}
-          </h3>
+          <h3 className="text-2xl font-serif text-gray-900">{trip.destination}</h3>
           <span className="text-gray-700">{trip.year}</span>
         </div>
         <div className="flex items-center gap-2 text-gray-800 mb-4">
@@ -1941,18 +2079,36 @@ function TripCard({ trip, onClick, onDelete }: TripCardProps) {
           <span className="text-sm">{trip.country}</span>
         </div>
         <p className="text-gray-700 italic text-sm">"{trip.tagline}"</p>
+        
         <div className="flex justify-end mt-4">
-          <button
-            onClick={(e) => {
-              e.stopPropagation();   // ⭐ IMPORTANT so clicking delete doesn't open trip
-              onDelete();
-            }}
-            className="text-red-500 hover:text-red-700 text-sm"
-          >
-            Delete
-          </button>
+          {isInvited ? (
+             // ⭐ ACTION BUTTONS FOR INVITE
+             <div className="flex gap-2 w-full">
+               <button 
+                 onClick={(e) => { e.stopPropagation(); onDecline?.(); }}
+                 className="flex-1 py-2 border border-red-200 text-red-600 rounded hover:bg-red-50 text-sm font-medium"
+               >
+                 Decline
+               </button>
+               <button 
+                 onClick={(e) => { e.stopPropagation(); onAccept?.(); }}
+                 className="flex-1 py-2 bg-gray-900 text-white rounded hover:bg-gray-800 text-sm font-medium"
+               >
+                 Accept
+               </button>
+             </div>
+          ) : (
+             <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onDelete();
+              }}
+              className="text-red-500 hover:text-red-700 text-sm"
+            >
+              Delete
+            </button>
+          )}
         </div>
-
       </div>
     </div>
   );
@@ -1972,57 +2128,108 @@ type TabId =
   | "scrapbook"
   | "admin"
   | "budget";
-
-
-function TripView({ trip, onBack }: TripViewProps) {
+function TripView({ trip: initialTrip, onBack }: TripViewProps) {
   const [activeTab, setActiveTab] = useState<TabId>("itinerary");
+  
+  // ⭐ 1. Use local state to track the "live" trip data
+  const [trip, setTrip] = useState<TripData>(initialTrip);
+
+  // ⭐ 2. Subscribe to the Trip Document for real-time updates
+  useEffect(() => {
+    // This listens to "travelData" collection where key is "trip:123"
+    const unsub = onSnapshot(doc(db, "travelData", `trip:${initialTrip.id}`), (doc) => {
+      if (doc.exists()) {
+        const data = doc.data();
+        // Handle if data is wrapped in { value: "..." } or raw object
+        const realData = data.value ? JSON.parse(data.value) : data;
+        setTrip((prev) => ({ ...prev, ...realData }));
+      }
+    });
+    return () => unsub();
+  }, [initialTrip.id]);
+
   const [summary, setSummary] = useState({
+    // ... keep existing summary state ...
     flights: 0,
     hotels: 0,
     activities: 0,
     places: 0,
-    photos: 0
+    photos: 0,
+    locations: 0
   });
-  const loadSummary = async () => {
 
-    const count = async (prefix: string) => {
+  // ... rest of the function (loadSummary, etc.) remains the same ...
+
+  const loadSummary = async () => {
+    // Helper to fetch all data for a prefix (Generic)
+    const getAll = async (prefix: string) => {
       const res = await storage.list(prefix);
-      return res?.keys?.length || 0;
+      if (!res?.keys) return [];
+      
+      const promises = res.keys.map((key) => storage.get(key));
+      const results = await Promise.all(promises);
+      
+      return results
+        .map((r) => (r?.value ? JSON.parse(r.value) : null))
+        .filter((i) => i !== null);
     };
 
-    const flightCount = await count(`flight:${trip.id}:`);
-    const hotelCount = await count(`hotel:${trip.id}:`);
-    const photoCount = await count(`photo:${trip.id}:`);
+    try {
+      // --- FLIGHTS (Confirmed only) ---
+      const allFlights = await getAll(`flight:${trip.id}:`);
+      const flightCount = allFlights.filter((f: any) => f.status === "confirmed").length;
 
-    // places = eat + visit
-    const eatCount = await count(`place:${trip.id}:eat:`);
-    const visitCount = await count(`place:${trip.id}:visit:`);
+      // --- HOTELS (Confirmed only) ---
+      const allHotels = await getAll(`hotel:${trip.id}:`);
+      const hotelCount = allHotels.filter((h: any) => h.status === "confirmed").length;
 
-    // activities = sum of all itinerary days
-    const itineraryRes = await storage.list(`itinerary:${trip.id}:date:`);
-    let activityCount = 0;
+      // --- PLACES (Confirmed only) ---
+      const eats = await getAll(`place:${trip.id}:eat:`);
+      const visits = await getAll(`place:${trip.id}:visit:`);
+      // check for 'confirmed' property (boolean) or status string if you used that
+      const placeCount = [...eats, ...visits].filter((p: any) => p.confirmed === true).length;
 
-    if (itineraryRes?.keys) {
-      for (const key of itineraryRes.keys) {
-        const data = await storage.get(key);
-        if (data?.value) {
-          const parsed = JSON.parse(data.value);
-          activityCount += parsed.items?.length || 0;
+      // --- PHOTOS ---
+      const photoRes = await storage.list(`photo:${trip.id}:`);
+      const photoCount = photoRes?.keys?.length || 0;
+
+      // --- ACTIVITIES ---
+      const itineraryRes = await storage.list(`itinerary:${trip.id}:date:`);
+      let activityCount = 0;
+      if (itineraryRes?.keys) {
+        for (const key of itineraryRes.keys) {
+          const data = await storage.get(key);
+          if (data?.value) {
+            const parsed = JSON.parse(data.value);
+            activityCount += parsed.items?.length || 0;
+          }
         }
       }
-    }
 
-    setSummary({
-      flights: flightCount,
-      hotels: hotelCount,
-      activities: activityCount,
-      places: eatCount + visitCount,
-      photos: photoCount
-    });
+      // --- LOCATIONS (From Segments) ---
+      // We use a Set to ensure duplicates (e.g. going to Tokyo twice) are only counted once
+      const uniqueLocations = new Set(
+        trip.segments?.map((s) => s.location.trim()) || []
+      ).size;
+
+      setSummary({
+        flights: flightCount,
+        hotels: hotelCount,
+        activities: activityCount,
+        places: placeCount,
+        photos: photoCount,
+        locations: uniqueLocations,
+      });
+
+    } catch (e) {
+      console.error("Failed to load summary", e);
+    }
   };
+
   useEffect(() => {
     loadSummary();
-  }, [trip.id]);
+  }, [trip.id, trip.segments]); // Reload if segments change
+
   const dayCount =
     Math.ceil(
       (new Date(trip.endDate).getTime() -
@@ -2041,10 +2248,12 @@ function TripView({ trip, onBack }: TripViewProps) {
     { id: "admin", label: "Admin", icon: PackageCheck },
     { id: "budget", label: "Budget", icon: Wallet },
   ];
+
   return (
     <div className="min-h-screen bg-[#f5f1e8]">
       <div className="bg-white border-b-2 border-gray-200">
-        <div className="max-w-7xl mx-auto px-8 py-6">
+        <div className="max-w-[90%] mx-auto px-8 py-6">
+          
           <button
             onClick={onBack}
             className="flex items-center gap-2 text-gray-800 hover:text-gray-900 mb-4"
@@ -2052,6 +2261,7 @@ function TripView({ trip, onBack }: TripViewProps) {
             <ChevronLeft size={20} />
             All Trips
           </button>
+          
           <div className="flex items-start gap-6">
             <div className="w-32 h-32 rounded-lg overflow-hidden flex-shrink-0">
               {trip.imageUrl ? (
@@ -2067,44 +2277,51 @@ function TripView({ trip, onBack }: TripViewProps) {
               )}
             </div>
 
-            <div>
-              <h1 className="text-4xl font-serif text-gray-900 leading-tight">
-                {trip.destination} Trip {trip.year}
-              </h1>
+            <div className="flex-1 min-w-0">
+              
+              <div className="flex justify-between items-start">
+                
+                <div>
+                  <h1 className="text-4xl font-serif text-gray-900 leading-tight">
+                    {trip.destination} Trip {trip.year}
+                  </h1>
+                  <p className="text-gray-600 mt-1 font-light tracking-wide">
+                    {trip.startDate} — {trip.endDate}
+                  </p>
+                </div>
 
-              <p className="text-gray-600 mt-1 font-light tracking-wide">
-                {trip.startDate} — {trip.endDate}
-              </p>
-              <div className="mt-3 text-sm text-gray-600 font-medium tracking-wide">
-
-                <span>{dayCount} days</span>
-
-                <span className="mx-2 text-gray-300">•</span>
-                <span>{summary.flights} flights</span>
-
-                <span className="mx-2 text-gray-300">•</span>
-                <span>{summary.hotels} hotels</span>
-
-                <span className="mx-2 text-gray-300">•</span>
-                <span>{summary.activities} activities</span>
-
-                <span className="mx-2 text-gray-300">•</span>
-                <span>{summary.places} places</span>
-
-                <span className="mx-2 text-gray-300">•</span>
-                <span>{summary.photos} photos</span>
-
+                <div className="ml-4">
+                  <NotificationToggle tripId={trip.id} />
+                </div>
+                
               </div>
 
-            </div>
-            
+              {/* ⭐ UPDATED STATS ROW */}
+              <div className="mt-3 text-sm text-gray-600 font-medium tracking-wide">
+                <span>{dayCount} days</span>
+                <span className="mx-2 text-gray-300">•</span>
+                
+                {/* NEW: Locations Count */}
+                <span>{summary.locations} locations</span>
+                <span className="mx-2 text-gray-300">•</span>
 
+                <span>{summary.flights} flights</span>
+                <span className="mx-2 text-gray-300">•</span>
+                <span>{summary.hotels} hotels</span>
+                <span className="mx-2 text-gray-300">•</span>
+                <span>{summary.activities} activities</span>
+                <span className="mx-2 text-gray-300">•</span>
+                <span>{summary.places} places</span>
+                <span className="mx-2 text-gray-300">•</span>
+                <span>{summary.photos} photos</span>
+              </div>
+            </div>
           </div>
         </div>
       </div>
 
       <div className="bg-white border-b-2 border-gray-200 sticky top-0 z-10">
-        <div className="max-w-7xl mx-auto px-8">
+        <div className="max-w-[90%] mx-auto px-8">
           <div className="flex gap-8 overflow-x-auto">
             {tabs.map((tab) => {
 
@@ -2128,7 +2345,7 @@ function TripView({ trip, onBack }: TripViewProps) {
         </div>
       </div>
 
-      <div className="max-w-7xl mx-auto px-8 py-8">
+      <div className="max-w-[90%] mx-auto px-8 py-8">
         {activeTab === "itinerary" && <ItineraryTab trip={trip} />}
         {activeTab === "places-visit" && (
           <PlacesTab tripId={trip.id} type="visit" />
@@ -2149,250 +2366,427 @@ function TripView({ trip, onBack }: TripViewProps) {
 type ItineraryTabProps = {
   trip: TripData;
 };
-
-function ItineraryTab({ trip }: ItineraryTabProps) {
-
+function ItineraryTab({ trip }: { trip: TripData }) {
+  // ... existing state ...
   const [days, setDays] = useState<ItineraryDay[]>([]);
-
+  const [viewMode, setViewMode] = useState<"timeline" | "calendar">("timeline");
   const [currentDayIndex, setCurrentDayIndex] = useState(0);
   const [showAddDialog, setShowAddDialog] = useState(false);
+  
+  // Location Manager State
+  const [showLocDialog, setShowLocDialog] = useState(false);
+  
+  // ⭐ UPDATE: Initialize with trip.segments
+  const [tripSegments, setTripSegments] = useState<TripSegment[]>(trip.segments || []);
+
+  // ⭐ NEW EFFECT: Keep segments in sync when they change in DB
+  useEffect(() => {
+    if (trip.segments) {
+      setTripSegments(trip.segments);
+    }
+  }, [trip.segments]);
+
+  // ... rest of the component ...
 
   useEffect(() => {
-    loadDays();
-  }, [trip.id, trip.startDate, trip.endDate]);
-
-  const loadDays = async () => {
+    // 1. Calculate the date range structure
     const allDates = getDatesInRange(trip.startDate, trip.endDate);
 
-    const result = await storage.list(`itinerary:${trip.id}:date:`);
-    const storedByDate: Record<string, ItineraryDay> = {};
+    // 2. Subscribe to all itinerary items
+    const unsubscribe = storage.subscribeToList(
+      `itinerary:${trip.id}:date:`,
+      (storedDays: any[]) => {
+        const storedByDate: Record<string, ItineraryDay> = {};
+        storedDays.forEach((day) => {
+          storedByDate[day.date] = day;
+        });
 
+        const fullItinerary = allDates.map((date, index) => {
+          const stored = storedByDate[date];
+          return {
+            day: index + 1,
+            date,
+            items: stored?.items ?? [],
+          };
+        });
 
-    if (result?.keys) {
-      for (const key of result.keys) {
-        const data = await storage.get(key);
-        if (data?.value) {
-          const parsed: ItineraryDay = JSON.parse(data.value);
-
-          storedByDate[parsed.date] = parsed;
-        }
+        setDays(fullItinerary);
       }
-    }
+    );
 
-    const fullItinerary = allDates.map((date, index) => {
-      const dayNum = index + 1;
-      const stored = storedByDate[date];
-      return {
-        day: dayNum,
-        date,
-        items: stored?.items ?? [],
-      };
-    });
+    return () => unsubscribe();
+  }, [trip.id, trip.startDate, trip.endDate]);
 
-    setDays(fullItinerary);
+  // ⭐ UPDATED: Returns an ARRAY of locations for overlaps
+  const getLocationsForDate = (date: string) => {
+    return tripSegments.filter((s) => date >= s.startDate && date <= s.endDate);
   };
 
+  const saveSegments = async (newSegments: TripSegment[]) => {
+    const updatedTrip = { ...trip, segments: newSegments };
+    setTripSegments(newSegments);
+    await storage.set(`trip:${trip.id}`, updatedTrip);
+    setShowLocDialog(false);
+  };
 
   const addActivity = async (dayNum: number, activity: ActivityData) => {
+      const dayData = days.find((d) => d.day === dayNum);
+      const date = dayData?.date;
+      if (!date) return;
+  
+      const key = `itinerary:${trip.id}:date:${date}`;
+      const existing = await storage.get(key);
+      const parsed: ItineraryDay = existing?.value
+      ? JSON.parse(existing.value)
+      : { date, items: [] };
+  
+      const newItem: ItineraryItem = {
+        id: Date.now(),
+        activity: activity.activity,
+        location: activity.location,
+        notes: activity.notes || "",
+        time: activity.time || "",
+        createdByUid: auth.currentUser?.uid || null,
+        iconType: (activity.iconType ?? "activity") as IconType,
+        createdAt: new Date().toISOString(),
+      };
+      
+      const updatedItems = [...(parsed.items || []), newItem];
+      updatedItems.sort((a, b) => (a.time || "99:99").localeCompare(b.time || "99:99"));
+  
+      // 1. Save to Storage
+      await storage.set(key, { date, items: updatedItems });
 
+      // 2. ⭐ TRIGGER EMAIL NOTIFICATION (Silent)
+      try {
+        const snap = await storage.get(`settings:${trip.id}:notifications`);
+        if (snap?.value) {
+          const settings = JSON.parse(snap.value);
+          
+          const recipients = Object.values(settings)
+            .filter((u: any) => u.enabled && u.email)
+            .map((u: any) => u.email);
 
-    const dayData = days.find((d) => d.day === dayNum);
-    const date = dayData?.date;
-    if (!date) return;
+          if (recipients.length > 0) {
+            const calendarLink = createGoogleCalendarLink(
+              activity.activity, 
+              activity.location, 
+              activity.notes || "", 
+              date, 
+              activity.time
+            );
 
-    const key = `itinerary:${trip.id}:date:${date}`;
+            const templateParams = {
+              subject: `New Activity: ${activity.activity} in ${activity.location}`,
+              message: `
+                Hey! A new activity has been added to the trip.
+                
+                What: ${activity.activity}
+                When: ${date} at ${activity.time}
+                Where: ${activity.location}
+                
+                Add to Google Calendar:
+                ${calendarLink}
+              `,
+              to_email: recipients.join(","),
+            };
 
-    // Load existing stored data
-    const existing = await storage.get(key);
-    const parsed: ItineraryDay = existing?.value
-    ? JSON.parse(existing.value)
-    : { date, items: [] };
+            // PASTE YOUR KEYS HERE AGAIN
+            const SERVICE_ID = "service_b2fw42k";   // e.g. "service_x9..."
+            const TEMPLATE_ID = "template_3khbgqf"; // e.g. "template_a5..."
+            const PUBLIC_KEY = "rOp_TDdIEYOIqxNii";   // e.g. "user_123..."
 
-
-    // Add the new activity
-    const newItem: ItineraryItem = {
-      id: Date.now(),
-      activity: activity.activity,
-      location: activity.location,
-      notes: activity.notes || "",
-      time: activity.time || "",
-      createdByUid: auth.currentUser?.uid || null,
-      iconType: (activity.iconType ?? "activity") as IconType,
-      createdAt: new Date().toISOString(),
-    };
-
-    const updatedItems = [
-      ...(parsed.items || []),
-      newItem,
-    ];
-
-
-
-    // 🔥 SORT BY TIME (earliest first, no-time last)
-    updatedItems.sort((a, b) => {
-      const ta = a.time || "99:99";
-      const tb = b.time || "99:99";
-      return ta.localeCompare(tb);
-    });
-
-    const newDayData = {
-      date,
-      items: updatedItems,
-    };
-
-    await storage.set(key, newDayData);
-    await loadDays();
+            await emailjs.send(SERVICE_ID, TEMPLATE_ID, templateParams, PUBLIC_KEY);
+            console.log("✅ Email sent silently");
+          }
+        }
+      } catch (err) {
+        console.error("Failed to send email:", err);
+      }
   };
-
-
-
-  // Safe access to current day
-  const currentDayData: ItineraryDay =
-  days[currentDayIndex] || { day: 1, date: "", items: [] };
-
 
   const deleteActivity = async (date: string, activityId: number) => {
-
-    const key = `itinerary:${trip.id}:date:${date}`;
-    const existing = await storage.get(key);
-    if (!existing?.value) return;
-
-    const parsed = JSON.parse(existing.value);
-
-    parsed.items = parsed.items.filter((i: ItineraryItem) => i.id !== activityId);
-
-
-    await storage.set(key, parsed);
-    await loadDays();
+       const key = `itinerary:${trip.id}:date:${date}`;
+       const existing = await storage.get(key);
+       if (!existing?.value) return;
+       const parsed = JSON.parse(existing.value);
+       parsed.items = parsed.items.filter((i: ItineraryItem) => i.id !== activityId);
+       await storage.set(key, parsed);
   };
 
+  const currentDayData = days[currentDayIndex] || { day: 1, date: "", items: [] };
+  
+  // ⭐ Get ALL locations for the current day (could be 1, could be 2+)
+  const currentLocations = getLocationsForDate(currentDayData.date);
+  // --- EXPORT TO CALENDAR ---
+  const downloadICS = () => {
+    if (!days || days.length === 0) {
+      alert("No itinerary items to export.");
+      return;
+    }
 
+    let icsContent = [
+      "BEGIN:VCALENDAR",
+      "VERSION:2.0",
+      "PRODID:-//TravelJournal//MyTrip//EN",
+      "CALSCALE:GREGORIAN",
+      "METHOD:PUBLISH",
+    ];
+
+    days.forEach((day) => {
+      day.items.forEach((item) => {
+        if (!item.time) return; // Skip items without time
+
+        // Format Date/Time: YYYYMMDDTHHMMSS
+        const dateStr = day.date.replace(/-/g, ""); // 2024-01-01 -> 20240101
+        const timeStr = item.time.replace(/:/g, "") + "00"; // 14:30 -> 143000
+        const startDateTime = `${dateStr}T${timeStr}`;
+
+        // Create End Time (Assume 1 hour duration)
+        // A robust solution would calculate real duration, but +1 hour is standard for simple exports
+        let hour = parseInt(item.time.split(":")[0]);
+        const minute = item.time.split(":")[1];
+        let endHour = hour + 1;
+        // Simple overflow handle (23:00 -> 00:00 next day is complex, so we just clamp to 23:59 for simplicity or wrap)
+        const endDateTime = `${dateStr}T${endHour.toString().padStart(2, "0")}${minute}00`;
+
+        icsContent.push("BEGIN:VEVENT");
+        icsContent.push(`UID:${item.id}@traveljournal.app`);
+        icsContent.push(`DTSTAMP:${new Date().toISOString().replace(/[-:]/g, "").split(".")[0]}Z`);
+        icsContent.push(`DTSTART:${startDateTime}`);
+        icsContent.push(`DTEND:${endDateTime}`);
+        icsContent.push(`SUMMARY:${item.activity}`);
+        icsContent.push(`DESCRIPTION:${item.notes || ""} (Location: ${item.location})`);
+        icsContent.push(`LOCATION:${item.location}`);
+        icsContent.push("STATUS:CONFIRMED");
+        icsContent.push("END:VEVENT");
+      });
+    });
+
+    icsContent.push("END:VCALENDAR");
+
+    // Create and trigger download
+    const blob = new Blob([icsContent.join("\r\n")], { type: "text/calendar;charset=utf-8" });
+    const link = document.createElement("a");
+    link.href = window.URL.createObjectURL(blob);
+    link.setAttribute("download", `${trip.destination}_Itinerary.ics`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      {/* HEADER CONTROLS */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h2 className="text-3xl font-serif text-gray-900">Itinerary</h2>
-          <p className="text-gray-800 mt-1">
-            {currentDayData.date} • Day {currentDayData.day}
-          </p>
+          {viewMode === "timeline" && (
+            <p className="text-gray-800 mt-1">
+              {currentDayData.date} • Day {currentDayData.day}
+            </p>
+          )}
         </div>
-        <div className="flex gap-3">
-          <button
-            onClick={() => setShowAddDialog(true)}
-            className="px-4 py-2 bg-white border-2 border-gray-300 rounded-lg hover:border-gray-400 flex items-center gap-2"
-          >
-            <Plus size={18} />
-            Add Activity
-          </button>
-        </div>
-      </div>
 
-      {/* Scrollable Day Tabs */}
-      <div className="flex gap-2 overflow-x-auto pb-2">
-        {days.map((day, index) => (
+        <div className="flex items-center gap-2 bg-gray-100 p-1 rounded-lg">
           <button
-            key={day.day}
-            onClick={() => setCurrentDayIndex(index)}
-            className={`px-4 py-2 rounded-full border-2 transition-all whitespace-nowrap ${
-              currentDayIndex === index
-                ? "bg-rose-500 text-white border-rose-500"
-                : "bg-white text-gray-700 border-gray-200 hover:border-rose-300"
+            onClick={() => setViewMode("timeline")}
+            className={`px-3 py-1.5 rounded-md text-sm font-medium transition-all ${
+              viewMode === "timeline" ? "bg-white shadow text-gray-900" : "text-gray-500 hover:text-gray-900"
             }`}
           >
-            Day {day.day}
-            <span className="ml-2 text-xs opacity-70 block sm:inline sm:ml-2">
-              {day.date}
-            </span>
+            Timeline
           </button>
-        ))}
-      </div>
-
-      {currentDayData.items.length === 0 ? (
-        <div className="text-center py-20 bg-white rounded-lg border-2 border-dashed border-gray-300">
-          <p className="text-gray-700 mb-4">
-            No activities planned for Day {currentDayData.day}
-          </p>
           <button
-            onClick={() => setShowAddDialog(true)}
-            className="px-6 py-3 bg-gray-900 text-white rounded-lg"
+            onClick={() => setViewMode("calendar")}
+            className={`px-3 py-1.5 rounded-md text-sm font-medium transition-all ${
+              viewMode === "calendar" ? "bg-white shadow text-gray-900" : "text-gray-500 hover:text-gray-900"
+            }`}
           >
-            Add First Activity
+            Calendar
           </button>
         </div>
-      ) : (
-        <div className="space-y-4">
-          {[...currentDayData.items]
-            .sort((a, b) => {
-              const ta = a.time || "99:99";
-              const tb = b.time || "99:99";
-              return ta.localeCompare(tb);
-            })
-            .map((item: ItineraryItem) => {
+            <div className="flex gap-2">
+          {/* ... existing Manage Locations button ... */}
+          
+          <button
+            onClick={downloadICS}
+            className="px-3 py-2 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 text-sm font-medium flex items-center gap-2"
+            title="Export to Google/Apple Calendar"
+          >
+            <Calendar size={16} /> 
+            Export
+          </button>
 
-              const Icon = iconMap[item.iconType] || Clock;
+          {/* ... existing Add Activity button ... */}
+        </div> 
+        <div className="flex gap-2">
+          <button
+            onClick={() => setShowLocDialog(true)}
+            className="px-3 py-2 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 text-sm font-medium"
+          >
+            Manage Locations
+          </button>
+          {viewMode === "timeline" && (
+            <button
+              onClick={() => setShowAddDialog(true)}
+              className="px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800 flex items-center gap-2"
+            >
+              <Plus size={18} />
+              Add Activity
+            </button>
+            
+          )}
+        </div>
+      </div>
 
+      {/* ================= TIMELINE VIEW ================= */}
+      {viewMode === "timeline" && (
+        <>
+          {/* Scrollable Day Tabs */}
+          <div className="flex gap-2 overflow-x-auto pb-4">
+            {days.map((day, index) => {
+              const dayLocs = getLocationsForDate(day.date);
+              
               return (
-                <div
-                  key={item.id}
-                  className="bg-white border-2 border-gray-200 rounded-lg p-6 hover:border-rose-300 hover:shadow-lg transition-all"
+                <button
+                  key={day.day}
+                  onClick={() => setCurrentDayIndex(index)}
+                  className={`relative px-4 py-2 rounded-full border-2 transition-all whitespace-nowrap min-w-[100px] ${
+                    currentDayIndex === index
+                      ? "bg-gray-900 text-white border-gray-900"
+                      : "bg-white text-gray-700 border-gray-200 hover:border-gray-400"
+                  }`}
                 >
-                  <div className="flex gap-4">
-                    
-                    {/* ICON + TIME */}
-                    <div className="flex-shrink-0 w-20 text-center">
-                      <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-gradient-to-br from-rose-400 to-purple-400 text-white shadow-lg">
-                        <Icon size={24} />
-                      </div>
-                      <p className="text-lg font-semibold mt-2">
-                        {item.time || "--:--"}
-                      </p>
+                  <span className="block text-sm font-bold">Day {day.day}</span>
+                  
+                  {/* Overlap Indicator Dots */}
+                  {dayLocs.length > 0 && (
+                    <div className="absolute top-0 right-0 -mt-1 -mr-1 flex gap-0.5">
+                      {dayLocs.map(loc => (
+                         <span 
+                           key={loc.id} 
+                           className={`w-3 h-3 rounded-full border-2 border-white ${loc.color.split(" ")[0]}`} 
+                         />
+                      ))}
                     </div>
-
-                    {/* CONTENT */}
-                    <div className="flex-1">
-                      
-                      {/* TITLE ROW WITH DELETE */}
-                      <div className="flex items-start justify-between">
-                        <h3 className="text-2xl font-serif text-gray-800 mb-1">
-                          {item.activity}
-                        </h3>
-
-                        <div className="flex flex-col items-end text-right">
-                          <CreatorBadge uid={item.createdByUid}/>
-                          {item.createdAt && (
-                            <span className="text-xs text-gray-400">
-                              {formatDistanceToNow(new Date(item.createdAt), { addSuffix: true })}
-                            </span>
-                          )}
-                        </div>
-
-
-
-                        <button
-                          onClick={() =>
-                            deleteActivity(currentDayData.date, item.id)
-                          }
-                          className="text-red-500 hover:text-red-700 text-sm ml-4"
-                        >
-                          Delete
-                        </button>
-                      </div>
-
-                      <div className="flex items-center gap-2 text-gray-800 mb-2">
-                        <MapPin size={18} />
-                        <span className="text-lg">{item.location}</span>
-                      </div>
-
-                      {item.notes && (
-                        <p className="mt-3 text-gray-700 bg-amber-50 p-3 rounded-lg italic">
-                          {item.notes}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                </div>
+                  )}
+                </button>
               );
             })}
+          </div>
+
+          {/* STACKED LOCATION BANNERS (Handles Overlaps) */}
+          <div className="space-y-2 mb-4">
+            {currentLocations.map((loc) => (
+              <div 
+                key={loc.id} 
+                className={`p-4 rounded-lg border-l-4 ${loc.color} flex justify-between items-center`}
+              >
+                <div>
+                  <span className="text-xs font-bold uppercase tracking-wider opacity-70">Location</span>
+                  <h3 className="text-xl font-serif font-semibold">{loc.location}</h3>
+                </div>
+                <MapPin className="opacity-50" />
+              </div>
+            ))}
+          </div>
+
+          {/* Activity List */}
+          {currentDayData.items.length === 0 ? (
+            <div className="text-center py-20 bg-white rounded-lg border-2 border-dashed border-gray-300">
+              <p className="text-gray-700 mb-4">No activities planned for Day {currentDayData.day}</p>
+              <button onClick={() => setShowAddDialog(true)} className="px-6 py-3 bg-gray-900 text-white rounded-lg">
+                Add First Activity
+              </button>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {currentDayData.items.map((item) => {
+                const Icon = iconMap[item.iconType] || Clock;
+                return (
+                  <div key={item.id} className="bg-white border-2 border-gray-200 rounded-lg p-6 hover:shadow-md transition-all">
+                    <div className="flex gap-4">
+                      <div className="flex-shrink-0 w-20 text-center">
+                        <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-gray-100 text-gray-700">
+                          <Icon size={24} />
+                        </div>
+                        <p className="text-lg font-semibold mt-2">{item.time || "--:--"}</p>
+                      </div>
+                      <div className="flex-1">
+                        <div className="flex justify-between">
+                            <h3 className="text-xl font-serif text-gray-800">{item.activity}</h3>
+                             <button
+                                onClick={() => deleteActivity(currentDayData.date, item.id)}
+                                className="text-red-500 hover:text-red-700 text-sm"
+                              >
+                                Delete
+                            </button>
+                        </div>
+                        <p className="text-gray-600 flex items-center gap-1 mt-1"><MapPin size={14}/> {item.location}</p>
+                        {item.notes && <p className="mt-2 text-sm text-gray-500 bg-gray-50 p-2 rounded">{item.notes}</p>}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </>
+      )}
+
+      {/* ================= CALENDAR VIEW ================= */}
+      {viewMode === "calendar" && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+          {days.map((day) => {
+            const dayLocs = getLocationsForDate(day.date);
+            
+            return (
+              <div
+                key={day.date}
+                className="min-h-[200px] bg-white border-2 border-gray-200 rounded-lg p-2 flex flex-col hover:shadow-md transition-shadow cursor-pointer"
+                onClick={() => {
+                   setCurrentDayIndex(day.day - 1);
+                   setViewMode("timeline"); 
+                }}
+              >
+                {/* Date Header */}
+                <div className="flex justify-between items-start mb-2 pb-2 border-b border-gray-100">
+                  <div className="flex flex-col">
+                    <span className="font-bold text-lg">Day {day.day}</span>
+                    <span className="text-xs text-gray-400">{day.date}</span>
+                  </div>
+                </div>
+
+                {/* Location Bars (Stacked for overlaps) */}
+                <div className="flex flex-col gap-1 mb-2">
+                  {dayLocs.map(loc => (
+                    <div 
+                      key={loc.id} 
+                      className={`text-[10px] uppercase font-bold px-2 py-1 rounded truncate ${loc.color}`}
+                    >
+                      {loc.location}
+                    </div>
+                  ))}
+                </div>
+
+                {/* Items List (Truncated) */}
+                <div className="space-y-1 flex-1 overflow-y-auto custom-scrollbar">
+                  {day.items.length === 0 && (
+                    <div className="h-full flex items-center justify-center text-gray-300 text-xs italic">
+                      Free Day
+                    </div>
+                  )}
+                  {day.items.map((item) => (
+                    <div key={item.id} className="text-xs p-1.5 bg-gray-50 rounded truncate flex gap-1 items-center">
+                       <div className="w-1.5 h-1.5 rounded-full bg-gray-400 flex-shrink-0" />
+                       <span className="font-medium text-gray-500">{item.time}</span>
+                       <span className="truncate">{item.activity}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
         </div>
       )}
 
@@ -2405,9 +2799,16 @@ function ItineraryTab({ trip }: ItineraryTabProps) {
           }}
         />
       )}
+
+      {showLocDialog && (
+        <LocationManagerDialog
+          trip={trip}
+          onClose={() => setShowLocDialog(false)}
+          onSave={saveSegments}
+        />
+      )}
     </div>
   );
-
 }
 
 export type StoredPlace = PlaceData & {
@@ -2415,6 +2816,7 @@ export type StoredPlace = PlaceData & {
   createdByUid?: string | null;
   createdAt?: string;
   cost?: number;
+  price?: string | number; 
   paidBy?: {
     uid: string;
     amount: number;}[]
@@ -2439,27 +2841,21 @@ function PlacesTab({ tripId, type }: PlacesTabProps) {
 
 
   useEffect(() => {
-    loadPlaces();
+    // Listen to either "eat" or "visit" list
+    const unsubscribe = storage.subscribeToList(
+      `place:${tripId}:${type}:`, 
+      (newPlaces) => {
+        setPlaces(newPlaces.sort((a: any, b: any) => b.id - a.id));
+      }
+    );
+
+    return () => unsubscribe();
   }, [tripId, type]);
 
-  const loadPlaces = async () => {
-    const result = await storage.list(`place:${tripId}:${type}:`);
-    const loadedPlaces: StoredPlace[] = [];
+  // You can now remove 'await loadPlaces()' from addPlace, deletePlace, and confirmPlace.
+  // Just perform the storage operation, and the UI will update itself.
 
-
-    if (result && result.keys) {
-      for (const key of result.keys) {
-        const data = await storage.get(key);
-        if (data && data.value) {
-          loadedPlaces.push(JSON.parse(data.value));
-        }
-      }
-    }
-
-    setPlaces(loadedPlaces.sort((a, b) => b.id - a.id));
-
-
-  };
+  
 
   const addPlace = async (placeData: Omit<PlaceData, "id">) => {
     const place: PlaceData = {
@@ -2471,7 +2867,7 @@ function PlacesTab({ tripId, type }: PlacesTabProps) {
 
 
     await storage.set(`place:${tripId}:${type}:${place.id}`, place);
-    await loadPlaces();
+    
   };
 
 
@@ -2485,7 +2881,7 @@ function PlacesTab({ tripId, type }: PlacesTabProps) {
       delete updated.paidBy;
 
       await storage.set(`place:${tripId}:${type}:${place.id}`, updated);
-      await loadPlaces();
+      
       return;
     }
 
@@ -2517,7 +2913,7 @@ function PlacesTab({ tripId, type }: PlacesTabProps) {
     await storage.set(`place:${tripId}:${type}:${place.id}`,place);
 
     setConfirmingPlace(null);
-    await loadPlaces();
+    
   };
 
 
@@ -2531,7 +2927,7 @@ function PlacesTab({ tripId, type }: PlacesTabProps) {
   const deletePlace = async (placeId: number) => {
 
     await deleteKey(`place:${tripId}:${type}:${placeId}`);
-    await loadPlaces();
+    
   };
 
 
@@ -2725,7 +3121,7 @@ function PlacesTab({ tripId, type }: PlacesTabProps) {
             setConfirmingPlace(updated);
 
             setCostDialogPlace(null);
-            await loadPlaces();
+            
           }}
 
 
@@ -2832,27 +3228,24 @@ function ShoppingTab({ tripId }: { tripId: number }) {
   const [buyingItem, setBuyingItem] = useState<ShoppingItem | null>(null);
 
   useEffect(() => {
-    loadItems();
-  }, [tripId]);
-
-  const loadItems = async () => {
     const user = auth.currentUser;
     if (!user) return;
 
-    const result = await storage.list(`shopping:${tripId}:user:${user.uid}:`);
-    const loadedItems: ShoppingItem[] = [];
-
-    if (result && result.keys) {
-      for (const key of result.keys) {
-        const data = await storage.get(key);
-        if (data && data.value) {
-          loadedItems.push(JSON.parse(data.value));
-        }
+    // This listens for ANY change to shopping items
+    const unsubscribe = storage.subscribeToList(
+      `shopping:${tripId}:user:${user.uid}:`, 
+      (newItems) => {
+        // Automatically sorts and updates state whenever DB changes
+        setItems(newItems.sort((a: any, b: any) => b.id - a.id));
       }
-    }
-    setItems(loadedItems.sort((a, b) => b.id - a.id));
-  };
+    );
 
+    return () => unsubscribe(); // Cleanup when tab closes
+  }, [tripId]);
+
+  
+
+  // Updated addItem (No longer needs manual loadItems call)
   const addItem = async (itemData: ShoppingData) => {
     const user = auth.currentUser;
     if (!user) return;
@@ -2865,18 +3258,18 @@ function ShoppingTab({ tripId }: { tripId: number }) {
       createdAt: new Date().toISOString(),
     };
 
+    // Just save. The listener above will update the UI automatically.
     await storage.set(
       `shopping:${tripId}:user:${user.uid}:${newItem.id}`,
       newItem
     );
-    await loadItems();
   };
 
+  // Updated deleteItem (No longer needs manual loadItems call)
   const deleteItem = async (id: number) => {
     const user = auth.currentUser;
     if (!user) return;
     await deleteKey(`shopping:${tripId}:user:${user.uid}:${id}`);
-    await loadItems();
   };
 
   const handleToggleClick = async (item: ShoppingItem) => {
@@ -2892,7 +3285,7 @@ function ShoppingTab({ tripId }: { tripId: number }) {
         `shopping:${tripId}:user:${user.uid}:${item.id}`,
         updated
       );
-      await loadItems();
+      
     } else {
       // If currently NOT bought -> Open the Simple Cost Dialog
       setBuyingItem(item);
@@ -2916,7 +3309,7 @@ function ShoppingTab({ tripId }: { tripId: number }) {
     );
     
     setBuyingItem(null);
-    await loadItems();
+    
   };
 
   // Group items by category
@@ -3246,26 +3639,17 @@ function PhotosTab({ tripId }: PhotosTabProps) {
   const [showAddDialog, setShowAddDialog] = useState(false);
 
   useEffect(() => {
-    loadPhotos();
+    const unsubscribe = storage.subscribeToList(
+      `photo:${tripId}:`, 
+      (newPhotos) => {
+        setPhotos(newPhotos.sort((a: any, b: any) => b.id - a.id));
+      }
+    );
+
+    return () => unsubscribe();
   }, [tripId]);
 
-  const loadPhotos = async () => {
-    const result = await storage.list(`photo:${tripId}:`);
-    const loadedPhotos: PhotoItem[] = [];
-
-
-    if (result && result.keys) {
-      for (const key of result.keys) {
-        const data = await storage.get(key);
-        if (data && data.value) {
-          loadedPhotos.push(JSON.parse(data.value));
-        }
-      }
-    }
-
-    setPhotos(loadedPhotos.sort((a: PhotoItem, b: PhotoItem) => b.id - a.id));
-
-  };
+  
 
   const addPhoto = async (photoData: PhotoData) => {
       const photo: PhotoItem = {
@@ -3276,13 +3660,13 @@ function PhotosTab({ tripId }: PhotosTabProps) {
   };
 
     await storage.set(`photo:${tripId}:${photo.id}`, photo);
-    await loadPhotos();
+    
   };
 
   const deletePhoto = async (photoId: number) => {
 
     await deleteKey(`photo:${tripId}:${photoId}`);
-    await loadPhotos();
+    
   };
 
 
@@ -3459,998 +3843,823 @@ function HotelCard({
   onConfirm,
   onEdit,
   onDelete
-}:{
+}: {
   hotel: StoredHotel;
-  onConfirm: ()=>void;
-  onEdit: ()=>void;
-  onDelete: ()=>void;
-}){
-
-  const creatorName = useUserName(hotel.createdByUid);
-
+  onConfirm: () => void;
+  onEdit: () => void;
+  onDelete: () => void;
+}) {
   return (
-    <div
-      className="bg-white border-2 border-gray-200 rounded-lg p-6 hover:border-amber-300 hover:shadow-lg transition-all"
-    >
-      <div className="flex items-start justify-between">
-
-        <div>
-          <h3 className="text-xl font-serif text-gray-800">
-            {hotel.name}
-          </h3>
-
-          {hotel.createdAt && (
-            <div className="text-xs text-gray-500 mt-1">
-              Added by {creatorName || "Unknown"} •{" "}
-              {formatDistanceToNow(new Date(hotel.createdAt), { addSuffix: true })}
-            </div>
-          )}
-
-
-          {hotel.address && (
-            <p className="text-gray-700 mt-1">{hotel.address}</p>
-          )}
-
-          <div className="text-sm text-gray-600 mt-2 space-y-1">
-            {hotel.checkIn && <div>Check-in: {hotel.checkIn}</div>}
-            {hotel.checkOut && <div>Check-out: {hotel.checkOut}</div>}
-            {hotel.price && <div className="font-medium">Price: {hotel.price}</div>}
-            {hotel.details && <div className="text-gray-500">{hotel.details}</div>}
-          </div>
-        </div>
-
-        <div className="flex flex-col items-end gap-2">
-
-          {hotel.status !== "confirmed" && (
-            <button
-              onClick={onConfirm}
-              className="px-3 py-1 bg-amber-500 text-white rounded text-sm hover:bg-amber-600"
-            >
-              Confirm
-            </button>
-          )}
-
-          {hotel.link && (
-            <button
-              onClick={()=>window.open(hotel.link,"_blank")}
-              className="px-3 py-1 bg-blue-600 text-white rounded text-sm hover:bg-blue-700"
-            >
-              Open Booking
-            </button>
-          )}
-
+    <div className="bg-white border border-gray-200 rounded-lg p-5 shadow-sm hover:shadow-md transition-shadow relative flex flex-col h-full">
+      <div className="flex justify-between items-start mb-2">
+        <h4 className="text-lg font-bold text-gray-900 leading-tight pr-2">{hotel.name}</h4>
+        {hotel.status !== "confirmed" ? (
           <button
-            onClick={onEdit}
-            className="text-blue-600 hover:text-blue-800 text-sm"
+            onClick={(e) => { e.stopPropagation(); onConfirm(); }}
+            className="bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold px-3 py-1.5 rounded flex-shrink-0"
           >
-            Edit
+            Confirm
           </button>
+        ) : (
+          <span className="bg-green-100 text-green-800 text-xs font-bold px-2 py-1 rounded flex-shrink-0">
+            Confirmed
+          </span>
+        )}
+      </div>
 
-          <button
-            onClick={onDelete}
-            className="text-red-500 hover:text-red-700 text-sm"
-          >
-            Delete
-          </button>
+      <p className="text-gray-600 text-xs mb-3">{hotel.address}</p>
 
+      <div className="flex-1 space-y-1 mb-4">
+        <div className="text-sm text-gray-700">
+          <span className="text-gray-500 text-xs block">Check-in:</span> {hotel.checkIn}
         </div>
+        <div className="text-sm text-gray-700">
+          <span className="text-gray-500 text-xs block">Check-out:</span> {hotel.checkOut}
+        </div>
+        
+        {hotel.price && <p className="text-gray-900 text-sm font-medium mt-2">Price: {hotel.price}</p>}
+        {hotel.details && <p className="text-gray-500 text-xs mt-1 italic">{hotel.details}</p>}
+      </div>
 
+      <div className="flex justify-end gap-3 text-xs font-medium border-t pt-3 mt-auto">
+        <button 
+          onClick={(e) => { e.stopPropagation(); onEdit(); }} 
+          className="text-blue-600 hover:text-blue-800"
+        >
+          Edit
+        </button>
+        <button 
+          onClick={(e) => { e.stopPropagation(); onDelete(); }} 
+          className="text-red-500 hover:text-red-700"
+        >
+          Delete
+        </button>
       </div>
     </div>
   );
 }
 
+type DocumentDialogProps = {
+  onClose: () => void;
+  onAdd: (data: Omit<DocumentData, "id" | "createdAt" | "createdByUid">) => void;
+};
 
-export type StoredFlight = FlightData & { id: number };
-export type StoredHotel = HotelData & { id: number };
+function DocumentDialog({ onClose, onAdd }: DocumentDialogProps) {
+  const [name, setName] = useState("");
+  const [category, setCategory] = useState<DocumentData["category"]>("Tickets");
+  const [fileData, setFileData] = useState<{ url: string; name: string; type: string } | null>(null);
+  const [error, setError] = useState("");
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Firestore document limit is 1MB. Safety check for 900KB.
+    if (file.size > 900 * 1024) {
+      setError("File is too large (Max 900KB). Please compress it first.");
+      return;
+    }
+    setError("");
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const result = event.target?.result;
+      if (typeof result === "string") {
+        setFileData({
+          url: result,
+          name: file.name,
+          type: file.type,
+        });
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleSubmit = () => {
+    if (!name || !fileData) {
+      setError("Please provide a name and upload a file.");
+      return;
+    }
+
+    onAdd({
+      name,
+      category,
+      fileUrl: fileData.url,
+      fileName: fileData.name,
+      fileType: fileData.type,
+    });
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+      <div className="bg-white rounded-lg max-w-md w-full p-6">
+        <h3 className="text-2xl font-serif mb-4">Upload Document</h3>
+        
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium mb-1">Document Name</label>
+            <input
+              type="text"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg focus:border-gray-900 outline-none"
+              placeholder="e.g., Flight Tickets to Tokyo"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium mb-1">Category</label>
+            <select
+              value={category}
+              onChange={(e) => setCategory(e.target.value as any)}
+              className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg focus:border-gray-900 outline-none"
+            >
+              <option value="Tickets">Tickets</option>
+              <option value="Reservations">Reservations</option>
+              <option value="Insurance">Insurance</option>
+              <option value="ID">IDs / Passports</option>
+              <option value="Other">Other</option>
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium mb-1">File (PDF, Image)</label>
+            <input
+              type="file"
+              accept=".pdf,.jpg,.jpeg,.png"
+              onChange={handleFileChange}
+              className="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-gray-100 file:text-gray-700 hover:file:bg-gray-200"
+            />
+            {error && <p className="text-red-500 text-xs mt-1">{error}</p>}
+            {fileData && !error && (
+              <p className="text-green-600 text-xs mt-1">✓ {fileData.name} ready to upload</p>
+            )}
+          </div>
+
+          <div className="flex gap-3 pt-4">
+            <button
+              onClick={handleSubmit}
+              className="flex-1 px-4 py-3 bg-gray-900 text-white rounded-lg hover:bg-gray-800"
+            >
+              Upload
+            </button>
+            <button
+              onClick={onClose}
+              className="px-4 py-3 bg-white border-2 border-gray-300 rounded-lg hover:border-gray-400"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function TransportCard({
+  transport,
+  onConfirm,
+  onEdit,
+  onDelete
+}: {
+  transport: StoredTransport;
+  onConfirm: () => void;
+  onEdit: () => void;
+  onDelete: () => void;
+}) {
+  return (
+    <div className="bg-white border border-gray-200 rounded-lg p-5 shadow-sm hover:shadow-md transition-shadow relative flex flex-col h-full">
+      <div className="flex justify-between items-start mb-2">
+        <div>
+          <h4 className="text-lg font-bold text-gray-900">{transport.type}</h4>
+          {transport.code && <p className="text-gray-500 text-xs">{transport.code}</p>}
+        </div>
+        {transport.status !== "confirmed" ? (
+          <button
+            onClick={(e) => { e.stopPropagation(); onConfirm(); }}
+            className="bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold px-3 py-1.5 rounded"
+          >
+            Confirm
+          </button>
+        ) : (
+          <span className="bg-green-100 text-green-800 text-xs font-bold px-2 py-1 rounded">
+            Confirmed
+          </span>
+        )}
+      </div>
+
+      <div className="flex-1 space-y-1 mb-4">
+        <p className="text-gray-800 text-sm font-medium">{transport.departure} ➝ {transport.arrival}</p>
+        <p className="text-gray-500 text-xs">{transport.date} {transport.time}</p>
+        {transport.price && <p className="text-gray-700 text-sm mt-1">Price: {transport.price}</p>}
+        {transport.details && <p className="text-gray-500 text-xs italic mt-1">{transport.details}</p>}
+      </div>
+
+      <div className="flex justify-end gap-3 text-xs font-medium border-t pt-3 mt-auto">
+        <button 
+          onClick={(e) => { e.stopPropagation(); onEdit(); }} 
+          className="text-blue-600 hover:text-blue-800"
+        >
+          Edit
+        </button>
+        <button 
+          onClick={(e) => { e.stopPropagation(); onDelete(); }} 
+          className="text-red-500 hover:text-red-700"
+        >
+          Delete
+        </button>
+      </div>
+    </div>
+  );
+}
+
+export type StoredFlight = FlightData & { 
+  id: number;
+  cost?: string | number;               // Add this
+  price?: string | number;              // Add this
+  paidBy?: { uid: string; amount: number }[]; // Add this
+};
+
+export type StoredHotel = HotelData & { 
+  id: number;
+  cost?: string | number;               // Add this
+  price?: string | number;              // Add this
+  paidBy?: { uid: string; amount: number }[]; // Add this
+};
 export type StoredPacking = PackingData & { id: number; packed: boolean };
 
 type AdminTabProps = { tripId: number };
 
-function AdminTab({ tripId }: AdminTabProps) {
-  const [costDialogFlight,setCostDialogFlight]=useState<StoredFlight|null>(null);
-  const [costDialogHotel,setCostDialogHotel]=useState<StoredHotel|null>(null);
-  const [transports,setTransports]=useState<StoredTransport[]>([]);
-  const [editingTransport,setEditingTransport]=useState<StoredTransport|null>(null);
-  const [showTransportDialog,setShowTransportDialog]=useState(false);
-  const [costDialogTransport,setCostDialogTransport]=useState<StoredTransport|null>(null);
-
-  type AdminSubTab = "flights" | "hotels" | "transport" | "packing";
-
-  const [inviteEmail, setInviteEmail] = useState("");
-  type PackingMode = "shared" | "personal";
-
-  const [packingMode, setPackingMode] = useState<PackingMode>("shared");
-
+function AdminTab({ tripId }: { tripId: number }) {
+  // --- STATE ---
+  const [activeSubTab, setActiveSubTab] = useState<"flights" | "hotels" | "transport" | "packing" | "documents">("flights");
+  
+  // Data State
   const [flights, setFlights] = useState<StoredFlight[]>([]);
   const [hotels, setHotels] = useState<StoredHotel[]>([]);
+  const [transports, setTransports] = useState<StoredTransport[]>([]);
   const [packing, setPacking] = useState<StoredPacking[]>([]);
+  const [documents, setDocuments] = useState<DocumentData[]>([]);
+
+  // Dialog State
+  const [showFlightDialog, setShowFlightDialog] = useState(false);
+  const [showHotelDialog, setShowHotelDialog] = useState(false);
+  const [showTransportDialog, setShowTransportDialog] = useState(false);
+  const [showPackingDialog, setShowPackingDialog] = useState(false);
+  const [showDocumentDialog, setShowDocumentDialog] = useState(false);
+
+  // Edit/Action State
+  const [costDialogFlight, setCostDialogFlight] = useState<StoredFlight | null>(null);
+  const [costDialogHotel, setCostDialogHotel] = useState<StoredHotel | null>(null);
+  const [costDialogTransport, setCostDialogTransport] = useState<StoredTransport | null>(null);
+  const [editingTransport, setEditingTransport] = useState<StoredTransport | null>(null);
   const [editingFlight, setEditingFlight] = useState<StoredFlight | null>(null);
   const [editingHotel, setEditingHotel] = useState<StoredHotel | null>(null);
 
-  const [activeSubTab, setActiveSubTab] = useState<AdminSubTab>("flights");
+  const [inviteEmail, setInviteEmail] = useState("");
+  const [packingMode, setPackingMode] = useState<"shared" | "personal">("shared");
 
-  const [showFlightDialog,setShowFlightDialog]=useState(false);
-  const [showHotelDialog,setShowHotelDialog]=useState(false);
-  const [showPackingDialog,setShowPackingDialog]=useState(false);
-
-  useEffect(()=>{
-    loadAdminData();
-  },[tripId, packingMode]);
-
-  const loadAdminData=async()=>{
-
-    const load = async <T,>(prefix: string): Promise<T[]> => {
-
-      const result=await storage.list(`${prefix}:${tripId}:`);
-      const arr=[];
-
-      if(result?.keys){
-        for(const key of result.keys){
-          const data=await storage.get(key);
-
-          // 🔥 ignore deleted / empty docs
-          if(data?.value){
-            try{
-              const parsed=JSON.parse(data.value);
-              if(parsed && parsed.id) arr.push(parsed);
-            }catch{}
-          }
-        }
-      }
-      return arr;
-    };
-
-    setFlights(await load<StoredFlight>("flight"));
-    setHotels(await load<StoredHotel>("hotel"));
-    setTransports(await load<StoredTransport>("transport"));
+  // --- LISTENERS ---
+  useEffect(() => {
+    const unsubFlights = storage.subscribeToList(`flight:${tripId}:`, (items) => setFlights(items));
+    const unsubHotels = storage.subscribeToList(`hotel:${tripId}:`, (items) => setHotels(items));
+    const unsubTransport = storage.subscribeToList(`transport:${tripId}:`, (items) => setTransports(items));
+    const unsubDocuments = storage.subscribeToList(`document:${tripId}:`, (items) => {
+      setDocuments(items.sort((a: any, b: any) => b.id - a.id));
+    });
 
     const user = auth.currentUser;
-    if(!user) return;
-
-    const prefix =
-      packingMode === "shared"
+    let unsubPacking = () => {};
+    if (user) {
+      const packingPrefix = packingMode === "shared"
         ? `packing:${tripId}:shared`
         : `packing:${tripId}:user:${user.uid}`;
-
-    setPacking(await load<StoredPacking>(prefix));
-
-
-  };
-
-  const addFlight = async (data: FlightData) => {
-
-
-    const user = auth.currentUser;
-
-    const flight = editingFlight
-      ? { ...editingFlight, ...data }
-      : {
-          id: Date.now(),
-          ...data,
-          createdByUid: user?.uid || null,
-          createdAt : new Date().toISOString(),
-
-        };
-
-
-    await storage.set(`flight:${tripId}:${flight.id}`, flight);
-
-          // itinerary logic unchanged
-          if (flight.status === "confirmed") {
-
-            // outbound
-            await addToItineraryStorage(
-              tripId,
-              flight.date,
-              flight.time,
-              `Flight ${flight.airline} ${flight.flightNumber}`,
-              `${flight.departure} → ${flight.arrival}`,
-              "",
-              "flight"
-            );
-
-            // return
-            if (flight.returnDate) {
-              await addToItineraryStorage(
-                tripId,
-                flight.returnDate,
-                flight.returnTime || "",
-                `Return Flight ${flight.airline} ${flight.flightNumber}`,
-                `${flight.arrival} → ${flight.departure}`,
-                "",
-                "flight"
-              );
-            }
-          }
-
-
-
-    setEditingFlight(null);
-    await loadAdminData();
-  };
-
-
-
-  const addHotel = async (data: HotelData) => {
-
-
-    const user = auth.currentUser;
-
-    const hotel = editingHotel
-      ? { ...editingHotel, ...data }
-      : {
-          id: Date.now(),
-          ...data,
-          createdByUid: user?.uid || null,
-          createdAt : new Date().toISOString(),
-        };
-
-
-    await storage.set(`hotel:${tripId}:${hotel.id}`, hotel);
-
-    if (hotel.status === "confirmed") {
-
-      // CHECK-IN
-      if (hotel.checkIn) {
-        await addToItineraryStorage(
-          tripId,
-          hotel.checkIn,
-          "15:00",
-          `Check-in: ${hotel.name}`,
-          hotel.address,
-          "",
-          "hotel"
-        );
-      }
-
-      // CHECK-OUT (NEW)
-      if (hotel.checkOut) {
-        await addToItineraryStorage(
-          tripId,
-          hotel.checkOut,
-          "11:00",
-          `Check-out: ${hotel.name}`,
-          hotel.address,
-          "",
-          "hotel"
-        );
-      }
-
+      unsubPacking = storage.subscribeToList(packingPrefix, (items) => setPacking(items));
     }
 
+    return () => {
+      unsubFlights();
+      unsubHotels();
+      unsubTransport();
+      unsubDocuments();
+      unsubPacking();
+    };
+  }, [tripId, packingMode]);
 
-    setEditingHotel(null);
-    await loadAdminData();
-  };
+  // --- ACTIONS ---
 
-  const addTransport = async (data: TransportData) => {
-
+  // FLIGHTS
+  const addFlight = async (data: FlightData) => {
     const user = auth.currentUser;
-
-    const transport = editingTransport
-      ? { ...editingTransport, ...data }
-      : {
-          id: Date.now(),
-          ...data,
-          createdByUid: user?.uid || null,
-          createdAt: new Date().toISOString(),
-        };
-
-    await storage.set(`transport:${tripId}:${transport.id}`, transport);
-
-    setEditingTransport(null);
-    await loadAdminData();
-  };
-
-  const deleteTransport = async(id:number)=>{
-    await deleteKey(`transport:${tripId}:${id}`);
-    setTransports(prev=>prev.filter(t=>t.id!==id));
-  };
-
-  const confirmTransport = (t:StoredTransport)=>{
-    setCostDialogTransport(t);
-  };
-
-
-
-  const addPackingItem = async (data: PackingData) => {
-    const user = auth.currentUser;
-    if(!user) return;
-
-    const item = {
-        id: Date.now(),
-        packed:false,
-        ...data,
-        createdByUid: user?.uid || null,
-        createdAt: new Date().toISOString()
-     };
-
-    const key =
-      packingMode === "shared"
-        ? `packing:${tripId}:shared:${item.id}`
-        : `packing:${tripId}:user:${user.uid}:${item.id}`;
-
-    await storage.set(key,item);
-
-    await loadAdminData();
+    const newFlight: StoredFlight = {
+      ...data,
+      id: editingFlight ? editingFlight.id : Date.now(),
+      createdByUid: user?.uid,
+      createdAt: editingFlight ? editingFlight.createdAt : new Date().toISOString(),
+    };
+    await storage.set(`flight:${tripId}:${newFlight.id}`, newFlight);
+    setEditingFlight(null);
   };
 
   const deleteFlight = async (id: number) => {
+    if (confirm("Delete this flight?")) await deleteKey(`flight:${tripId}:${id}`);
+  };
 
-    await deleteKey(`flight:${tripId}:${id}`);
-    setFlights(prev => prev.filter((f) => f.id !== id)); // instant UI update
+  // HOTELS
+  const addHotel = async (data: HotelData) => {
+    const user = auth.currentUser;
+    const newHotel: StoredHotel = {
+      ...data,
+      id: editingHotel ? editingHotel.id : Date.now(),
+      createdByUid: user?.uid,
+      createdAt: editingHotel ? editingHotel.createdAt : new Date().toISOString(),
+    };
+    await storage.set(`hotel:${tripId}:${newHotel.id}`, newHotel);
+    setEditingHotel(null);
   };
 
   const deleteHotel = async (id: number) => {
-
-    await deleteKey(`hotel:${tripId}:${id}`);
-    setHotels(prev => prev.filter((h) => h.id !== id));
-
+    if (confirm("Delete this hotel?")) await deleteKey(`hotel:${tripId}:${id}`);
   };
 
-  const togglePacked = async (id: number) => {
-
-    const item=packing.find(p=>p.id===id);
-    if(!item)return;
-    item.packed=!item.packed;
+  // TRANSPORT
+  const addTransport = async (data: TransportData) => {
     const user = auth.currentUser;
-    if(!user) return;
-
-    const key =
-      packingMode === "shared"
-        ? `packing:${tripId}:shared:${id}`
-        : `packing:${tripId}:user:${user.uid}:${id}`;
-
-    await storage.set(key,item);
-
-    await loadAdminData();
+    const newTransport: StoredTransport = {
+      ...data,
+      id: editingTransport ? editingTransport.id : Date.now(),
+      createdByUid: user?.uid,
+      createdAt: editingTransport ? editingTransport.createdAt : new Date().toISOString(),
+    };
+    await storage.set(`transport:${tripId}:${newTransport.id}`, newTransport);
+    setEditingTransport(null);
   };
 
-  const toggleFlightStatus = async (flightId: number) => {
-
-    const flight = flights.find((f) => f.id === flightId);
-    if (!flight) return;
-
-    flight.status = "confirmed";
-
-    await storage.set(`flight:${tripId}:${flightId}`, flight);
-
-    // 🔥 ADD TO ITINERARY WHEN CONFIRMED
-    if (flight.date && flight.time) {
-      await addToItineraryStorage(
-        tripId,
-        flight.date,
-        flight.time,
-        `Flight ${flight.airline} ${flight.flightNumber}`,
-        `${flight.departure} → ${flight.arrival}`,
-        "",
-        "flight"
-      );
-    }
-
-    await loadAdminData();
+  const deleteTransport = async (id: number) => {
+    if (confirm("Delete this transport?")) await deleteKey(`transport:${tripId}:${id}`);
   };
+
+  // PACKING & DOCUMENTS (Same as before)
+  const addPackingItem = async (data: PackingData) => {
+    const user = auth.currentUser;
+    const newItem: StoredPacking = {
+      ...data,
+      id: Date.now(),
+      packed: false,
+      createdByUid: user?.uid,
+      createdAt: new Date().toISOString(),
+    };
+    const prefix = packingMode === "shared" ? `packing:${tripId}:shared` : `packing:${tripId}:user:${user?.uid}`;
+    await storage.set(`${prefix}:${newItem.id}`, newItem);
+  };
+
+  const togglePacked = async (item: StoredPacking) => {
+    const user = auth.currentUser;
+    const updated = { ...item, packed: !item.packed };
+    const prefix = packingMode === "shared" ? `packing:${tripId}:shared` : `packing:${tripId}:user:${user?.uid}`;
+    await storage.set(`${prefix}:${item.id}`, updated);
+  };
+
   const deletePackingItem = async (id: number) => {
-
     const user = auth.currentUser;
-    if (!user) return;
-
-    const confirmed = confirm("Delete this packing item?");
-    if (!confirmed) return;
-
-    const key =
-      packingMode === "shared"
-        ? `packing:${tripId}:shared:${id}`
-        : `packing:${tripId}:user:${user.uid}:${id}`;
-
-    await deleteKey(key);
-
-    // instant UI update (optional but nice)
-    setPacking(prev => prev.filter(p => p.id !== id));
-
+    const prefix = packingMode === "shared" ? `packing:${tripId}:shared` : `packing:${tripId}:user:${user?.uid}`;
+    await deleteKey(`${prefix}:${id}`);
   };
 
-  const toggleHotelStatus = async (hotelId: number) => {
-
-    const hotel = hotels.find((h) => h.id === hotelId);
-    if (!hotel) return;
-
-    // mark confirmed
-    hotel.status = "confirmed";
-
-    await storage.set(`hotel:${tripId}:${hotelId}`, hotel);
-
-    // CHECK-IN
-    if (hotel.checkIn) {
-      await addToItineraryStorage(
-        tripId,
-        hotel.checkIn,
-        "15:00",
-        `Check-in: ${hotel.name}`,
-        hotel.address || "",
-        "",
-        "hotel"
-      );
-    }
-
-    // ✅ CHECK-OUT (THIS WAS MISSING)
-    if (hotel.checkOut) {
-      await addToItineraryStorage(
-        tripId,
-        hotel.checkOut,
-        "11:00",
-        `Check-out: ${hotel.name}`,
-        hotel.address || "",
-        "",
-        "hotel"
-      );
-    }
-
-    await loadAdminData();
+  const addDocument = async (data: Omit<DocumentData, "id" | "createdAt" | "createdByUid">) => {
+    const user = auth.currentUser;
+    const newDoc: DocumentData = {
+      id: Date.now(),
+      ...data,
+      createdByUid: user?.uid || null,
+      createdAt: new Date().toISOString(),
+    };
+    await storage.set(`document:${tripId}:${newDoc.id}`, newDoc);
   };
 
+  const deleteDocument = async (id: number) => {
+    if (confirm("Delete document?")) await deleteKey(`document:${tripId}:${id}`);
+  };
 
-  
+  const downloadDocument = (doc: DocumentData) => {
+    const link = document.createElement("a");
+    link.href = doc.fileUrl;
+    link.download = doc.fileName || doc.name;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  // Helper for Packing stats
   const packedCount = packing.filter((p) => p.packed).length;
+  // --- CLEANUP TOOL ---
+  const cleanUpGhosts = async () => {
+    if (!confirm("This will scan for and delete any broken/empty items that cannot be deleted normally. Continue?")) return;
 
+    let count = 0;
+    const prefixes = [`flight:${tripId}:`, `hotel:${tripId}:`, `transport:${tripId}:`, `packing:${tripId}:`];
 
-  return(
-<div className="space-y-6">
+    try {
+      for (const prefix of prefixes) {
+        // 1. Get all KEYS for this category
+        const result = await storage.list(prefix);
+        
+        if (result && result.keys) {
+          for (const key of result.keys) {
+            // 2. Fetch the raw data for each key
+            const dataSnap = await storage.get(key);
+            
+            // 3. Determine if it's "Ghost" (Broken/Empty)
+            let isBroken = false;
+            
+            if (!dataSnap) {
+               isBroken = true;
+            } else {
+               try {
+                 // Handle both stringified (legacy) and raw object data
+                 const val = dataSnap.value ? JSON.parse(dataSnap.value) : dataSnap;
+                 
+                 // CRITICAL CHECK: Does it have an ID? 
+                 // If ID is missing, or it's an empty object, it's a ghost.
+                 if (!val || val.id === undefined || Object.keys(val).length <= 1) {
+                   isBroken = true;
+                 }
+               } catch (e) {
+                 isBroken = true; // If we can't parse it, it's corrupt
+               }
+            }
 
-  <div>
-    <h2 className="text-3xl font-serif text-gray-900">Trip Administration</h2>
-    <p className="text-gray-800 mt-1">All your important trip details in one place</p>
-    
-  </div>
-  <p className="text-gray-800 mt-1">Invite people to your trip!</p>
-  <div className="bg-white border-2 rounded-lg p-4 flex gap-2">
-    <input
-      type="email"
-      placeholder="Invite by email"
-      value={inviteEmail}
-      onChange={(e)=>setInviteEmail(e.target.value)}
-      className="flex-1 border-2 rounded-lg px-3 py-2"
-    />
-
-    <button
-      onClick={async ()=>{
-        if(!inviteEmail) return;
-
-        // lookup user by email
-        const snapshot = await getDocs(collection(db, "users"));
-        let uid = null;
-
-        snapshot.forEach((userDoc) => {
-          const email = userDoc.data().email?.toLowerCase().trim();
-
-          if (email === inviteEmail.toLowerCase().trim()) {
-            uid = userDoc.id;
+            // 4. Delete if broken
+            if (isBroken) {
+              console.log("Deleting ghost item:", key);
+              await deleteKey(key);
+              count++;
+            }
           }
-        });
-
-
-        if(!uid){
-          alert("User not found");
-          return;
         }
-
-        const ownerId = auth.currentUser?.uid;
-        if (!ownerId) return;
-
-        const tripKey = `trip:${tripId}`;
-        const tripDoc = await storage.get(tripKey);
-
-        if(!tripDoc?.value) return;
-
-        const trip = JSON.parse(tripDoc.value);
-
-        trip.members = [...new Set([...(trip.members||[]), uid])];
-
-        await storage.set(tripKey, trip);
-        setInviteEmail("");
-        alert("User invited!");
-      }}
-      className="px-4 py-2 bg-gray-900 text-white rounded-lg"
-    >
-      Invite
-    </button>
-  </div>
+      }
+      alert(`Cleanup complete! Removed ${count} broken items.`);
+      // Reload page to refresh state cleanly
+      window.location.reload(); 
+    } catch (err) {
+      console.error("Cleanup failed:", err);
+      alert("An error occurred during cleanup. Check console.");
+    }
+  };
+  return (
+    <div className="space-y-6">
+      {/* HEADER */}
+      <div>
+        <h2 className="text-3xl font-serif text-gray-900">Trip Administration</h2>
+        <p className="text-gray-800 mt-1">All your important trip details in one place</p>
+      </div>
+      
 
 
-  {/* SUBTABS */}
-    <div className="flex gap-2 border-b-2 border-gray-200">
-      {(
-        [
-          { id: "flights", label: "Flights", icon: Plane },
-          { id: "hotels", label: "Hotels", icon: Hotel },
-          { id: "transport", label: "Other Transport", icon: Train },
-          { id: "packing", label: "Packing", icon: PackageCheck },
-        ] as { id: AdminSubTab; label: string; icon: any }[]
-      ).map((tab) => {
-        const Icon = tab.icon;
-        return (
-          <button
-            key={tab.id}
-            onClick={() => setActiveSubTab(tab.id)}
-            className={`flex items-center gap-2 px-4 py-3 border-b-4 ${
-              activeSubTab === tab.id
-                ? "border-gray-900 text-gray-900"
-                : "border-transparent text-gray-800 hover:text-gray-900"
-            }`}
-          >
-            <Icon size={18} />
-            {tab.label}
-          </button>
-        );
-      })}
+      {/* INVITE */}
+      <div className="bg-white border-2 rounded-lg p-4 flex gap-2">
+           <input
+             type="email"
+             placeholder="Invite by email"
+             value={inviteEmail}
+             onChange={(e)=>setInviteEmail(e.target.value)}
+             className="flex-1 border-2 rounded-lg px-3 py-2"
+           />
+           <button
+             onClick={async ()=>{
+                if(!inviteEmail) return;
+                const user = auth.currentUser;
+                if(!user) return;
+
+                try {
+                  // 1. Get current trip data
+                  const tripSnap = await storage.get(`trip:${tripId}`);
+                  if(tripSnap?.value) {
+                    const tripData = JSON.parse(tripSnap.value);
+                    
+                    // 2. Add to invites array (if not already there)
+                    const currentInvites = tripData.invites || [];
+                    if(!currentInvites.includes(inviteEmail) && !tripData.members.includes(inviteEmail)) { // Basic check
+                       const updated = {
+                         ...tripData,
+                         invites: [...currentInvites, inviteEmail]
+                       };
+                       await storage.set(`trip:${tripId}`, updated);
+                       alert(`Invite sent to ${inviteEmail}`);
+                       setInviteEmail(""); // Clear input
+                    } else {
+                      alert("User is already invited or a member.");
+                    }
+                  }
+                } catch(e) {
+                  console.error("Invite failed", e);
+                  alert("Failed to send invite");
+                }
+             }}
+             className="px-4 py-2 bg-gray-900 text-white rounded-lg"
+           >
+             Invite
+           </button>
+       </div>
+
+      {/* SUBTABS NAVIGATION */}
+      <div className="flex gap-2 border-b-2 border-gray-200 overflow-x-auto">
+        {(
+          [
+            { id: "flights", label: "Flights", icon: Plane },
+            { id: "hotels", label: "Hotels", icon: Hotel },
+            { id: "transport", label: "Transport", icon: Train },
+            { id: "documents", label: "Documents", icon: FileText },
+            { id: "packing", label: "Packing", icon: PackageCheck },
+          ] as const
+        ).map((tab) => {
+          const Icon = tab.icon;
+          return (
+            <button
+              key={tab.id}
+              onClick={() => setActiveSubTab(tab.id)}
+              className={`flex items-center gap-2 px-4 py-3 border-b-4 whitespace-nowrap ${
+                activeSubTab === tab.id
+                  ? "border-gray-900 text-gray-900"
+                  : "border-transparent text-gray-800 hover:text-gray-900"
+              }`}
+            >
+              <Icon size={18} />
+              {tab.label}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* === FLIGHTS VIEW === */}
+      {activeSubTab === "flights" && (
+        <div className="space-y-6">
+          <div className="flex justify-between items-center">
+            <h3 className="text-xl font-serif">Flights</h3>
+            <button
+              onClick={() => { setEditingFlight(null); setShowFlightDialog(true); }}
+              className="px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800 flex items-center gap-2"
+            >
+              <Plus size={18} /> Add Flight
+            </button>
+          </div>
+          {/* GRID LAYOUT FOR FLIGHTS */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {flights.map((flight) => (
+              <FlightCard
+                key={flight.id}
+                flight={flight}
+                onConfirm={() => setCostDialogFlight(flight)}
+                onDelete={() => deleteFlight(flight.id)}
+                onEdit={() => {
+                  setEditingFlight(flight);
+                  setShowFlightDialog(true);
+                }}
+              />
+            ))}
+            {flights.length === 0 && <div className="col-span-2 text-center text-gray-500 italic py-8 border-2 border-dashed rounded-lg">No flights added yet.</div>}
+          </div>
+        </div>
+      )}
+
+      {/* === HOTELS VIEW === */}
+      {activeSubTab === "hotels" && (
+        <div className="space-y-6">
+          <div className="flex justify-between items-center">
+            <h3 className="text-xl font-serif">Accommodations</h3>
+            <button
+              onClick={() => { setEditingHotel(null); setShowHotelDialog(true); }}
+              className="px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800 flex items-center gap-2"
+            >
+              <Plus size={18} /> Add Hotel
+            </button>
+          </div>
+          {/* GRID LAYOUT FOR HOTELS */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {hotels.map((hotel) => (
+              <HotelCard
+                key={hotel.id}
+                hotel={hotel}
+                onConfirm={() => setCostDialogHotel(hotel)}
+                onDelete={() => deleteHotel(hotel.id)}
+                onEdit={() => {
+                  setEditingHotel(hotel);
+                  setShowHotelDialog(true);
+                }}
+              />
+            ))}
+            {hotels.length === 0 && <div className="col-span-2 text-center text-gray-500 italic py-8 border-2 border-dashed rounded-lg">No hotels added yet.</div>}
+          </div>
+        </div>
+      )}
+
+      {/* === TRANSPORT VIEW === */}
+      {activeSubTab === "transport" && (
+        <div className="space-y-6">
+          <div className="flex justify-between items-center">
+            <h3 className="text-xl font-serif">Transport</h3>
+            <button
+              onClick={() => { setEditingTransport(null); setShowTransportDialog(true); }}
+              className="px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800 flex items-center gap-2"
+            >
+              <Plus size={18} /> Add Transport
+            </button>
+          </div>
+          {/* GRID LAYOUT FOR TRANSPORT */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {transports.map((t) => (
+              <TransportCard
+                key={t.id}
+                transport={t}
+                onConfirm={() => setCostDialogTransport(t)}
+                onDelete={() => deleteTransport(t.id)}
+                onEdit={() => {
+                  setEditingTransport(t);
+                  setShowTransportDialog(true);
+                }}
+              />
+            ))}
+            {transports.length === 0 && <div className="col-span-2 text-center text-gray-500 italic py-8 border-2 border-dashed rounded-lg">No transport added yet.</div>}
+          </div>
+        </div>
+      )}
+
+      {/* === DOCUMENTS VIEW (Grid Already) === */}
+      {activeSubTab === "documents" && (
+        <div className="space-y-6">
+          <div className="flex justify-between items-center">
+            <h3 className="text-xl font-serif">Trip Documents</h3>
+            <button
+              onClick={() => setShowDocumentDialog(true)}
+              className="px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800 flex items-center gap-2"
+            >
+              <Plus size={18} /> Upload Doc
+            </button>
+          </div>
+          {documents.length === 0 ? (
+            <div className="text-center py-12 bg-white rounded-lg border-2 border-dashed border-gray-300">
+              <p className="text-gray-700">No documents uploaded yet</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {documents.map((doc) => (
+                <div key={doc.id} className="bg-white border-2 border-gray-200 rounded-lg p-5 hover:border-blue-300 hover:shadow-lg transition-all">
+                  <div className="flex items-start justify-between mb-3">
+                    <div className="p-3 bg-blue-50 rounded-lg text-blue-600">
+                      <FileText size={24} />
+                    </div>
+                    <div className="flex gap-2">
+                      <button onClick={() => downloadDocument(doc)} className="p-2 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded">
+                        <Download size={18} />
+                      </button>
+                      <button onClick={() => deleteDocument(doc.id)} className="p-2 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded">
+                        <Trash2 size={18} />
+                      </button>
+                    </div>
+                  </div>
+                  <h4 className="font-semibold text-gray-900 truncate" title={doc.name}>{doc.name}</h4>
+                  <div className="flex items-center justify-between mt-2">
+                    <span className="text-xs font-medium px-2 py-1 bg-gray-100 text-gray-600 rounded">{doc.category}</span>
+                    <CreatorBadge uid={doc.createdByUid} />
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* === PACKING VIEW (List) === */}
+      {activeSubTab === "packing" && (
+        <div className="space-y-6">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <h3 className="text-xl font-serif">Packing List ({packedCount}/{packing.length})</h3>
+            <div className="flex gap-2">
+              <div className="flex bg-gray-100 p-1 rounded-lg">
+                <button
+                  onClick={() => setPackingMode("shared")}
+                  className={`px-3 py-1 rounded text-sm ${packingMode === "shared" ? "bg-white shadow text-gray-900" : "text-gray-500"}`}
+                >
+                  Shared
+                </button>
+                <button
+                  onClick={() => setPackingMode("personal")}
+                  className={`px-3 py-1 rounded text-sm ${packingMode === "personal" ? "bg-white shadow text-gray-900" : "text-gray-500"}`}
+                >
+                  Personal
+                </button>
+              </div>
+              <button
+                onClick={() => setShowPackingDialog(true)}
+                className="px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800 flex items-center gap-2"
+              >
+                <Plus size={18} /> Add Item
+              </button>
+            </div>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {packing.map((item) => (
+              <div key={item.id} className="flex items-center gap-3 bg-white p-3 rounded-lg border border-gray-200">
+                <input
+                  type="checkbox"
+                  checked={item.packed}
+                  onChange={() => togglePacked(item)}
+                  className="w-5 h-5 rounded text-gray-900 focus:ring-gray-900"
+                />
+                <div className="flex-1">
+                  <p className={`font-medium ${item.packed ? "line-through text-gray-400" : "text-gray-900"}`}>{item.item}</p>
+                  <p className="text-xs text-gray-500">{item.category}</p>
+                </div>
+                <button onClick={() => deletePackingItem(item.id)} className="text-gray-400 hover:text-red-500">
+                  <Trash2 size={16} />
+                </button>
+              </div>
+            ))}
+            {packing.length === 0 && <p className="text-gray-500 italic col-span-2 text-center py-4">List is empty.</p>}
+          </div>
+        </div>
+      )}
+
+      {/* === DIALOGS (Hidden until triggered) === */}
+      {showFlightDialog && (
+        <FlightDialog
+          initialData={editingFlight || undefined}
+          onClose={() => { setShowFlightDialog(false); setEditingFlight(null); }}
+          onAdd={(data) => { addFlight(data); setShowFlightDialog(false); }}
+        />
+      )}
+
+      {showHotelDialog && (
+        <HotelDialog
+          initialData={editingHotel || undefined}
+          onClose={() => { setShowHotelDialog(false); setEditingHotel(null); }}
+          onAdd={(data) => { addHotel(data); setShowHotelDialog(false); }}
+        />
+      )}
+
+      {showTransportDialog && (
+        <TransportDialog
+          initialData={editingTransport || undefined}
+          onClose={() => { setShowTransportDialog(false); setEditingTransport(null); }}
+          onAdd={(data) => { addTransport(data); setShowTransportDialog(false); }}
+        />
+      )}
+
+      {showPackingDialog && (
+        <PackingDialog
+          onClose={() => setShowPackingDialog(false)}
+          onAdd={(data) => { addPackingItem(data); setShowPackingDialog(false); }}
+        />
+      )}
+
+      {showDocumentDialog && (
+        <DocumentDialog
+          onClose={() => setShowDocumentDialog(false)}
+          onAdd={(data) => { addDocument(data); setShowDocumentDialog(false); }}
+        />
+      )}
+
+      {costDialogFlight && (
+        <CostDialog
+          item={{ item: `Flight: ${costDialogFlight.airline} ${costDialogFlight.flightNumber}` }}
+          tripId={tripId}
+          onClose={() => setCostDialogFlight(null)}
+          onSave={async (cost, paidBy) => {
+            const updated = { ...costDialogFlight, status: "confirmed", cost, paidBy };
+            await storage.set(`flight:${tripId}:${costDialogFlight.id}`, updated);
+            setCostDialogFlight(null);
+          }}
+        />
+      )}
+
+      {costDialogHotel && (
+        <CostDialog
+          item={{ item: `Hotel: ${costDialogHotel.name}` }}
+          tripId={tripId}
+          onClose={() => setCostDialogHotel(null)}
+          onSave={async (cost, paidBy) => {
+            const updated = { ...costDialogHotel, status: "confirmed", cost, paidBy };
+            await storage.set(`hotel:${tripId}:${costDialogHotel.id}`, updated);
+            setCostDialogHotel(null);
+          }}
+        />
+      )}
+
+      {costDialogTransport && (
+        <CostDialog
+          item={{ item: `Transport: ${costDialogTransport.type}` }}
+          tripId={tripId}
+          onClose={() => setCostDialogTransport(null)}
+          onSave={async (cost, paidBy) => {
+            const updated = { ...costDialogTransport, status: "confirmed", cost, paidBy };
+            await storage.set(`transport:${tripId}:${costDialogTransport.id}`, updated);
+            setCostDialogTransport(null);
+          }}
+        />
+      )}
     </div>
-
-
-
-{/* ================= FLIGHTS ================= */}
-{activeSubTab==="flights"&&(
-<div className="space-y-4">
-
-<div className="flex justify-end">
-<button
-onClick={()=>setShowFlightDialog(true)}
-className="px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800 flex items-center gap-2"
->
-<Plus size={18}/> Add Flight
-</button>
-</div>
-
-{flights.length===0?(
-<div className="text-center py-12 bg-white rounded-lg border-2 border-dashed border-gray-300">
-<p className="text-gray-700">No flights added yet</p>
-</div>
-):(
-
-<div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-{flights.map(f=>(
-  <FlightCard
-    key={f.id}
-    flight={f}
-    onConfirm={()=>setCostDialogFlight(f)}
-    onEdit={()=>{
-      setEditingFlight(f);
-      setShowFlightDialog(true);
-    }}
-    onDelete={()=>deleteFlight(f.id)}
-  />
-))}
-
-</div>
-
-)}
-
-</div>
-)}
-
-
-{/* ================= HOTELS ================= */}
-{activeSubTab==="hotels"&&(
-<div className="space-y-4">
-
-<div className="flex justify-end">
-<button
-onClick={()=>setShowHotelDialog(true)}
-className="px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800 flex items-center gap-2"
->
-<Plus size={18}/> Add Hotel
-</button>
-</div>
-
-{hotels.length===0?(
-<div className="text-center py-12 bg-white rounded-lg border-2 border-dashed border-gray-300">
-<p className="text-gray-700">No hotels added yet</p>
-</div>
-):(
-
-<div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-{hotels.map(h=>(
-  <HotelCard
-    key={h.id}
-    hotel={h}
-    onConfirm={()=>setCostDialogHotel(h)}
-    onEdit={()=>{
-      setEditingHotel(h);
-      setShowHotelDialog(true);
-    }}
-    onDelete={()=>deleteHotel(h.id)}
-  />
-))}
-
-</div>
-
-)}
-
-</div>
-)}
-
-{activeSubTab==="transport"&&(
-<div className="space-y-4">
-
-<div className="flex justify-end">
-<button
-onClick={()=>setShowTransportDialog(true)}
-className="px-4 py-2 bg-gray-900 text-white rounded-lg flex items-center gap-2"
->
-<Plus size={18}/> Add Transport
-</button>
-</div>
-
-{transports.length===0?(
-<div className="text-center py-12 bg-white rounded-lg border-2 border-dashed border-gray-300">
-<p className="text-gray-700">No transport added yet</p>
-</div>
-):(
-
-<div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-
-{transports.map(t=>(
-
-<div key={t.id}
-className="bg-white border-2 border-gray-200 rounded-lg p-6">
-
-<div className="flex justify-between">
-
-<div>
-<h3 className="text-xl font-serif">
-{t.type} {t.code||""}
-</h3>
-
-<p className="text-gray-700 mt-1">
-{t.departure} → {t.arrival}
-</p>
-
-<div className="text-sm text-gray-600 mt-2 space-y-1">
-{t.date && <div>Date: {t.date}</div>}
-{t.time && <div>Time: {t.time}</div>}
-{t.price && <div>Price: {t.price}</div>}
-</div>
-</div>
-
-<div className="flex flex-col gap-2">
-
-{t.status!=="confirmed" && (
-<button
-onClick={()=>confirmTransport(t)}
-className="px-3 py-1 bg-amber-500 text-white rounded text-sm"
->
-Confirm
-</button>
-)}
-
-{t.link && (
-<button
-onClick={()=>window.open(t.link,"_blank")}
-className="px-3 py-1 bg-blue-600 text-white rounded text-sm"
->
-Open Booking
-</button>
-)}
-
-<button
-onClick={()=>{
-setEditingTransport(t);
-setShowTransportDialog(true);
-}}
-className="text-blue-600 text-sm"
->
-Edit
-</button>
-
-<button
-onClick={()=>deleteTransport(t.id)}
-className="text-red-500 text-sm"
->
-Delete
-</button>
-
-</div>
-
-</div>
-</div>
-
-))}
-
-</div>
-)}
-
-</div>
-)}
-
-
-{/* ================= PACKING ================= */}
-{activeSubTab==="packing"&&(
-
-<div className="space-y-6">
-
-<div className="flex justify-between items-center">
-<div className="font-medium">
-{packedCount}/{packing.length} packed
-</div>
-<div className="flex gap-2 mb-4">
-  <button
-    onClick={()=>setPackingMode("shared")}
-    className={`px-3 py-1 rounded ${
-      packingMode==="shared" ? "bg-gray-900 text-white" : "bg-gray-200"
-    }`}
-  >
-    Shared List
-  </button>
-
-  <button
-    onClick={()=>setPackingMode("personal")}
-    className={`px-3 py-1 rounded ${
-      packingMode==="personal" ? "bg-gray-900 text-white" : "bg-gray-200"
-    }`}
-  >
-    My List
-  </button>
-</div>
-
-<button
-onClick={()=>setShowPackingDialog(true)}
-className="px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800 flex items-center gap-2"
->
-<Plus size={18}/> Add Item
-</button>
-</div>
-
-
-{packing.length===0?(
-<div className="text-center py-12 bg-white rounded-lg border-2 border-dashed border-gray-300">
-<p className="text-gray-700">No packing items yet</p>
-</div>
-):(
-
-Array.from(new Set(packing.map(p=>p.category))).map(category=>(
-<div key={category}
-className="bg-white border-2 border-gray-200 rounded-lg overflow-hidden">
-
-<div className="bg-gray-50 px-6 py-3 border-b border-gray-200">
-<h3 className="font-serif text-lg text-gray-900">{category}</h3>
-</div>
-
-<div className="p-4 space-y-2">
-
-{packing
-.filter(p=>p.category===category)
-.map(item=>(
-<div key={item.id}
-className={`flex items-center gap-3 p-3 rounded-lg border ${
-item.packed
-? "bg-gray-50 border-gray-200"
-: "bg-white border-gray-200 hover:border-purple-300"
-}`}
->
-
-<input
-  type="checkbox"
-  checked={item.packed}
-  onChange={()=>togglePacked(item.id)}
-  className="w-4 h-4"
-/>
-
-<span className={item.packed?"line-through text-gray-500":"text-gray-800 flex-1"}>
-  {item.item}
-</span>
-
-<button
-  onClick={()=>deletePackingItem(item.id)}
-  className="text-red-500 hover:text-red-700 text-xs"
->
-  Delete
-</button>
-
-
-</div>
-))}
-
-</div>
-
-</div>
-))
-
-)}
-
-</div>
-
-)}
-{/* ===== DIALOGS ===== */}
-
-{showFlightDialog && (
-  <FlightDialog
-    initialData={editingFlight ?? undefined}
-
-    onClose={() => {
-      setShowFlightDialog(false);
-      setEditingFlight(null);
-    }}
-    onAdd={(data) => {
-      addFlight(data);
-      setShowFlightDialog(false);
-    }}
-  />
-)}
-
-
-{showHotelDialog && (
-  <HotelDialog
-    initialData={editingHotel ?? undefined}
-    onClose={() => {
-      setShowHotelDialog(false);
-      setEditingHotel(null);
-    }}
-    onAdd={(data) => {
-      addHotel(data);
-      setShowHotelDialog(false);
-    }}
-  />
-)}
-
-{showTransportDialog && (
-  <TransportDialog
-    initialData={editingTransport ?? undefined}
-    onClose={()=>{
-      setShowTransportDialog(false);
-      setEditingTransport(null);
-    }}
-    onAdd={(data)=>{
-      addTransport(data);
-      setShowTransportDialog(false);
-    }}
-  />
-)}
-
-
-
-{showPackingDialog && (
-  <PackingDialog
-    onClose={() => setShowPackingDialog(false)}
-    onAdd={(data) => {
-      addPackingItem(data);
-      setShowPackingDialog(false);
-    }}
-  />
-)}
-{costDialogFlight && (
-  <CostDialog
-    item={{ item: `${costDialogFlight.airline} ${costDialogFlight.flightNumber}` }}
-    tripId={tripId}
-    onClose={()=>setCostDialogFlight(null)}
-    onSave={async(cost,paidBy)=>{
-
-      const updated={
-        ...costDialogFlight,
-        status:"confirmed",
-        cost,
-        paidBy
-      };
-
-      await storage.set(`flight:${tripId}:${updated.id}`,updated);
-
-      // itinerary add (your existing logic)
-      if(updated.date && updated.time){
-        await addToItineraryStorage(
-          tripId,
-          updated.date,
-          updated.time,
-          `Flight ${updated.airline} ${updated.flightNumber}`,
-          `${updated.departure} → ${updated.arrival}`,
-          "",
-          "flight"
-        );
-      }
-
-      if(updated.returnDate){
-        await addToItineraryStorage(
-          tripId,
-          updated.returnDate,
-          updated.returnTime || "",
-          `Return Flight ${updated.airline} ${updated.flightNumber}`,
-          `${updated.arrival} → ${updated.departure}`,
-          "",
-          "flight"
-        );
-      }
-
-      setCostDialogFlight(null);
-      await loadAdminData();
-    }}
-  />
-)}
-{costDialogHotel && (
-  <CostDialog
-    item={{ item: costDialogHotel.name }}
-    tripId={tripId}
-    onClose={()=>setCostDialogHotel(null)}
-    onSave={async(cost,paidBy)=>{
-
-      const updated={
-        ...costDialogHotel,
-        status:"confirmed",
-        cost,
-        paidBy
-      };
-
-      await storage.set(`hotel:${tripId}:${updated.id}`,updated);
-
-      if(updated.checkIn){
-        await addToItineraryStorage(
-          tripId,
-          updated.checkIn,
-          "15:00",
-          `Check-in: ${updated.name}`,
-          updated.address || "",
-          "",
-          "hotel"
-        );
-      }
-
-      if(updated.checkOut){
-        await addToItineraryStorage(
-          tripId,
-          updated.checkOut,
-          "11:00",
-          `Check-out: ${updated.name}`,
-          updated.address || "",
-          "",
-          "hotel"
-        );
-      }
-
-      setCostDialogHotel(null);
-      await loadAdminData();
-    }}
-  />
-)}
-{costDialogTransport && (
-  <CostDialog
-    item={{ item:`${costDialogTransport.type} ${costDialogTransport.code||""}` }}
-    tripId={tripId}
-    onClose={()=>setCostDialogTransport(null)}
-    onSave={async(cost,paidBy)=>{
-
-      const updated={
-        ...costDialogTransport,
-        status:"confirmed",
-        cost,
-        paidBy
-      };
-
-      await storage.set(`transport:${tripId}:${updated.id}`,updated);
-
-      // add to itinerary
-      if(updated.date && updated.time){
-        await addToItineraryStorage(
-          tripId,
-          updated.date,
-          updated.time,
-          `${updated.type} ${updated.code||""}`,
-          `${updated.departure} → ${updated.arrival}`,
-          "",
-          "transport"
-        );
-      }
-
-      setCostDialogTransport(null);
-      await loadAdminData();
-    }}
-  />
-)}
-
-
-
-
-</div>
-);
-
+  );
 }
-
 function BudgetTab({ tripId }: { tripId: number }) {
   type BudgetLimits = {
     total: number;
@@ -4566,16 +4775,13 @@ function BudgetTab({ tripId }: { tripId: number }) {
         paidBy?: any
       ) => {
         let amount = 0;
-
         if (mode === "mine") {
-          // If viewing "Mine", only show what *I* paid
           if (!myUid) return;
           if (paidBy && Array.isArray(paidBy)) {
              const me = paidBy.find((p: any) => p.uid === myUid);
              if (me) amount = me.amount;
           } 
         } else {
-          // If viewing "Shared", show total cost
           amount = parsePrice(cost);
         }
 
@@ -4585,131 +4791,76 @@ function BudgetTab({ tripId }: { tripId: number }) {
         }
       };
 
-      // ... [Keep Hotels, Flights, Transport sections exactly as they were] ...
-      // (I have omitted them here for brevity, but keep them in your code)
-      
-      // --- HOTELS ---
-      const hotelRes = await storage.list(`hotel:${tripId}:`);
-      if (hotelRes?.keys) {
-        for (const key of hotelRes.keys) {
-          const d = await storage.get(key);
-          if (d?.value) {
-            const h = JSON.parse(d.value);
-            if (h.status === "confirmed") {
-              addItem("accommodation", h.name || "Hotel", h.cost ?? h.price, h.paidBy);
-            }
-          }
+      // --- 1. HOTELS ---
+      const hotels = await storage.getAll<StoredHotel>(`hotel:${tripId}:`);
+      hotels.forEach(h => {
+        if (h.status === "confirmed") {
+          // Use ?? "" to ensure we never pass undefined to addItem
+          addItem("accommodation", h.name || "Hotel", h.cost ?? h.price ?? "", h.paidBy);
         }
-      }
+      });
 
-      // --- FLIGHTS ---
-      const flightRes = await storage.list(`flight:${tripId}:`);
-      if (flightRes?.keys) {
-        for (const key of flightRes.keys) {
-          const d = await storage.get(key);
-          if (d?.value) {
-            const f = JSON.parse(d.value);
-            if (f.status === "confirmed") {
-              addItem("travel", `${f.airline} ${f.flightNumber}`, f.cost ?? f.price, f.paidBy);
-            }
-          }
+      // --- 2. FLIGHTS ---
+      const flights = await storage.getAll<StoredFlight>(`flight:${tripId}:`);
+      flights.forEach(f => {
+        if (f.status === "confirmed") {
+          addItem("travel", `${f.airline} ${f.flightNumber}`, f.cost ?? f.price ?? "", f.paidBy);
         }
-      }
+      });
       
-      // --- TRANSPORT ---
-      const transportRes = await storage.list(`transport:${tripId}:`);
-      if (transportRes?.keys) {
-        for (const key of transportRes.keys) {
-          const d = await storage.get(key);
-          if (d?.value) {
-            const t = JSON.parse(d.value);
-            if (t.status === "confirmed") {
-              addItem("travel", `${t.type} ${t.code || ""}`, t.cost ?? t.price, t.paidBy);
-            }
-          }
+      // --- 3. TRANSPORT ---
+      const transports = await storage.getAll<StoredTransport>(`transport:${tripId}:`);
+      transports.forEach(t => {
+        if (t.status === "confirmed") {
+          addItem("travel", `${t.type} ${t.code || ""}`, t.cost ?? t.price ?? "", t.paidBy);
         }
-      }
+      });
 
-      // 🔥 UPDATED SHOPPING SECTION 🔥
-      // Only load shopping if looking at "My Spending"
+      // --- 4. SHOPPING (Personal Only) ---
       if (mode === "mine" && myUid) {
-        // Look for keys specific to this user: shopping:tripId:user:UID:
-        const shopRes = await storage.list(`shopping:${tripId}:user:${myUid}:`);
-        
-        if (shopRes?.keys) {
-          for (const key of shopRes.keys) {
-            const d = await storage.get(key);
-            if (d?.value) {
-              const s = JSON.parse(d.value);
-              // Only include if bought and has a cost
-              if (s.bought && s.cost) {
-                  // Direct add to budget (bypassing addItem split logic because it's 100% yours)
-                  newBudget.shopping.total += Number(s.cost);
-                  newBudget.shopping.items.push({ 
-                    label: s.item, 
-                    amount: Number(s.cost) 
-                  });
-              }
+        const shoppingItems = await storage.getAll<any>(`shopping:${tripId}:user:${myUid}:`);
+        shoppingItems.forEach(s => {
+            if (s.bought && s.cost) {
+                newBudget.shopping.total += Number(s.cost);
+                newBudget.shopping.items.push({ 
+                  label: s.item, 
+                  amount: Number(s.cost) 
+                });
             }
-          }
-        }
+        });
       }
 
-      // ... [Keep Places and Manual Expenses sections exactly as they were] ...
-      // --- PLACES (Eat) ---
-      const eatRes = await storage.list(`place:${tripId}:eat:`);
-      if (eatRes?.keys) {
-        for (const key of eatRes.keys) {
-          const d = await storage.get(key);
-          if (d?.value) {
-            const p = JSON.parse(d.value);
-            if (p.visited && (p.cost || p.price)) {
-              addItem("food", p.name, p.cost || p.price, p.paidBy);
-            }
-          }
-        }
-      }
+      // --- 5. PLACES ---
+      const [eats, visits] = await Promise.all([
+          storage.getAll<StoredPlace>(`place:${tripId}:eat:`),
+          storage.getAll<StoredPlace>(`place:${tripId}:visit:`)
+      ]);
 
-      // --- PLACES (Visit) ---
-      const visitRes = await storage.list(`place:${tripId}:visit:`);
-      if (visitRes?.keys) {
-        for (const key of visitRes.keys) {
-          const d = await storage.get(key);
-          if (d?.value) {
-            const p = JSON.parse(d.value);
-            if (p.visited && (p.cost || p.price)) {
-              addItem("other", p.name, p.cost || p.price, p.paidBy);
-            }
-          }
+      eats.forEach(p => {
+        if (p.visited) {
+            addItem("food", p.name, p.cost ?? p.price ?? "", p.paidBy);
         }
-      }
+      });
 
-      // --- MANUAL EXPENSES (Shared) ---
+      visits.forEach(p => {
+        if (p.visited) {
+            addItem("other", p.name, p.cost ?? p.price ?? "", p.paidBy);
+        }
+      });
+
+      // --- 6. MANUAL EXPENSES ---
       if (mode === "shared") {
-        const sharedRes = await storage.list(`expense:${tripId}:shared:`);
-        if (sharedRes?.keys) {
-          for (const key of sharedRes.keys) {
-            const d = await storage.get(key);
-            if (d?.value) {
-              const e = JSON.parse(d.value);
-              addItem((e.category as keyof BudgetState) || "other", e.label, e.amount, e.paidBy);
-            }
-          }
-        }
+        const sharedExpenses = await storage.getAll<any>(`expense:${tripId}:shared:`);
+        sharedExpenses.forEach(e => {
+             addItem((e.category as keyof BudgetState) || "other", e.label, e.amount, e.paidBy);
+        });
       }
 
-      // --- MANUAL EXPENSES (Personal) ---
       if (mode === "mine" && myUid) {
-        const myRes = await storage.list(`expense:${tripId}:user:${myUid}:`);
-        if (myRes?.keys) {
-          for (const key of myRes.keys) {
-            const d = await storage.get(key);
-            if (d?.value) {
-              const e = JSON.parse(d.value);
-              addItem((e.category as keyof BudgetState) || "other", e.label, e.amount);
-            }
-          }
-        }
+        const myExpenses = await storage.getAll<any>(`expense:${tripId}:user:${myUid}:`);
+        myExpenses.forEach(e => {
+            addItem((e.category as keyof BudgetState) || "other", e.label, e.amount);
+        });
       }
 
       setBudget(newBudget);
@@ -5301,5 +5452,163 @@ function TransportDialog({
       </div>
 
     </div>
+  );
+}
+
+function LocationManagerDialog({
+  trip,
+  onClose,
+  onSave,
+}: {
+  trip: TripData;
+  onClose: () => void;
+  onSave: (segments: TripSegment[]) => void;
+}) {
+  const [segments, setSegments] = useState<TripSegment[]>(trip.segments || []);
+  const [newLoc, setNewLoc] = useState("");
+  const [start, setStart] = useState("");
+  const [end, setEnd] = useState("");
+  const [color, setColor] = useState("bg-blue-100");
+
+  const colors = [
+    { label: "Blue", val: "bg-blue-100 text-blue-800 border-blue-200" },
+    { label: "Rose", val: "bg-rose-100 text-rose-800 border-rose-200" },
+    { label: "Green", val: "bg-green-100 text-green-800 border-green-200" },
+    { label: "Amber", val: "bg-amber-100 text-amber-800 border-amber-200" },
+    { label: "Purple", val: "bg-purple-100 text-purple-800 border-purple-200" },
+  ];
+
+  const add = () => {
+    if (!newLoc || !start || !end) return;
+    setSegments([
+      ...segments,
+      { id: Date.now().toString(), location: newLoc, startDate: start, endDate: end, color },
+    ]);
+    setNewLoc("");
+    setStart("");
+    setEnd("");
+  };
+
+  const remove = (id: string) => {
+    setSegments(segments.filter((s) => s.id !== id));
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+      <div className="bg-white rounded-lg max-w-lg w-full p-6">
+        <h3 className="text-2xl font-serif mb-4">Manage Trip Locations</h3>
+        
+        {/* Existing Segments */}
+        <div className="space-y-2 mb-6">
+          {segments.map((s) => (
+            <div key={s.id} className={`flex justify-between items-center p-3 rounded border ${s.color}`}>
+              <div>
+                <span className="font-bold">{s.location}</span>
+                <span className="text-sm ml-2 opacity-80">{s.startDate} → {s.endDate}</span>
+              </div>
+              <button onClick={() => remove(s.id)} className="text-sm font-bold hover:underline">
+                Remove
+              </button>
+            </div>
+          ))}
+          {segments.length === 0 && <p className="text-gray-500 italic">No locations defined yet.</p>}
+        </div>
+
+        {/* Add New */}
+        <div className="bg-gray-50 p-4 rounded-lg space-y-3">
+          <h4 className="font-medium text-sm text-gray-700">Add New Segment</h4>
+          <input
+            className="w-full border rounded px-2 py-1"
+            placeholder="Location (e.g., Tokyo)"
+            value={newLoc}
+            onChange={(e) => setNewLoc(e.target.value)}
+          />
+          <div className="flex gap-2">
+            <input type="date" className="border rounded px-2 py-1 w-1/2" value={start} onChange={(e) => setStart(e.target.value)} />
+            <input type="date" className="border rounded px-2 py-1 w-1/2" value={end} onChange={(e) => setEnd(e.target.value)} />
+          </div>
+          <div className="flex gap-2">
+            {colors.map((c) => (
+              <button
+                key={c.val}
+                onClick={() => setColor(c.val)}
+                className={`w-6 h-6 rounded-full border-2 ${c.val.split(" ")[0]} ${color === c.val ? "border-black" : "border-transparent"}`}
+              />
+            ))}
+          </div>
+          <button onClick={add} className="w-full bg-gray-900 text-white py-2 rounded">Add Segment</button>
+        </div>
+
+        <div className="flex justify-end gap-2 mt-4">
+          <button onClick={onClose} className="px-4 py-2 border rounded">Cancel</button>
+          <button onClick={() => onSave(segments)} className="px-4 py-2 bg-gray-900 text-white rounded">Save Changes</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function NotificationToggle({ tripId }: { tripId: number }) {
+  const [enabled, setEnabled] = useState(false);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    loadSetting();
+  }, [tripId]);
+
+  const loadSetting = async () => {
+    const user = auth.currentUser;
+    if (!user) return;
+    
+    // Fetch the notification settings for this trip
+    const snap = await storage.get(`settings:${tripId}:notifications`);
+    if (snap?.value) {
+      const settings = JSON.parse(snap.value);
+      // Check if MY user id is enabled
+      setEnabled(!!settings[user.uid]?.enabled);
+    }
+    setLoading(false);
+  };
+
+  const toggle = async () => {
+    const user = auth.currentUser;
+    if (!user) return;
+
+    const newStatus = !enabled;
+    setEnabled(newStatus); // Optimistic update
+
+    // 1. Get existing settings
+    const snap = await storage.get(`settings:${tripId}:notifications`);
+    let settings = snap?.value ? JSON.parse(snap.value) : {};
+
+    // 2. Update MY entry
+    settings[user.uid] = {
+      enabled: newStatus,
+      email: user.email, // Save email so the sender knows where to send it!
+      name: user.displayName || "Traveler"
+    };
+
+    // 3. Save back
+    await storage.set(`settings:${tripId}:notifications`, settings);
+    
+    if (newStatus) {
+      alert("You will now receive email alerts for new activities.");
+    }
+  };
+
+  if (loading) return null;
+
+  return (
+    <button
+      onClick={toggle}
+      title={enabled ? "Turn off email alerts" : "Turn on email alerts"}
+      className={`p-2 rounded-full transition-colors ${
+        enabled 
+          ? "bg-yellow-100 text-yellow-700 hover:bg-yellow-200" 
+          : "bg-gray-100 text-gray-400 hover:bg-gray-200"
+      }`}
+    >
+      {enabled ? <Bell size={20} className="fill-current" /> : <BellOff size={20} />}
+    </button>
   );
 }
