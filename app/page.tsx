@@ -1489,6 +1489,30 @@ export default function TravelJournal() {
     return trip;
   };
 
+  const deleteTrip = async (tripId: number) => {
+    const user = auth.currentUser;
+    if (!user) return;
+
+    const confirmed = confirm("Delete this trip? This cannot be undone.");
+    if (!confirmed) return;
+
+    try {
+      await deleteKey(`trip:${tripId}`);
+
+      // If user was viewing it, go home
+      if (selectedTrip?.id === tripId) {
+        setSelectedTrip(null);
+        setCurrentView("home");
+      }
+
+      // reload trips list
+      await loadTrips(user.uid);
+
+    } catch (err) {
+      console.error("Delete trip failed:", err);
+    }
+  };
+
 
 
   if (currentView === "home") {
@@ -1512,7 +1536,9 @@ export default function TravelJournal() {
           setCurrentView("trip");
         }}
         onCreateTrip={createTrip}
+        onDeleteTrip={deleteTrip}
       />
+
 
       </div>
     );
@@ -1539,13 +1565,16 @@ type HomePageProps = {
   loading: boolean;
   onSelectTrip: (trip: TripData) => void;
   onCreateTrip: (trip: TripFormData) => Promise<TripData>;
+  onDeleteTrip: (tripId: number) => void;   // NEW
 };
+
 
 function HomePage({
   trips,
   loading,
   onSelectTrip,
   onCreateTrip,
+  onDeleteTrip,
 }: HomePageProps) {
   const [filter, setFilter] = useState("all");
   const [showNewTripDialog, setShowNewTripDialog] = useState(false);
@@ -1638,6 +1667,7 @@ function HomePage({
                 key={trip.id}
                 trip={trip}
                 onClick={() => onSelectTrip(trip)}
+                onDelete={() => onDeleteTrip(trip.id)}
               />
             ))}
           </div>
@@ -1657,10 +1687,11 @@ function HomePage({
 type TripCardProps = {
   trip: TripData;
   onClick: () => void;
+  onDelete: () => void;   // NEW
 };
 
 
-function TripCard({ trip, onClick }: TripCardProps) {
+function TripCard({ trip, onClick, onDelete }: TripCardProps) {
   const statusColors: Record<TripStatus, string> = {
     upcoming: "bg-amber-100 text-amber-800",
     ongoing: "bg-green-100 text-green-800",
@@ -1709,6 +1740,18 @@ function TripCard({ trip, onClick }: TripCardProps) {
           <span className="text-sm">{trip.country}</span>
         </div>
         <p className="text-gray-700 italic text-sm">"{trip.tagline}"</p>
+        <div className="flex justify-end mt-4">
+          <button
+            onClick={(e) => {
+              e.stopPropagation();   // ⭐ IMPORTANT so clicking delete doesn't open trip
+              onDelete();
+            }}
+            className="text-red-500 hover:text-red-700 text-sm"
+          >
+            Delete
+          </button>
+        </div>
+
       </div>
     </div>
   );
