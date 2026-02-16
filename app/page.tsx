@@ -74,15 +74,20 @@ export type FlightData = {
   flightNumber: string;
   departure: string;
   arrival: string;
+
   date: string;
   time: string;
+
+  returnDate?: string;
+  returnTime?: string;
+
   link?: string;
   status: string;
 
-  // ✅ ADD THESE
   price?: string;
   details?: string;
 };
+
 
 
 export type HotelData = {
@@ -2819,18 +2824,35 @@ function AdminTab({ tripId }: AdminTabProps) {
 
     await storage.set(`flight:${tripId}:${flight.id}`, flight);
 
-    // itinerary logic unchanged
-    if (flight.status === "confirmed" && flight.date && flight.time) {
-      await addToItineraryStorage(
-        tripId,
-        flight.date,
-        flight.time,
-        `Flight ${flight.airline} ${flight.flightNumber}`,
-        `${flight.departure} → ${flight.arrival}`,
-        "",
-        "flight"
-      );
-    }
+          // itinerary logic unchanged
+          if (flight.status === "confirmed") {
+
+            // outbound
+            await addToItineraryStorage(
+              tripId,
+              flight.date,
+              flight.time,
+              `Flight ${flight.airline} ${flight.flightNumber}`,
+              `${flight.departure} → ${flight.arrival}`,
+              "",
+              "flight"
+            );
+
+            // return
+            if (flight.returnDate) {
+              await addToItineraryStorage(
+                tripId,
+                flight.returnDate,
+                flight.returnTime || "",
+                `Return Flight ${flight.airline} ${flight.flightNumber}`,
+                `${flight.arrival} → ${flight.departure}`,
+                "",
+                "flight"
+              );
+            }
+          }
+
+
 
     setEditingFlight(null);
     await loadAdminData();
@@ -2847,17 +2869,36 @@ function AdminTab({ tripId }: AdminTabProps) {
 
     await storage.set(`hotel:${tripId}:${hotel.id}`, hotel);
 
-    if (hotel.status === "confirmed" && hotel.checkIn) {
-      await addToItineraryStorage(
-        tripId,
-        hotel.checkIn,
-        "15:00",
-        `Check-in: ${hotel.name}`,
-        hotel.address,
-        "",
-        "hotel"
-      );
+    if (hotel.status === "confirmed") {
+
+      // CHECK-IN
+      if (hotel.checkIn) {
+        await addToItineraryStorage(
+          tripId,
+          hotel.checkIn,
+          "15:00",
+          `Check-in: ${hotel.name}`,
+          hotel.address,
+          "",
+          "hotel"
+        );
+      }
+
+      // CHECK-OUT (NEW)
+      if (hotel.checkOut) {
+        await addToItineraryStorage(
+          tripId,
+          hotel.checkOut,
+          "11:00",
+          `Check-out: ${hotel.name}`,
+          hotel.address,
+          "",
+          "hotel"
+        );
+      }
+
     }
+
 
     setEditingHotel(null);
     await loadAdminData();
@@ -2922,30 +2963,42 @@ function AdminTab({ tripId }: AdminTabProps) {
   const toggleHotelStatus = async (hotelId: number) => {
 
     const hotel = hotels.find((h) => h.id === hotelId);
-
     if (!hotel) return;
 
     // mark confirmed
     hotel.status = "confirmed";
 
-    // save updated hotel
     await storage.set(`hotel:${tripId}:${hotelId}`, hotel);
 
-    // 🔥 ADD CHECK-IN TO ITINERARY
+    // CHECK-IN
     if (hotel.checkIn) {
       await addToItineraryStorage(
         tripId,
         hotel.checkIn,
-        "15:00",                      // default check-in time
-        `Check-in: ${hotel.name}`,    // activity title
-        hotel.address || "",          // location
-        "",                           // notes
-        "hotel"                       // iconType
+        "15:00",
+        `Check-in: ${hotel.name}`,
+        hotel.address || "",
+        "",
+        "hotel"
+      );
+    }
+
+    // ✅ CHECK-OUT (THIS WAS MISSING)
+    if (hotel.checkOut) {
+      await addToItineraryStorage(
+        tripId,
+        hotel.checkOut,
+        "11:00",
+        `Check-out: ${hotel.name}`,
+        hotel.address || "",
+        "",
+        "hotel"
       );
     }
 
     await loadAdminData();
   };
+
 
   
   const packedCount = packing.filter((p) => p.packed).length;
@@ -3098,6 +3151,16 @@ className="bg-white border-2 border-gray-200 rounded-lg p-6 hover:border-blue-30
         Confirm
       </button>
     )}
+
+    {f.link && (
+        <button
+          onClick={() => window.open(f.link, "_blank")}
+          className="px-3 py-1 bg-blue-600 text-white rounded text-sm hover:bg-blue-700"
+        >
+          Open Booking
+        </button>
+      )}
+
     <button
       onClick={()=>{
         setEditingFlight(f);
@@ -3188,6 +3251,15 @@ className="bg-white border-2 border-gray-200 rounded-lg p-6 hover:border-amber-3
         Confirm
       </button>
     )}
+    {h.link && (
+        <button
+          onClick={() => window.open(h.link, "_blank")}
+          className="px-3 py-1 bg-blue-600 text-white rounded text-sm hover:bg-blue-700"
+        >
+          Open Booking
+        </button>
+      )}
+
     <button
       onClick={()=>{
         setEditingHotel(h);
