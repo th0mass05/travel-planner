@@ -2652,15 +2652,7 @@ function PhotosTab({ tripId }: PhotosTabProps) {
                   </div>
                 </div>
 
-                {/* DELETE BUTTON */}
-                <div className="flex justify-end mt-4">
-                  <button
-                    onClick={() => deletePhoto(photo.id)}
-                    className="text-sm text-red-500 hover:text-red-700"
-                  >
-                    Delete
-                  </button>
-                </div>
+                
               </div>
             </div>
           ))}
