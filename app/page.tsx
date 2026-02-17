@@ -36,6 +36,9 @@ import {
   Trash2,   // Add this (optional, for cleaner delete icons)
   Bell,
   BellOff,
+  Users,
+  CheckCircle,
+  XCircle,
 } from "lucide-react";
 import { storage } from "../firebaseStore";
 import { exp } from "firebase/firestore/pipelines";
@@ -452,7 +455,57 @@ function PlaceDialog({ onClose, onAdd, type }: PlaceDialogProps) {
   );
 }
 
+// Add this new component to handle "Who and When"
+function TripAuthorInfo({ 
+  uid, 
+  createdAt, 
+  className = "" 
+}: { 
+  uid?: string | null; 
+  createdAt?: string; 
+  className?: string; 
+}) {
+  const [name, setName] = useState<string>("");
+  
+  useEffect(() => {
+    if (!uid) return;
+    
+    // 1. Check if it's the current user
+    if (auth.currentUser?.uid === uid) {
+      setName("You");
+      return;
+    }
 
+    // 2. Otherwise fetch user name
+    const fetchName = async () => {
+      try {
+        const docRef = doc(db, "users", uid);
+        const snap = await getDoc(docRef);
+        if (snap.exists()) {
+          const data = snap.data();
+          setName(data.name || data.displayName || "Unknown");
+        } else {
+          setName("Unknown Traveler");
+        }
+      } catch (e) {
+        setName("Unknown");
+      }
+    };
+    fetchName();
+  }, [uid]);
+
+  if (!uid && !createdAt) return null;
+
+  return (
+    <div className={`flex items-center gap-1 text-xs text-gray-400 italic ${className}`}>
+      {uid && <span>{name}</span>}
+      {uid && createdAt && <span>•</span>}
+      {createdAt && (
+        <span>{formatDistanceToNow(new Date(createdAt), { addSuffix: true })}</span>
+      )}
+    </div>
+  );
+}
 
 type PhotoDialogProps = {
   onClose: () => void;
@@ -1605,6 +1658,9 @@ function FlightCard({
         </p>
         {flight.price && <p className="text-gray-700 text-sm font-medium">Price: {flight.price}</p>}
         {flight.details && <p className="text-gray-500 text-xs mt-2">{flight.details}</p>}
+        <div className="pt-2 mt-2">
+           <TripAuthorInfo uid={flight.createdByUid} createdAt={flight.createdAt} />
+        </div>
       </div>
 
       <div className="flex justify-end gap-3 text-xs font-medium border-t pt-3 mt-auto">
@@ -1632,7 +1688,7 @@ export default function TravelJournal() {
   const [currentView, setCurrentView] = useState("home");
   const [selectedTrip, setSelectedTrip] = useState<TripData | null>(null);
   const [trips, setTrips] = useState<TripData[]>([]);
-
+  const [nameSaveStatus, setNameSaveStatus] = useState<"idle" | "saving" | "saved">("idle");
   const [loading, setLoading] = useState(true);
   const handleLogout = async () => {
     await signOut(auth);
@@ -1794,53 +1850,64 @@ export default function TravelJournal() {
 
   if (currentView === "home") {
     return (
-      <div>
+      <div className="[&_button]:cursor-pointer">
 
       {/* Logout button top right */}
-      <div className="flex justify-end items-center gap-2 p-4">
-
-        <input
-          value={displayName}
-          onChange={(e)=>setDisplayName(e.target.value)}
-          placeholder="Your name"
-          className="border px-3 py-2 rounded-lg"
-        />
-
-        <button
-          onClick={async ()=>{
-            const user = auth.currentUser;
-            if(!user) return;
-
-            try{
-              await setDoc(
-                doc(db,"users",user.uid),
-                {
-                  email:user.email,
-                  name:displayName
-                },
-                {merge:true}
-              );
-
-              alert("Name saved ✔");   // 👈 ADD THIS
-
-            }catch(e){
-              console.error("Failed to save name",e);
-              alert("Failed to save name");
-            }
-          }}
-
-          className="px-3 py-2 bg-gray-900 text-white rounded-lg"
-        >
-          Save name
-        </button>
+      <div className="flex justify-end items-center gap-3 p-4">
+        <div className="flex items-center gap-2 bg-white rounded-lg border p-1 pr-2 shadow-sm">
+          <div className="relative">
+            <input
+              value={displayName}
+              onChange={(e) => {
+                setDisplayName(e.target.value);
+                setNameSaveStatus("idle"); // Reset status on type
+              }}
+              placeholder="Your name"
+              className="px-3 py-1.5 outline-none text-sm w-40"
+            />
+            {nameSaveStatus === "saved" && (
+              <span className="absolute right-2 top-1.5 text-green-500 animate-in fade-in zoom-in">
+                <CheckCircle size={16} />
+              </span>
+            )}
+          </div>
           
+          <button
+            onClick={async () => {
+              const user = auth.currentUser;
+              if (!user) return;
+              
+              setNameSaveStatus("saving");
+              try {
+                await setDoc(doc(db, "users", user.uid), {
+                  email: user.email,
+                  name: displayName,
+                }, { merge: true });
+                
+                setNameSaveStatus("saved");
+                // Reset checkmark after 3 seconds
+                setTimeout(() => setNameSaveStatus("idle"), 3000);
+              } catch (e) {
+                console.error("Failed to save name", e);
+                setNameSaveStatus("idle");
+              }
+            }}
+            className={`px-3 py-1.5 text-xs font-bold uppercase tracking-wide rounded transition-all ${
+              nameSaveStatus === "saved" 
+                ? "bg-green-100 text-green-800" 
+                : "bg-gray-900 text-white hover:bg-gray-800"
+            }`}
+          >
+            {nameSaveStatus === "saving" ? "..." : nameSaveStatus === "saved" ? "Saved" : "Save"}
+          </button>
+        </div>
+
         <button
           onClick={handleLogout}
-          className="px-4 py-2 border-2 border-gray-300 rounded-lg hover:border-gray-400"
+          className="px-4 py-2 border-2 border-gray-300 rounded-lg hover:border-gray-400 text-sm font-medium"
         >
           Log out
         </button>
-
       </div>
 
       <HomePage
@@ -1920,7 +1987,7 @@ function HomePage({
   };
 
   return (
-    <div className="min-h-screen bg-[#f5f1e8]">
+    <div className="min-h-screen bg-[#f5f1e8] ">
       {/* ... Header (Keep same) ... */}
       <div className="bg-[#f5f1e8] border-b border-[#d4c5a0] py-16 px-8">
         <div className="max-w-[90%] mx-auto text-center">
@@ -2250,7 +2317,7 @@ function TripView({ trip: initialTrip, onBack }: TripViewProps) {
   ];
 
   return (
-    <div className="min-h-screen bg-[#f5f1e8]">
+    <div className="min-h-screen bg-[#f5f1e8] [&_button]:cursor-pointer">
       <div className="bg-white border-b-2 border-gray-200">
         <div className="max-w-[90%] mx-auto px-8 py-6">
           
@@ -2724,6 +2791,10 @@ function ItineraryTab({ trip }: { trip: TripData }) {
                         </div>
                         <p className="text-gray-600 flex items-center gap-1 mt-1"><MapPin size={14}/> {item.location}</p>
                         {item.notes && <p className="mt-2 text-sm text-gray-500 bg-gray-50 p-2 rounded">{item.notes}</p>}
+                        {/* ⭐ ADD THIS: Author Info */}
+                        <div className="mt-3 pt-3 border-t border-gray-100">
+                          <TripAuthorInfo uid={item.createdByUid} createdAt={item.createdAt} />
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -3000,12 +3071,7 @@ function PlacesTab({ tripId, type }: PlacesTabProps) {
                     {place.name}
                   </h3>
                   <div className="flex flex-col items-end text-right">
-                    <CreatorBadge uid={place.createdByUid}/>
-                    {place.createdAt && (
-                      <span className="text-xs text-gray-400">
-                        {formatDistanceToNow(new Date(place.createdAt), { addSuffix: true })}
-                      </span>
-                    )}
+                    <TripAuthorInfo uid={place.createdByUid} createdAt={place.createdAt} />
                   </div>
 
                   <div className="flex gap-2">
@@ -3426,6 +3492,9 @@ function ShoppingTab({ tripId }: { tripId: number }) {
                             {item.notes}
                           </p>
                         )}
+                        <div className="mt-1">
+                          <TripAuthorInfo uid={item.createdByUid} createdAt={item.createdAt} />
+                        </div>
                       </div>
                     </div>
                   ))}
@@ -3727,7 +3796,9 @@ function PhotosTab({ tripId }: PhotosTabProps) {
                 <p className="font-medium text-gray-800 mb-2">
                   {photo.caption}
                 </p>
-                <CreatorBadge uid={photo.createdByUid}/>
+                <div className="mb-2">
+                  <TripAuthorInfo uid={photo.createdByUid} createdAt={photo.createdAt} />
+                </div>
 
                 <div className="space-y-1 text-sm text-gray-800">
                   <div className="flex items-center gap-2">
@@ -3879,6 +3950,9 @@ function HotelCard({
         
         {hotel.price && <p className="text-gray-900 text-sm font-medium mt-2">Price: {hotel.price}</p>}
         {hotel.details && <p className="text-gray-500 text-xs mt-1 italic">{hotel.details}</p>}
+        <div className="pt-2 mt-2">
+           <TripAuthorInfo uid={hotel.createdByUid} createdAt={hotel.createdAt} />
+        </div>
       </div>
 
       <div className="flex justify-end gap-3 text-xs font-medium border-t pt-3 mt-auto">
@@ -4053,6 +4127,9 @@ function TransportCard({
         <p className="text-gray-500 text-xs">{transport.date} {transport.time}</p>
         {transport.price && <p className="text-gray-700 text-sm mt-1">Price: {transport.price}</p>}
         {transport.details && <p className="text-gray-500 text-xs italic mt-1">{transport.details}</p>}
+        <div className="pt-2 mt-2">
+           <TripAuthorInfo uid={transport.createdByUid} createdAt={transport.createdAt} />
+        </div>
       </div>
 
       <div className="flex justify-end gap-3 text-xs font-medium border-t pt-3 mt-auto">
@@ -4091,8 +4168,10 @@ export type StoredPacking = PackingData & { id: number; packed: boolean };
 type AdminTabProps = { tripId: number };
 
 function AdminTab({ tripId }: { tripId: number }) {
-  // --- STATE ---
-  const [activeSubTab, setActiveSubTab] = useState<"flights" | "hotels" | "transport" | "packing" | "documents">("flights");
+  // 1. Update ActiveSubTab type
+  const [activeSubTab, setActiveSubTab] = useState<
+    "members" | "flights" | "hotels" | "transport" | "packing" | "documents"
+  >("flights"); // Default to members or flights, your choice
   
   // Data State
   const [flights, setFlights] = useState<StoredFlight[]>([]);
@@ -4119,6 +4198,71 @@ function AdminTab({ tripId }: { tripId: number }) {
   const [inviteEmail, setInviteEmail] = useState("");
   const [packingMode, setPackingMode] = useState<"shared" | "personal">("shared");
 
+  // 2. Add State for Members Tab
+  type MemberDisplay = {
+    id: string; // uid or email
+    name: string;
+    email?: string; // only for invites
+    status: "Member" | "Invited";
+    isMe?: boolean;
+  };
+  
+  const [memberList, setMemberList] = useState<MemberDisplay[]>([]);
+  const [inviteStatus, setInviteStatus] = useState<"idle" | "success" | "error">("idle");
+  const [inviteMsg, setInviteMsg] = useState("");
+  // 3. Load Members Effect
+  useEffect(() => {
+    if (activeSubTab === "members") {
+      loadMembers();
+    }
+  }, [activeSubTab, tripId]);
+  const loadMembers = async () => {
+    try {
+      const tripSnap = await storage.get(`trip:${tripId}`);
+      if (!tripSnap?.value) return;
+      const tripData = JSON.parse(tripSnap.value);
+      const currentUid = auth.currentUser?.uid;
+
+      const list: MemberDisplay[] = [];
+
+      // A. Process Actual Members
+      if (tripData.members) {
+        for (const uid of tripData.members) {
+          // Fetch user details from Firestore 'users' collection
+          let name = "Unknown User";
+          try {
+             const userDoc = await getDoc(doc(db, "users", uid));
+             if (userDoc.exists()) {
+               name = userDoc.data().name || userDoc.data().email || "User";
+             }
+          } catch(e) { console.log("User fetch error", e)}
+
+          list.push({
+            id: uid,
+            name: name,
+            status: "Member",
+            isMe: uid === currentUid
+          });
+        }
+      }
+
+      // B. Process Invites
+      if (tripData.invites) {
+        tripData.invites.forEach((email: string) => {
+          list.push({
+            id: email,
+            name: email, // For invites, name is the email
+            email: email,
+            status: "Invited",
+          });
+        });
+      }
+
+      setMemberList(list);
+    } catch (e) {
+      console.error("Failed to load members", e);
+    }
+  };
   // --- LISTENERS ---
   useEffect(() => {
     const unsubFlights = storage.subscribeToList(`flight:${tripId}:`, (items) => setFlights(items));
@@ -4316,54 +4460,22 @@ function AdminTab({ tripId }: { tripId: number }) {
       
 
 
-      {/* INVITE */}
-      <div className="bg-white border-2 rounded-lg p-4 flex gap-2">
-           <input
-             type="email"
-             placeholder="Invite by email"
-             value={inviteEmail}
-             onChange={(e)=>setInviteEmail(e.target.value)}
-             className="flex-1 border-2 rounded-lg px-3 py-2"
-           />
-           <button
-             onClick={async ()=>{
-                if(!inviteEmail) return;
-                const user = auth.currentUser;
-                if(!user) return;
-
-                try {
-                  // 1. Get current trip data
-                  const tripSnap = await storage.get(`trip:${tripId}`);
-                  if(tripSnap?.value) {
-                    const tripData = JSON.parse(tripSnap.value);
-                    
-                    // 2. Add to invites array (if not already there)
-                    const currentInvites = tripData.invites || [];
-                    if(!currentInvites.includes(inviteEmail) && !tripData.members.includes(inviteEmail)) { // Basic check
-                       const updated = {
-                         ...tripData,
-                         invites: [...currentInvites, inviteEmail]
-                       };
-                       await storage.set(`trip:${tripId}`, updated);
-                       alert(`Invite sent to ${inviteEmail}`);
-                       setInviteEmail(""); // Clear input
-                    } else {
-                      alert("User is already invited or a member.");
-                    }
-                  }
-                } catch(e) {
-                  console.error("Invite failed", e);
-                  alert("Failed to send invite");
-                }
-             }}
-             className="px-4 py-2 bg-gray-900 text-white rounded-lg"
-           >
-             Invite
-           </button>
-       </div>
+      
 
       {/* SUBTABS NAVIGATION */}
       <div className="flex gap-2 border-b-2 border-gray-200 overflow-x-auto">
+        {/* ADD MEMBERS TAB HERE */}
+        <button
+          onClick={() => setActiveSubTab("members")}
+          className={`flex items-center gap-2 px-4 py-3 border-b-4 whitespace-nowrap ${
+            activeSubTab === "members"
+              ? "border-gray-900 text-gray-900"
+              : "border-transparent text-gray-800 hover:text-gray-900"
+          }`}
+        >
+          <Users size={18} />
+          Members
+        </button>
         {(
           [
             { id: "flights", label: "Flights", icon: Plane },
@@ -4390,7 +4502,116 @@ function AdminTab({ tripId }: { tripId: number }) {
           );
         })}
       </div>
+      {/* === MEMBERS VIEW (NEW) === */}
+      {activeSubTab === "members" && (
+        <div className="space-y-8 max-w-2xl">
+          
+          {/* 1. Invite Section */}
+          <div className="bg-blue-50 border border-blue-100 rounded-lg p-6">
+            <h3 className="text-lg font-serif font-semibold mb-2">Invite Travelers</h3>
+            <div className="flex gap-2">
+              <input
+                type="email"
+                placeholder="Enter email address"
+                value={inviteEmail}
+                onChange={(e) => {
+                  setInviteEmail(e.target.value);
+                  setInviteStatus("idle"); // reset status on type
+                }}
+                className="flex-1 border-2 border-white shadow-sm rounded-lg px-4 py-2 focus:border-blue-300 outline-none"
+              />
+              <button
+                onClick={async () => {
+                  if (!inviteEmail) return;
+                  const user = auth.currentUser;
+                  if (!user) return;
 
+                  try {
+                    const tripSnap = await storage.get(`trip:${tripId}`);
+                    if (tripSnap?.value) {
+                      const tripData = JSON.parse(tripSnap.value);
+                      const currentInvites = tripData.invites || [];
+                      
+                      // Check if already invited or member
+                      // Note: This is a basic check. Ideally you check against UIDs too if you had the email map.
+                      if (currentInvites.includes(inviteEmail)) {
+                         setInviteStatus("error");
+                         setInviteMsg("User already invited.");
+                         return;
+                      }
+
+                      const updated = {
+                        ...tripData,
+                        invites: [...currentInvites, inviteEmail],
+                      };
+                      await storage.set(`trip:${tripId}`, updated);
+                      
+                      setInviteStatus("success");
+                      setInviteMsg(`Invite sent to ${inviteEmail}`);
+                      setInviteEmail("");
+                      loadMembers(); // Refresh list
+                    }
+                  } catch (e) {
+                    console.error("Invite failed", e);
+                    setInviteStatus("error");
+                    setInviteMsg("Failed to send invite.");
+                  }
+                }}
+                className="px-6 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition-colors shadow-sm"
+              >
+                Send Invite
+              </button>
+            </div>
+            
+            {/* Visual Feedback Area */}
+            {inviteStatus !== "idle" && (
+              <div className={`mt-3 flex items-center gap-2 text-sm font-medium animate-in slide-in-from-top-2 ${
+                inviteStatus === "success" ? "text-green-600" : "text-red-600"
+              }`}>
+                {inviteStatus === "success" ? <CheckCircle size={16} /> : <XCircle size={16} />}
+                {inviteMsg}
+              </div>
+            )}
+          </div>
+
+          {/* 2. Members List */}
+          <div>
+            <h3 className="text-xl font-serif mb-4">Who's going?</h3>
+            <div className="bg-white border-2 border-gray-200 rounded-lg overflow-hidden divide-y divide-gray-100">
+              {memberList.map((member) => (
+                <div key={member.id} className="p-4 flex items-center justify-between hover:bg-gray-50 transition-colors">
+                  <div className="flex items-center gap-3">
+                    <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-lg ${
+                      member.status === "Member" 
+                        ? "bg-gray-900 text-white" 
+                        : "bg-amber-100 text-amber-700"
+                    }`}>
+                      {member.name.charAt(0).toUpperCase()}
+                    </div>
+                    <div>
+                      <p className="font-medium text-gray-900">
+                        {member.name} {member.isMe && <span className="text-gray-400 font-normal">(You)</span>}
+                      </p>
+                      {member.status === "Invited" && (
+                        <p className="text-xs text-gray-500">{member.email}</p>
+                      )}
+                    </div>
+                  </div>
+                  
+                  <span className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wide ${
+                    member.status === "Member" 
+                      ? "bg-green-100 text-green-700" 
+                      : "bg-amber-100 text-amber-700"
+                  }`}>
+                    {member.status}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+        </div>
+      )}
       {/* === FLIGHTS VIEW === */}
       {activeSubTab === "flights" && (
         <div className="space-y-6">
@@ -4577,8 +4798,12 @@ function AdminTab({ tripId }: { tripId: number }) {
             ))}
             {packing.length === 0 && <p className="text-gray-500 italic col-span-2 text-center py-4">List is empty.</p>}
           </div>
+          
         </div>
+        
       )}
+      
+      
 
       {/* === DIALOGS (Hidden until triggered) === */}
       {showFlightDialog && (
