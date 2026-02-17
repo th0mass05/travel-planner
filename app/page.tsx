@@ -4639,6 +4639,15 @@ function AdminTab({ tripId }: { tripId: number }) {
 
   // Helper for Packing stats
   const packedCount = packing.filter((p) => p.packed).length;
+  // 👇 ADD THIS: Groups the list items into categories
+  const groupedPacking = packing.reduce((acc, item) => {
+    const cat = item.category || "Other";
+    if (!acc[cat]) acc[cat] = [];
+    acc[cat].push(item);
+    return acc;
+  }, {} as Record<string, StoredPacking[]>);
+
+  const categories = Object.keys(groupedPacking).sort();
   // --- CLEANUP TOOL ---
   const cleanUpGhosts = async () => {
     if (!confirm("This will scan for and delete any broken/empty items that cannot be deleted normally. Continue?")) return;
@@ -5011,26 +5020,63 @@ function AdminTab({ tripId }: { tripId: number }) {
               </button>
             </div>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {packing.map((item) => (
-              <div key={item.id} className="flex items-center gap-3 bg-white p-3 rounded-lg border border-gray-200">
-                <input
-                  type="checkbox"
-                  checked={item.packed}
-                  onChange={() => togglePacked(item)}
-                  className="w-5 h-5 rounded text-gray-900 focus:ring-gray-900 cursor-pointer"
-                />
-                <div className="flex-1">
-                  <p className={`font-medium ${item.packed ? "line-through text-gray-400" : "text-gray-900"}`}>{item.item}</p>
-                  <p className="text-xs text-gray-500">{item.category}</p>
-                </div>
-                <button onClick={() => deletePackingItem(item.id)} className="text-gray-400 hover:text-red-500">
-                  <Trash2 size={16} />
-                </button>
-              </div>
-            ))}
-            {packing.length === 0 && <p className="text-gray-500 italic col-span-2 text-center py-4">List is empty.</p>}
-          </div>
+          {/* 👇 REPLACE WITH THIS NEW GROUPED GRID 👇 */}
+          {packing.length === 0 ? (
+             <div className="text-center py-12 bg-white rounded-xl border border-dashed border-stone-200">
+               <div className="w-12 h-12 bg-stone-50 rounded-full flex items-center justify-center mx-auto mb-3 text-stone-300">
+                  <PackageCheck size={24} />
+               </div>
+               <p className="text-stone-500 text-sm">List is empty.</p>
+             </div>
+          ) : (
+             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 items-start">
+               {/* 1. Loop through Categories first */}
+               {categories.map((category) => {
+                 const items = groupedPacking[category];
+                 const catPacked = items.filter(i => i.packed).length;
+                 
+                 return (
+                   <div key={category} className="bg-white border border-stone-200 rounded-xl p-5 shadow-sm hover:shadow-md transition-all">
+                      {/* Category Header */}
+                      <div className="flex justify-between items-baseline mb-4 border-b border-stone-100 pb-2">
+                        <h4 className="font-serif text-lg text-stone-900">{category}</h4>
+                        <span className="text-[10px] font-bold text-stone-400 uppercase tracking-widest bg-stone-50 px-2 py-1 rounded-full">
+                           {catPacked}/{items.length}
+                        </span>
+                      </div>
+                      
+                      {/* 2. Loop through Items in this Category */}
+                      <div className="space-y-3">
+                        {items.map((item) => (
+                           <div key={item.id} className="flex items-start gap-3 group">
+                              <input
+                                type="checkbox"
+                                checked={item.packed}
+                                onChange={() => togglePacked(item)}
+                                className="mt-1 w-4 h-4 rounded border-stone-300 text-stone-900 focus:ring-stone-900 cursor-pointer"
+                              />
+                              <div className="flex-1 min-w-0 pt-0.5">
+                                <p className={`text-sm font-medium transition-colors leading-snug ${
+                                   item.packed ? "line-through text-stone-300" : "text-stone-700"
+                                }`}>
+                                  {item.item}
+                                </p>
+                              </div>
+                              <button 
+                                onClick={() => deletePackingItem(item.id)} 
+                                className="text-stone-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"
+                                title="Delete item"
+                              >
+                                <Trash2 size={14} />
+                              </button>
+                           </div>
+                        ))}
+                      </div>
+                   </div>
+                 );
+               })}
+             </div>
+          )}
           
         </div>
         
