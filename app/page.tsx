@@ -303,22 +303,21 @@ type PlaceDialogProps = {
   onClose: () => void;
   onAdd: (data: PlaceFormData) => void;
   type: PlaceType;
+  initialData?: PlaceFormData;
 };
 
-function PlaceDialog({ onClose, onAdd, type }: PlaceDialogProps) {
-
-
-  const [formData, setFormData] = useState<PlaceFormData>({
-
-
-    name: "",
-    description: "",
-    address: "",
-    rating: "",
-    imageUrl: "",
-    link: "",
-    visited: false,
-  });
+function PlaceDialog({ onClose, onAdd, type, initialData }: PlaceDialogProps) {
+  const [formData, setFormData] = useState<PlaceFormData>(
+    initialData || { // ⭐ Use initialData if provided
+      name: "",
+      description: "",
+      address: "",
+      rating: "",
+      imageUrl: "",
+      link: "",
+      visited: false,
+    }
+  );
 
 
   // Inside PlaceDialog ...
@@ -442,7 +441,7 @@ function PlaceDialog({ onClose, onAdd, type }: PlaceDialogProps) {
               onClick={() => onAdd(formData)}
               className="flex-1 px-4 py-3 bg-gray-900 text-white rounded-lg hover:bg-gray-800"
             >
-              Add {type === "eat" ? "Restaurant" : "Place"}
+              {initialData ? "Save Changes" : `Add ${type === "eat" ? "Restaurant" : "Place"}`}
             </button>
             <button
               onClick={onClose}
@@ -1042,7 +1041,7 @@ function PackingDialog({ onClose, onAdd }: PackingDialogProps) {
               onChange={(e) =>
                 setFormData({ ...formData, category: e.target.value })
               }
-              className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg focus:border-gray-900 outline-none"
+              className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg focus:border-gray-900 outline-none cursor-pointer"
             >
               <option value="Clothing">Clothing</option>
               <option value="Toiletries">Toiletries</option>
@@ -1190,17 +1189,20 @@ function ShoppingDialog({ onClose, onAdd }: ShoppingDialogProps) {
 type ActivityDialogProps = {
   onClose: () => void;
   onAdd: (data: ActivityData) => void;
+  initialData?: ActivityData; // ⭐ NEW PROP
 };
 
-function ActivityDialog({ onClose, onAdd }: ActivityDialogProps) {
-  const [formData, setFormData] = useState<ActivityData>({
-    time: "",
-    activity: "",
-    location: "",
-    notes: "",
-    iconType: "activity",
-    createdAt: new Date().toISOString(),
-  });
+function ActivityDialog({ onClose, onAdd, initialData }: ActivityDialogProps) {
+  const [formData, setFormData] = useState<ActivityData>(
+    initialData || { // ⭐ Use initialData
+      time: "",
+      activity: "",
+      location: "",
+      notes: "",
+      iconType: "activity",
+      createdAt: new Date().toISOString(),
+    }
+  );
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
@@ -1249,7 +1251,7 @@ function ActivityDialog({ onClose, onAdd }: ActivityDialogProps) {
               onChange={(e)=>
                 setFormData({...formData, iconType:e.target.value})
               }
-              className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg"
+              className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg cursor-pointer"
             >
               <option value="activity">General Activity</option>
               <option value="visit">Place to Visit</option>
@@ -1277,7 +1279,7 @@ function ActivityDialog({ onClose, onAdd }: ActivityDialogProps) {
               onClick={() => onAdd(formData)}
               className="flex-1 px-4 py-3 bg-gray-900 text-white rounded-lg hover:bg-gray-800"
             >
-              Add Activity
+              {initialData ? "Save Changes" : "Add Activity"}
             </button>
             <button
               onClick={onClose}
@@ -1503,7 +1505,7 @@ function ConfirmToItineraryDialog({
             <label className="text-sm font-medium">Date</label>
             <input
               type="date"
-              className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg"
+              className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg cursor-pointer"
               value={date}
               onChange={(e)=>setDate(e.target.value)}
             />
@@ -1513,7 +1515,7 @@ function ConfirmToItineraryDialog({
             <label className="text-sm font-medium">Time</label>
             <input
               type="time"
-              className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg"
+              className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg cursor-pointer"
               value={time}
               onChange={(e)=>setTime(e.target.value)}
             />
@@ -1552,12 +1554,62 @@ type ItineraryItem = {
   iconType: IconType;
   createdByUid?: string | null;
   createdAt?: string;
+  sourceId?: string; // ⭐ NEW: Links to original Place ID (e.g., "place:123")
 };
 
 type ItineraryDay = {
   day: number;
   date: string;
   items: ItineraryItem[];
+};
+
+// ⭐ NEW: Remove from Itinerary if Unconfirmed/Deleted
+const removeFromItineraryBySource = async (tripId: number, sourceId: string) => {
+  // We have to search all days because we don't know the date
+  const keys = await storage.list(`itinerary:${tripId}:date:`);
+  if (!keys || !keys.keys) return;
+
+  for (const key of keys.keys) {
+    const daySnap = await storage.get(key);
+    if (daySnap?.value) {
+      const dayData = JSON.parse(daySnap.value);
+      const originalLen = dayData.items.length;
+      
+      // Filter out the item linked to this place
+      dayData.items = dayData.items.filter((i: ItineraryItem) => i.sourceId !== sourceId);
+
+      // If changed, save back
+      if (dayData.items.length !== originalLen) {
+        await storage.set(key, dayData);
+      }
+    }
+  }
+};
+
+// ⭐ NEW: Update Itinerary if Place is Modified
+const updateItineraryBySource = async (tripId: number, sourceId: string, newName: string, newLoc: string) => {
+  const keys = await storage.list(`itinerary:${tripId}:date:`);
+  if (!keys || !keys.keys) return;
+
+  for (const key of keys.keys) {
+    const daySnap = await storage.get(key);
+    if (daySnap?.value) {
+      const dayData = JSON.parse(daySnap.value);
+      let changed = false;
+
+      dayData.items = dayData.items.map((i: ItineraryItem) => {
+        if (i.sourceId === sourceId) {
+          changed = true;
+          return { ...i, activity: newName, location: newLoc };
+        }
+        return i;
+      });
+
+      if (changed) {
+        await storage.set(key, dayData);
+      }
+    }
+  }
 };
 
 const addToItineraryStorage = async (
@@ -2620,6 +2672,37 @@ function ItineraryTab({ trip }: { trip: TripData }) {
        parsed.items = parsed.items.filter((i: ItineraryItem) => i.id !== activityId);
        await storage.set(key, parsed);
   };
+  const [editingActivity, setEditingActivity] = useState<ItineraryItem | null>(null); // ⭐ NEW
+  // ⭐ NEW: Handle Edit Save
+  const handleEditActivity = async (updatedData: ActivityData) => {
+    if (!editingActivity) return;
+    
+    // Find the day this item belongs to
+    // (In a real app, passing the date to edit function is safer, but searching works too)
+    const dayData = days[currentDayIndex]; 
+    const key = `itinerary:${trip.id}:date:${dayData.date}`;
+    
+    // 1. Update in Storage
+    const newItemList = dayData.items.map(item => {
+      if (item.id === editingActivity.id) {
+        return {
+          ...item,
+          time: updatedData.time,
+          activity: updatedData.activity,
+          location: updatedData.location,
+          notes: updatedData.notes || "",
+          iconType: (updatedData.iconType as IconType)
+        };
+      }
+      return item;
+    });
+
+    // Re-sort
+    newItemList.sort((a, b) => (a.time || "99:99").localeCompare(b.time || "99:99"));
+
+    await storage.set(key, { ...dayData, items: newItemList });
+    setEditingActivity(null);
+  };
 
   const currentDayData = days[currentDayIndex] || { day: 1, date: "", items: [] };
   
@@ -2822,12 +2905,20 @@ function ItineraryTab({ trip }: { trip: TripData }) {
                       <div className="flex-1">
                         <div className="flex justify-between">
                             <h3 className="text-xl font-serif text-gray-800">{item.activity}</h3>
-                             <button
+                             <div className="flex gap-2"> {/* ⭐ Wrap buttons in div */}
+                              <button
+                                onClick={() => setEditingActivity(item)} // ⭐ Trigger Edit
+                                className="text-blue-600 hover:text-blue-800 text-sm font-medium"
+                              >
+                                Edit
+                              </button>
+                              <button
                                 onClick={() => deleteActivity(currentDayData.date, item.id)}
                                 className="text-red-500 hover:text-red-700 text-sm"
                               >
                                 Delete
-                            </button>
+                              </button>
+                            </div>
                         </div>
                         <p className="text-gray-600 flex items-center gap-1 mt-1"><MapPin size={14}/> {item.location}</p>
                         {item.notes && <p className="mt-2 text-sm text-gray-500 bg-gray-50 p-2 rounded">{item.notes}</p>}
@@ -2910,6 +3001,19 @@ function ItineraryTab({ trip }: { trip: TripData }) {
           }}
         />
       )}
+      {editingActivity && (
+        <ActivityDialog
+          initialData={{ // You'll need to update ActivityDialog to accept initialData (see step 4)
+            time: editingActivity.time,
+            activity: editingActivity.activity,
+            location: editingActivity.location,
+            notes: editingActivity.notes,
+            iconType: editingActivity.iconType,
+          }}
+          onClose={() => setEditingActivity(null)}
+          onAdd={handleEditActivity} // Reuse the onAdd prop but treating it as update
+        />
+      )}
 
       {showLocDialog && (
         <LocationManagerDialog
@@ -2942,7 +3046,7 @@ type PlacesTabProps = {
 function PlacesTab({ tripId, type }: PlacesTabProps) {
   const [places, setPlaces] = useState<StoredPlace[]>([]);
 
-
+  const [editingPlace, setEditingPlace] = useState<StoredPlace | null>(null); // ⭐ NEW
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [confirmingPlace, setConfirmingPlace] = useState<StoredPlace | null>(null);
   const [costDialogPlace, setCostDialogPlace] = useState<StoredPlace | null>(null);
@@ -3003,28 +3107,68 @@ function PlacesTab({ tripId, type }: PlacesTabProps) {
 
 
 
-  const confirmPlace = async (
-      place: StoredPlace,
-      date: string,
-      time: string
-    ) => {
+  const confirmPlace = async (place: StoredPlace, date: string, time: string) => {
+    // Save to Itinerary with Source ID
+    const key = `itinerary:${tripId}:date:${date}`;
+    const existing = await storage.get(key);
+    const targetDay = existing?.value ? JSON.parse(existing.value) : { date, items: [] };
 
-    await addToItineraryStorage(
-      tripId,
-      date,
+    const newItem: ItineraryItem = {
+      id: Date.now(),
       time,
-      place.name,
-      place.address,
-      place.description || "",
-      type === "eat" ? "eat" : "visit"
-    );
+      activity: place.name,
+      location: place.address,
+      notes: place.description || "",
+      iconType: type === "eat" ? "eat" : "visit",
+      sourceId: `place:${place.id}`, // ⭐ LINK HERE
+      createdAt: new Date().toISOString()
+    };
 
+    targetDay.items.push(newItem);
+    targetDay.items.sort((a: any, b: any) => a.time.localeCompare(b.time));
+    await storage.set(key, targetDay);
+
+    // Update Place status
     place.confirmed = true;
-
-    await storage.set(`place:${tripId}:${type}:${place.id}`,place);
-
+    await storage.set(`place:${tripId}:${type}:${place.id}`, place);
     setConfirmingPlace(null);
+  };
+  // Inside PlacesTab component...
+
+  const unconfirmPlace = async (place: StoredPlace) => {
+    // 1. Remove from Itinerary
+    await removeFromItineraryBySource(tripId, `place:${place.id}`);
+
+    // 2. Update Place status
+    // ⭐ KEY CHANGE: Set visited to false and remove cost data
+    const updated = { 
+      ...place, 
+      confirmed: false, 
+      visited: false 
+    };
     
+    // Clean up financial data since it's no longer "visited"
+    delete updated.cost;
+    delete updated.paidBy;
+
+    await storage.set(`place:${tripId}:${type}:${place.id}`, updated);
+  };
+  const handleEditPlace = async (formData: PlaceFormData) => {
+    if (!editingPlace) return;
+
+    const updated: StoredPlace = {
+      ...editingPlace,
+      ...formData
+    };
+
+    await storage.set(`place:${tripId}:${type}:${editingPlace.id}`, updated);
+
+    // If it was confirmed, sync the new name/address to the itinerary
+    if (updated.confirmed) {
+       await updateItineraryBySource(tripId, `place:${updated.id}`, updated.name, updated.address);
+    }
+
+    setEditingPlace(null);
   };
 
 
@@ -3036,9 +3180,13 @@ function PlacesTab({ tripId, type }: PlacesTabProps) {
   const checkColor = type === "eat" ? "bg-amber-500" : "bg-green-500";
 
   const deletePlace = async (placeId: number) => {
-
-    await deleteKey(`place:${tripId}:${type}:${placeId}`);
+    if (!confirm("Delete this place?")) return;
     
+    // Remove from Itinerary first
+    await removeFromItineraryBySource(tripId, `place:${placeId}`);
+    
+    // Delete actual place
+    await deleteKey(`place:${tripId}:${type}:${placeId}`);
   };
 
 
@@ -3154,28 +3302,46 @@ function PlacesTab({ tripId, type }: PlacesTabProps) {
                       checked={place.visited}
                       onChange={()=>handleVisitedToggle(place)}
 
-                      className="w-4 h-4"
+                      className="w-4 h-4 cursor-pointer"
                     />
-                    <label className="text-sm">
+                    <label className="text-sm cursor-pointer">
                       {place.visited ? "Visited" : "Mark visited"}
                     </label>
                   </div>
 
-                  {!place.confirmed && (
+                  <div className="flex gap-2 text-sm font-medium">
+                  {/* ⭐ Modify Button (Always visible) */}
+                  <button
+                    onClick={() => setEditingPlace(place)}
+                    className="text-blue-600 hover:text-blue-800"
+                  >
+                    Modify
+                  </button>
+
+                  {!place.confirmed ? (
                     <button
-                      onClick={()=>setConfirmingPlace(place)}
-                      className="px-3 py-1 text-sm bg-gray-900 text-white rounded"
+                      onClick={() => setConfirmingPlace(place)}
+                      className="px-3 py-1 bg-gray-900 text-white rounded hover:bg-gray-800"
                     >
                       Confirm
+                    </button>
+                  ) : (
+                    // ⭐ Unconfirm Button
+                    <button
+                      onClick={() => unconfirmPlace(place)}
+                      className="px-3 py-1 bg-amber-100 text-amber-800 rounded hover:bg-amber-200"
+                    >
+                      Unconfirm
                     </button>
                   )}
 
                   <button
                     onClick={() => deletePlace(place.id)}
-                    className="px-3 py-1 text-sm border border-red-400 text-red-500 rounded hover:bg-red-50"
+                    className="text-red-500 hover:text-red-700"
                   >
                     Delete
                   </button>
+                </div>
 
                 </div>
 
@@ -3208,13 +3374,12 @@ function PlacesTab({ tripId, type }: PlacesTabProps) {
         <CostDialog
           item={{ item: costDialogPlace.name }}
           tripId={tripId}
-          onClose={()=>setCostDialogPlace(null)}
-          onSave={async(cost, paidBy)=>{
-
+          onClose={() => setCostDialogPlace(null)}
+          onSave={async (cost, paidBy) => {
             const updated: StoredPlace = {
               ...costDialogPlace!,
               visited: true,
-              cost: Number(cost),   // ⭐ FIX HERE
+              cost: Number(cost),
               paidBy
             };
 
@@ -3223,14 +3388,29 @@ function PlacesTab({ tripId, type }: PlacesTabProps) {
               updated
             );
 
-            // open confirm dialog AFTER cost save
-            setConfirmingPlace(updated);
+            // ⭐ FIX: Only ask for date/time if it hasn't been confirmed yet
+            if (!updated.confirmed) {
+              setConfirmingPlace(updated);
+            }
 
             setCostDialogPlace(null);
-            
           }}
-
-
+        />
+      )}
+      {editingPlace && (
+        <PlaceDialog
+          type={type}
+          initialData={{
+            name: editingPlace.name,
+            description: editingPlace.description,
+            address: editingPlace.address,
+            rating: editingPlace.rating || "",
+            imageUrl: editingPlace.imageUrl || "",
+            link: editingPlace.link || "",
+            visited: editingPlace.visited
+          }}
+          onClose={() => setEditingPlace(null)}
+          onAdd={(data) => handleEditPlace(data)}
         />
       )}
 
@@ -4825,7 +5005,7 @@ function AdminTab({ tripId }: { tripId: number }) {
                   type="checkbox"
                   checked={item.packed}
                   onChange={() => togglePacked(item)}
-                  className="w-5 h-5 rounded text-gray-900 focus:ring-gray-900"
+                  className="w-5 h-5 rounded text-gray-900 focus:ring-gray-900 cursor-pointer"
                 />
                 <div className="flex-1">
                   <p className={`font-medium ${item.packed ? "line-through text-gray-400" : "text-gray-900"}`}>{item.item}</p>
