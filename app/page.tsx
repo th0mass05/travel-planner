@@ -158,6 +158,11 @@ export type FlightData = {
   date: string;
   time: string;
 
+  // ⭐ NEW FIELDS
+  arrivalDate?: string;
+  arrivalTime?: string;
+  duration?: string;
+
   returnDate?: string;
   returnTime?: string;
 
@@ -168,7 +173,6 @@ export type FlightData = {
   details?: string;
   createdAt?: string;
   createdByUid?: string | null;
-
 };
 
 
@@ -558,102 +562,94 @@ type PhotoDialogProps = {
 };
 
 function PhotoDialog({ onClose, onAdd }: PhotoDialogProps) {
-
   const [formData, setFormData] = useState<PhotoData>({
-    url: "",
-    caption: "",
-    date: "",
-    location: "",
+    url: "", caption: "", date: "", location: "",
   });
 
-  // Inside PhotoDialog ...
-
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    /* ... keep existing compression logic ... */
     const file = e.target.files?.[0];
     if (!file) return;
-
     try {
       const compressedBase64 = await compressImage(file);
-      setFormData(prev => ({
-        ...prev,
-        url: compressedBase64,
-      }));
-    } catch (err) {
-      console.error("Image compression failed", err);
-    }
+      setFormData(prev => ({ ...prev, url: compressedBase64 }));
+    } catch (err) { console.error(err); }
   };
 
-
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-lg max-w-md w-full p-6">
-        <h3 className="text-2xl font-serif mb-4">Add Photo</h3>
-        <div className="space-y-4">
+    <div className="fixed inset-0 bg-stone-900/40 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-8 animate-in zoom-in-95 duration-200">
+        <h3 className="text-2xl font-serif text-stone-900 mb-6">Add Photo</h3>
+        
+        <div className="space-y-5">
+          {/* Custom File Input Styling */}
           <div>
-            <label className="block text-sm font-medium mb-1">Photo</label>
-            <input
-              type="file"
-              accept="image/*"
-              onChange={handleImageUpload}
-              className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg focus:border-gray-900 outline-none file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-gray-100 file:text-gray-700 hover:file:bg-gray-200"
-            />
-            {formData.url && (
-              <div className="mt-2">
-                <img
-                  src={formData.url}
-                  alt="Preview"
-                  className="w-full h-48 object-cover rounded-lg border-2 border-gray-200"
+            <label className="block text-xs font-bold uppercase tracking-wider text-stone-500 mb-1.5">Image</label>
+            <div className="relative group cursor-pointer">
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={handleImageUpload}
+                  className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
                 />
-              </div>
-            )}
+                <div className={`w-full border-2 border-dashed rounded-xl p-4 flex flex-col items-center justify-center text-center transition-all ${
+                    formData.url ? "border-stone-900 bg-stone-50" : "border-stone-300 hover:border-stone-400"
+                }`}>
+                    {formData.url ? (
+                        <img src={formData.url} alt="Preview" className="h-40 object-cover rounded-lg shadow-sm" />
+                    ) : (
+                        <div className="py-6 text-stone-400 group-hover:text-stone-600">
+                            <Camera size={32} className="mx-auto mb-2" />
+                            <span className="text-sm font-medium">Click to upload photo</span>
+                        </div>
+                    )}
+                </div>
+            </div>
           </div>
+
           <div>
-            <label className="block text-sm font-medium mb-1">Caption</label>
+            <label className="block text-xs font-bold uppercase tracking-wider text-stone-500 mb-1.5">Caption</label>
             <input
               type="text"
               value={formData.caption}
-              onChange={(e) =>
-                setFormData({ ...formData, caption: e.target.value })
-              }
-              className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg focus:border-gray-900 outline-none"
-              placeholder="What's happening in this photo?"
+              onChange={(e) => setFormData({ ...formData, caption: e.target.value })}
+              className="w-full px-4 py-2.5 border border-stone-300 rounded-lg focus:border-stone-900 outline-none transition-all"
+              placeholder="What's happening?"
             />
           </div>
+
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium mb-1">Date</label>
+              <label className="block text-xs font-bold uppercase tracking-wider text-stone-500 mb-1.5">Date</label>
               <input
                 type="date"
                 value={formData.date}
-                onChange={(e) =>
-                  setFormData({ ...formData, date: e.target.value })
-                }
-                className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg focus:border-gray-900 outline-none"
+                onChange={(e) => setFormData({ ...formData, date: e.target.value })}
+                className="w-full px-4 py-2.5 border border-stone-300 rounded-lg focus:border-stone-900 outline-none"
               />
             </div>
             <div>
-              <label className="block text-sm font-medium mb-1">Location</label>
+              <label className="block text-xs font-bold uppercase tracking-wider text-stone-500 mb-1.5">Location</label>
               <input
                 type="text"
                 value={formData.location}
-                onChange={(e) =>
-                  setFormData({ ...formData, location: e.target.value })
-                }
-                className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg focus:border-gray-900 outline-none"
+                onChange={(e) => setFormData({ ...formData, location: e.target.value })}
+                className="w-full px-4 py-2.5 border border-stone-300 rounded-lg focus:border-stone-900 outline-none"
                 placeholder="Where?"
               />
             </div>
           </div>
-          <div className="flex gap-3 pt-4">
+
+          <div className="flex gap-3 pt-4 mt-2">
             <button
               onClick={() => onAdd(formData)}
-              className="flex-1 px-4 py-3 bg-gray-900 text-white rounded-lg hover:bg-gray-800"
+              className="flex-1 px-6 py-3 bg-stone-900 text-white font-bold rounded-lg hover:bg-stone-800 transition-colors shadow-lg"
             >
-              Add Photo
+              Save Memory
             </button>
             <button
               onClick={onClose}
-              className="px-4 py-3 bg-white border-2 border-gray-300 rounded-lg hover:border-gray-400"
+              className="px-6 py-3 border border-stone-200 text-stone-600 font-bold rounded-lg hover:bg-stone-50 transition-colors"
             >
               Cancel
             </button>
@@ -671,173 +667,184 @@ type FlightDialogProps = {
 };
 
 function FlightDialog({ onClose, onAdd, initialData }: FlightDialogProps) {
-
   const [formData, setFormData] = useState<FlightData>(
     initialData ?? {
-      airline: "",
-      flightNumber: "",
-      departure: "",
-      arrival: "",
-      date: "",
-      time: "",
-      link: "",
-      status: "potential",
-      price: "",
-      details: "",
+      airline: "", flightNumber: "", 
+      departure: "", arrival: "",
+      date: "", time: "",
+      arrivalDate: "", arrivalTime: "", duration: "", // NEW Defaults
+      link: "", status: "potential", price: "", details: "",
       createdAt: new Date().toISOString(),
     }
   );
 
-
-
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-lg max-w-md w-full p-6">
-        <h3 className="text-2xl font-serif mb-4">Add Flight</h3>
-        <div className="space-y-4">
+    <div className="fixed inset-0 bg-stone-900/40 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg p-8 animate-in zoom-in-95 duration-200 max-h-[90vh] overflow-y-auto">
+        <h3 className="text-2xl font-serif text-stone-900 mb-6">
+            {initialData ? "Edit Flight" : "Add Flight"}
+        </h3>
+        
+        <div className="space-y-6">
+          {/* Airline & Flight No */}
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium mb-1">Airline</label>
+              <label className="block text-xs font-bold uppercase tracking-wider text-stone-500 mb-1.5">Airline</label>
               <input
                 type="text"
                 value={formData.airline}
-                onChange={(e) =>
-                  setFormData({ ...formData, airline: e.target.value })
-                }
-                className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg focus:border-gray-900 outline-none"
-                placeholder="e.g., United"
+                onChange={(e) => setFormData({ ...formData, airline: e.target.value })}
+                className="w-full px-4 py-2.5 border border-stone-300 rounded-lg focus:border-stone-900 outline-none transition-all"
+                placeholder="e.g. BA"
               />
             </div>
             <div>
-              <label className="block text-sm font-medium mb-1">
-                Flight Number
-              </label>
+              <label className="block text-xs font-bold uppercase tracking-wider text-stone-500 mb-1.5">Flight No.</label>
               <input
                 type="text"
                 value={formData.flightNumber}
-                onChange={(e) =>
-                  setFormData({ ...formData, flightNumber: e.target.value })
-                }
-                className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg focus:border-gray-900 outline-none"
-                placeholder="e.g., UA123"
+                onChange={(e) => setFormData({ ...formData, flightNumber: e.target.value })}
+                className="w-full px-4 py-2.5 border border-stone-300 rounded-lg focus:border-stone-900 outline-none transition-all"
+                placeholder="e.g. 123"
               />
             </div>
-          </div>
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium mb-1">
-                Departure
-              </label>
-              <input
-                type="text"
-                value={formData.departure}
-                onChange={(e) =>
-                  setFormData({ ...formData, departure: e.target.value })
-                }
-                className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg focus:border-gray-900 outline-none"
-                placeholder="e.g., JFK"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium mb-1">Arrival</label>
-              <input
-                type="text"
-                value={formData.arrival}
-                onChange={(e) =>
-                  setFormData({ ...formData, arrival: e.target.value })
-                }
-                className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg focus:border-gray-900 outline-none"
-                placeholder="e.g., NRT"
-              />
-            </div>
-          </div>
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium mb-1">Date</label>
-              <input
-                type="date"
-                value={formData.date}
-                onChange={(e) =>
-                  setFormData({ ...formData, date: e.target.value })
-                }
-                className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg focus:border-gray-900 outline-none"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium mb-1">Time</label>
-              <input
-                type="time"
-                value={formData.time}
-                onChange={(e) =>
-                  setFormData({ ...formData, time: e.target.value })
-                }
-                className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg focus:border-gray-900 outline-none"
-              />
-            </div>
-          </div>
-          <div>
-            <label className="block text-sm font-medium mb-1">Price (optional)</label>
-            <input
-              type="text"
-              value={formData.price}
-              onChange={(e)=>
-                setFormData({...formData, price:e.target.value})
-              }
-              className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg"
-              placeholder="e.g., £650"
-            />
           </div>
 
-          <div>
-            <label className="block text-sm font-medium mb-1">Details (optional)</label>
-            <textarea
-              value={formData.details}
-              onChange={(e)=>
-                setFormData({...formData, details:e.target.value})
-              }
-              className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg"
-              rows={2}
-              placeholder="Seat, baggage, terminal, notes..."
-            />
+          {/* DEPARTURE SECTION */}
+          <div className="bg-stone-50 p-4 rounded-xl border border-stone-200 space-y-4">
+            <h4 className="text-xs font-bold uppercase text-stone-400 tracking-widest flex items-center gap-2">
+              <Plane size={12} className="rotate-[-45deg]" /> Departure
+            </h4>
+            <div className="grid grid-cols-3 gap-3">
+               <div className="col-span-1">
+                 <label className="block text-[10px] font-bold uppercase text-stone-500 mb-1">Airport</label>
+                 <input
+                    value={formData.departure}
+                    onChange={(e) => setFormData({ ...formData, departure: e.target.value })}
+                    className="w-full px-3 py-2 border border-stone-300 rounded-md focus:border-stone-900 outline-none text-sm font-bold uppercase"
+                    placeholder="LHR"
+                 />
+               </div>
+               <div className="col-span-2 grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="block text-[10px] font-bold uppercase text-stone-500 mb-1">Date</label>
+                    <input
+                      type="date"
+                      value={formData.date}
+                      onChange={(e) => setFormData({ ...formData, date: e.target.value })}
+                      className="w-full px-2 py-2 border border-stone-300 rounded-md focus:border-stone-900 outline-none text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold uppercase text-stone-500 mb-1">Time</label>
+                    <input
+                      type="time"
+                      value={formData.time}
+                      onChange={(e) => setFormData({ ...formData, time: e.target.value })}
+                      className="w-full px-2 py-2 border border-stone-300 rounded-md focus:border-stone-900 outline-none text-sm"
+                    />
+                  </div>
+               </div>
+            </div>
           </div>
 
-          <div>
-            <label className="block text-sm font-medium mb-1">
-              Booking Link (optional)
-            </label>
-            <input
-              type="url"
-              value={formData.link}
-              onChange={(e) =>
-                setFormData({ ...formData, link: e.target.value })
-              }
-              className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg focus:border-gray-900 outline-none"
-              placeholder="https://..."
-            />
+          {/* ARRIVAL SECTION */}
+          <div className="bg-stone-50 p-4 rounded-xl border border-stone-200 space-y-4">
+            <h4 className="text-xs font-bold uppercase text-stone-400 tracking-widest flex items-center gap-2">
+              <Plane size={12} className="rotate-[45deg]" /> Arrival
+            </h4>
+            <div className="grid grid-cols-3 gap-3">
+               <div className="col-span-1">
+                 <label className="block text-[10px] font-bold uppercase text-stone-500 mb-1">Airport</label>
+                 <input
+                    value={formData.arrival}
+                    onChange={(e) => setFormData({ ...formData, arrival: e.target.value })}
+                    className="w-full px-3 py-2 border border-stone-300 rounded-md focus:border-stone-900 outline-none text-sm font-bold uppercase"
+                    placeholder="JFK"
+                 />
+               </div>
+               <div className="col-span-2 grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="block text-[10px] font-bold uppercase text-stone-500 mb-1">Date</label>
+                    <input
+                      type="date"
+                      value={formData.arrivalDate || formData.date} // Default to dep date logic if empty visually
+                      onChange={(e) => setFormData({ ...formData, arrivalDate: e.target.value })}
+                      className="w-full px-2 py-2 border border-stone-300 rounded-md focus:border-stone-900 outline-none text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold uppercase text-stone-500 mb-1">Time</label>
+                    <input
+                      type="time"
+                      value={formData.arrivalTime || ""}
+                      onChange={(e) => setFormData({ ...formData, arrivalTime: e.target.value })}
+                      className="w-full px-2 py-2 border border-stone-300 rounded-md focus:border-stone-900 outline-none text-sm"
+                    />
+                  </div>
+               </div>
+            </div>
           </div>
-          <div>
-            <label className="block text-sm font-medium mb-1">Status</label>
-            <select
-              value={formData.status}
-              onChange={(e) =>
-                setFormData({ ...formData, status: e.target.value })
-              }
-              className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg focus:border-gray-900 outline-none"
-            >
-              <option value="potential">Potential Option</option>
-              <option value="confirmed">Confirmed</option>
-            </select>
+
+          {/* Duration & Price */}
+          <div className="grid grid-cols-2 gap-4">
+             <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-stone-500 mb-1.5">Duration</label>
+                <input
+                    type="text"
+                    value={formData.duration || ""}
+                    onChange={(e) => setFormData({ ...formData, duration: e.target.value })}
+                    className="w-full px-4 py-2.5 border border-stone-300 rounded-lg focus:border-stone-900 outline-none"
+                    placeholder="e.g. 8h 30m"
+                />
+             </div>
+             <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-stone-500 mb-1.5">Price</label>
+                <input
+                    type="text"
+                    value={formData.price}
+                    onChange={(e) => setFormData({ ...formData, price: e.target.value })}
+                    className="w-full px-4 py-2.5 border border-stone-300 rounded-lg focus:border-stone-900 outline-none"
+                    placeholder="Total Cost"
+                />
+             </div>
           </div>
+
+          {/* Status & Details */}
+          <div className="grid grid-cols-1 gap-4">
+             <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-stone-500 mb-1.5">Status</label>
+                <select
+                  value={formData.status}
+                  onChange={(e) => setFormData({ ...formData, status: e.target.value })}
+                  className="w-full px-4 py-2.5 border border-stone-300 rounded-lg focus:border-stone-900 outline-none bg-white cursor-pointer"
+                >
+                  <option value="potential">Potential</option>
+                  <option value="confirmed">Confirmed</option>
+                </select>
+             </div>
+             <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-stone-500 mb-1.5">Details</label>
+                <textarea
+                    value={formData.details}
+                    onChange={(e) => setFormData({ ...formData, details: e.target.value })}
+                    className="w-full px-4 py-2.5 border border-stone-300 rounded-lg focus:border-stone-900 outline-none"
+                    placeholder="Seat numbers, terminal info..."
+                    rows={2}
+                />
+             </div>
+          </div>
+
           <div className="flex gap-3 pt-4">
             <button
               onClick={() => onAdd(formData)}
-              className="flex-1 px-4 py-3 bg-gray-900 text-white rounded-lg hover:bg-gray-800"
+              className="flex-1 px-6 py-3 bg-stone-900 text-white font-bold rounded-lg hover:bg-stone-800 transition-colors shadow-lg"
             >
-              Add Flight
+              {initialData ? "Save Changes" : "Add Flight"}
             </button>
             <button
               onClick={onClose}
-              className="px-4 py-3 bg-white border-2 border-gray-300 rounded-lg hover:border-gray-400"
+              className="px-6 py-3 border border-stone-200 text-stone-600 font-bold rounded-lg hover:bg-stone-50 transition-colors"
             >
               Cancel
             </button>
@@ -856,156 +863,132 @@ type HotelDialogProps = {
 };
 
 function HotelDialog({ onClose, onAdd, initialData }: HotelDialogProps) {
-
   const [formData, setFormData] = useState<HotelData>(
     initialData || {
-      name: "",
-      address: "",
-      checkIn: "",
-      checkOut: "",
-      confirmationNumber: "",
-      link: "",
-      status: "potential",
-      price: "",      // NEW
-      details: "",    // NEW
-      createdAt: new Date().toISOString(),
+      name: "", address: "", checkIn: "", checkOut: "",
+      confirmationNumber: "", link: "", status: "potential",
+      price: "", details: "", createdAt: new Date().toISOString(),
     }
   );
 
-
-
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-lg max-w-md w-full p-6">
-        <h3 className="text-2xl font-serif mb-4">Add Hotel</h3>
-        <div className="space-y-4">
+    <div className="fixed inset-0 bg-stone-900/40 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg p-8 animate-in zoom-in-95 duration-200 max-h-[90vh] overflow-y-auto">
+        <h3 className="text-2xl font-serif text-stone-900 mb-6">
+          {initialData ? "Edit Accommodation" : "Add Accommodation"}
+        </h3>
+        
+        <div className="space-y-5">
           <div>
-            <label className="block text-sm font-medium mb-1">Hotel Name</label>
+            <label className="block text-xs font-bold uppercase tracking-wider text-stone-500 mb-1.5">Hotel Name</label>
             <input
               type="text"
               value={formData.name}
-              onChange={(e) =>
-                setFormData({ ...formData, name: e.target.value })
-              }
-              className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg focus:border-gray-900 outline-none"
-              placeholder="e.g., Grand Hyatt Tokyo"
+              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+              className="w-full px-4 py-2.5 border border-stone-300 rounded-lg focus:border-stone-900 outline-none transition-all"
+              placeholder="e.g. Grand Hyatt Tokyo"
             />
           </div>
+
           <div>
-            <label className="block text-sm font-medium mb-1">Address</label>
+            <label className="block text-xs font-bold uppercase tracking-wider text-stone-500 mb-1.5">Address</label>
             <input
               type="text"
               value={formData.address}
-              onChange={(e) =>
-                setFormData({ ...formData, address: e.target.value })
-              }
-              className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg focus:border-gray-900 outline-none"
-              placeholder="Full address"
+              onChange={(e) => setFormData({ ...formData, address: e.target.value })}
+              className="w-full px-4 py-2.5 border border-stone-300 rounded-lg focus:border-stone-900 outline-none"
+              placeholder="Full Address"
             />
           </div>
+
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium mb-1">Check-in</label>
+              <label className="block text-xs font-bold uppercase tracking-wider text-stone-500 mb-1.5">Check-in</label>
               <input
                 type="date"
                 value={formData.checkIn}
-                onChange={(e) =>
-                  setFormData({ ...formData, checkIn: e.target.value })
-                }
-                className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg focus:border-gray-900 outline-none"
+                onChange={(e) => setFormData({ ...formData, checkIn: e.target.value })}
+                className="w-full px-4 py-2.5 border border-stone-300 rounded-lg focus:border-stone-900 outline-none"
               />
             </div>
             <div>
-              <label className="block text-sm font-medium mb-1">
-                Check-out
-              </label>
+              <label className="block text-xs font-bold uppercase tracking-wider text-stone-500 mb-1.5">Check-out</label>
               <input
                 type="date"
                 value={formData.checkOut}
-                onChange={(e) =>
-                  setFormData({ ...formData, checkOut: e.target.value })
-                }
-                className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg focus:border-gray-900 outline-none"
+                onChange={(e) => setFormData({ ...formData, checkOut: e.target.value })}
+                className="w-full px-4 py-2.5 border border-stone-300 rounded-lg focus:border-stone-900 outline-none"
               />
             </div>
           </div>
-          <div>
-            <label className="block text-sm font-medium mb-1">
-              Confirmation Number
-            </label>
-            <input
-              type="text"
-              value={formData.confirmationNumber}
-              onChange={(e) =>
-                setFormData({ ...formData, confirmationNumber: e.target.value })
-              }
-              className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg focus:border-gray-900 outline-none"
-              placeholder="e.g., ABC123456"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium mb-1">Price (optional)</label>
-            <input
-              type="text"
-              value={formData.price}
-              onChange={(e)=>
-                setFormData({...formData, price:e.target.value})
-              }
-              className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg"
-              placeholder="e.g., £1200 total"
-            />
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+               <label className="block text-xs font-bold uppercase tracking-wider text-stone-500 mb-1.5">Conf. Number</label>
+               <input
+                 type="text"
+                 value={formData.confirmationNumber}
+                 onChange={(e) => setFormData({ ...formData, confirmationNumber: e.target.value })}
+                 className="w-full px-4 py-2.5 border border-stone-300 rounded-lg focus:border-stone-900 outline-none"
+                 placeholder="#12345"
+               />
+            </div>
+            <div>
+               <label className="block text-xs font-bold uppercase tracking-wider text-stone-500 mb-1.5">Total Cost</label>
+               <input
+                 type="text"
+                 value={formData.price}
+                 onChange={(e) => setFormData({ ...formData, price: e.target.value })}
+                 className="w-full px-4 py-2.5 border border-stone-300 rounded-lg focus:border-stone-900 outline-none"
+                 placeholder="e.g. £450"
+               />
+            </div>
           </div>
 
           <div>
-            <label className="block text-sm font-medium mb-1">Details (optional)</label>
+            <label className="block text-xs font-bold uppercase tracking-wider text-stone-500 mb-1.5">Details</label>
             <textarea
               value={formData.details}
-              onChange={(e)=>
-                setFormData({...formData, details:e.target.value})
-              }
-              className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg"
+              onChange={(e) => setFormData({ ...formData, details: e.target.value })}
+              className="w-full px-4 py-2.5 border border-stone-300 rounded-lg focus:border-stone-900 outline-none"
               rows={2}
-              placeholder="Room type, breakfast included, notes..."
+              placeholder="Room type, breakfast included..."
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium mb-1">
-              Booking Link (optional)
-            </label>
-            <input
-              type="url"
-              value={formData.link}
-              onChange={(e) =>
-                setFormData({ ...formData, link: e.target.value })
-              }
-              className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg focus:border-gray-900 outline-none"
-              placeholder="https://..."
-            />
+             <label className="block text-xs font-bold uppercase tracking-wider text-stone-500 mb-1.5">Booking Link</label>
+             <input
+               type="url"
+               value={formData.link}
+               onChange={(e) => setFormData({ ...formData, link: e.target.value })}
+               className="w-full px-4 py-2.5 border border-stone-300 rounded-lg focus:border-stone-900 outline-none"
+               placeholder="https://..."
+             />
           </div>
+
           <div>
-            <label className="block text-sm font-medium mb-1">Status</label>
+            <label className="block text-xs font-bold uppercase tracking-wider text-stone-500 mb-1.5">Status</label>
             <select
               value={formData.status}
-              onChange={(e) =>
-                setFormData({ ...formData, status: e.target.value as "potential" | "confirmed", })
-              }
-              className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg focus:border-gray-900 outline-none"
+              onChange={(e) => setFormData({ ...formData, status: e.target.value as any })}
+              className="w-full px-4 py-2.5 border border-stone-300 rounded-lg focus:border-stone-900 outline-none bg-white cursor-pointer"
             >
               <option value="potential">Potential Option</option>
               <option value="confirmed">Confirmed</option>
             </select>
           </div>
+
           <div className="flex gap-3 pt-4">
             <button
               onClick={() => onAdd(formData)}
-              className="flex-1 px-4 py-3 bg-gray-900 text-white rounded-lg hover:bg-gray-800"
+              className="flex-1 px-6 py-3 bg-stone-900 text-white font-bold rounded-lg hover:bg-stone-800 transition-colors shadow-lg"
             >
-              Add Hotel
+              {initialData ? "Save Changes" : "Add Hotel"}
             </button>
             <button
               onClick={onClose}
-              className="px-4 py-3 bg-white border-2 border-gray-300 rounded-lg hover:border-gray-400"
+              className="px-6 py-3 border border-stone-200 text-stone-600 font-bold rounded-lg hover:bg-stone-50 transition-colors"
             >
               Cancel
             </button>
@@ -1022,26 +1005,22 @@ type PackingDialogProps = {
 };
 
 function PackingDialog({ onClose, onAdd }: PackingDialogProps) {
-
   const [formData, setFormData] = useState<PackingData>({
-    category: "Clothing",
-    item: "",
-    createdAt: new Date().toISOString(),
+    category: "Clothing", item: "", createdAt: new Date().toISOString(),
   });
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-lg max-w-md w-full p-6">
-        <h3 className="text-2xl font-serif mb-4">Add Packing Item</h3>
-        <div className="space-y-4">
+    <div className="fixed inset-0 bg-stone-900/40 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-8 animate-in zoom-in-95 duration-200">
+        <h3 className="text-2xl font-serif text-stone-900 mb-6">Add Packing Item</h3>
+        
+        <div className="space-y-5">
           <div>
-            <label className="block text-sm font-medium mb-1">Category</label>
+            <label className="block text-xs font-bold uppercase tracking-wider text-stone-500 mb-1.5">Category</label>
             <select
               value={formData.category}
-              onChange={(e) =>
-                setFormData({ ...formData, category: e.target.value })
-              }
-              className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg focus:border-gray-900 outline-none cursor-pointer"
+              onChange={(e) => setFormData({ ...formData, category: e.target.value })}
+              className="w-full px-4 py-2.5 border border-stone-300 rounded-lg focus:border-stone-900 outline-none bg-white cursor-pointer"
             >
               <option value="Clothing">Clothing</option>
               <option value="Toiletries">Toiletries</option>
@@ -1051,28 +1030,29 @@ function PackingDialog({ onClose, onAdd }: PackingDialogProps) {
               <option value="Other">Other</option>
             </select>
           </div>
+
           <div>
-            <label className="block text-sm font-medium mb-1">Item</label>
+            <label className="block text-xs font-bold uppercase tracking-wider text-stone-500 mb-1.5">Item Name</label>
             <input
               type="text"
+              autoFocus
               value={formData.item}
-              onChange={(e) =>
-                setFormData({ ...formData, item: e.target.value })
-              }
-              className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg focus:border-gray-900 outline-none"
-              placeholder="e.g., Passport, T-shirts, Phone charger"
+              onChange={(e) => setFormData({ ...formData, item: e.target.value })}
+              className="w-full px-4 py-2.5 border border-stone-300 rounded-lg focus:border-stone-900 outline-none"
+              placeholder="e.g. Passport, Camera Charger"
             />
           </div>
+
           <div className="flex gap-3 pt-4">
             <button
               onClick={() => onAdd(formData)}
-              className="flex-1 px-4 py-3 bg-gray-900 text-white rounded-lg hover:bg-gray-800"
+              className="flex-1 px-6 py-3 bg-stone-900 text-white font-bold rounded-lg hover:bg-stone-800 transition-colors shadow-lg"
             >
-              Add Item
+              Add to List
             </button>
             <button
               onClick={onClose}
-              className="px-4 py-3 bg-white border-2 border-gray-300 rounded-lg hover:border-gray-400"
+              className="px-6 py-3 border border-stone-200 text-stone-600 font-bold rounded-lg hover:bg-stone-50 transition-colors"
             >
               Cancel
             </button>
@@ -1091,91 +1071,76 @@ type ShoppingDialogProps = {
 
 function ShoppingDialog({ onClose, onAdd }: ShoppingDialogProps) {
   const [formData, setFormData] = useState<ShoppingData>({
-    item: "",
-    category: "",
-    link: "",
-    notes: "",
+    item: "", category: "", link: "", notes: "",
     createdAt: new Date().toISOString(),
   });
 
   const handleSubmit = () => {
     if (!formData.item) return;
-    onAdd({
-      ...formData,
-      category: formData.category || "General", // Default if empty
-    });
+    onAdd({ ...formData, category: formData.category || "General" });
   };
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-lg max-w-md w-full p-6">
-        <h3 className="text-2xl font-serif mb-4">Add Shopping Item</h3>
-        <div className="space-y-4">
+    <div className="fixed inset-0 bg-stone-900/40 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-8 animate-in zoom-in-95 duration-200">
+        <h3 className="text-2xl font-serif text-stone-900 mb-6">Add Shopping Item</h3>
+        
+        <div className="space-y-5">
           <div>
-            <label className="block text-sm font-medium mb-1">Item Name</label>
+            <label className="block text-xs font-bold uppercase tracking-wider text-stone-500 mb-1.5">Item Name</label>
             <input
               type="text"
+              autoFocus
               value={formData.item}
-              onChange={(e) =>
-                setFormData({ ...formData, item: e.target.value })
-              }
-              className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg focus:border-gray-900 outline-none"
-              placeholder="e.g., Kapital T-shirt"
+              onChange={(e) => setFormData({ ...formData, item: e.target.value })}
+              className="w-full px-4 py-2.5 border border-stone-300 rounded-lg focus:border-stone-900 focus:ring-1 focus:ring-stone-900 outline-none transition-all"
+              placeholder="e.g., Vintage Camera"
             />
           </div>
+
           <div>
-            <label className="block text-sm font-medium mb-1">Category</label>
+            <label className="block text-xs font-bold uppercase tracking-wider text-stone-500 mb-1.5">Category</label>
             <input
               type="text"
               value={formData.category}
-              onChange={(e) =>
-                setFormData({ ...formData, category: e.target.value })
-              }
-              className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg focus:border-gray-900 outline-none"
-              placeholder="e.g., Clothing, Beauty, Souvenirs"
-            />
-            <p className="text-xs text-gray-500 mt-1">
-              Type a new category or use an existing one.
-            </p>
-          </div>
-          <div>
-            <label className="block text-sm font-medium mb-1">
-              Link (optional)
-            </label>
-            <input
-              type="url"
-              value={formData.link}
-              onChange={(e) =>
-                setFormData({ ...formData, link: e.target.value })
-              }
-              className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg focus:border-gray-900 outline-none"
-              placeholder="https://..."
+              onChange={(e) => setFormData({ ...formData, category: e.target.value })}
+              className="w-full px-4 py-2.5 border border-stone-300 rounded-lg focus:border-stone-900 outline-none transition-all"
+              placeholder="e.g., Souvenirs"
             />
           </div>
+
           <div>
-            <label className="block text-sm font-medium mb-1">
-              Notes (optional)
-            </label>
+             <label className="block text-xs font-bold uppercase tracking-wider text-stone-500 mb-1.5">Link (Optional)</label>
+             <input
+               type="url"
+               value={formData.link}
+               onChange={(e) => setFormData({ ...formData, link: e.target.value })}
+               className="w-full px-4 py-2.5 border border-stone-300 rounded-lg focus:border-stone-900 outline-none transition-all"
+               placeholder="https://..."
+             />
+          </div>
+
+          <div>
+            <label className="block text-xs font-bold uppercase tracking-wider text-stone-500 mb-1.5">Notes</label>
             <textarea
               value={formData.notes}
-              onChange={(e) =>
-                setFormData({ ...formData, notes: e.target.value })
-              }
-              className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg focus:border-gray-900 outline-none"
+              onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+              className="w-full px-4 py-2.5 border border-stone-300 rounded-lg focus:border-stone-900 outline-none transition-all"
               rows={2}
-              placeholder="Size, color, store location..."
+              placeholder="Color, size, max price..."
             />
           </div>
-          <div className="flex gap-3 pt-4">
+
+          <div className="flex gap-3 pt-4 mt-2">
             <button
               onClick={handleSubmit}
-              className="flex-1 px-4 py-3 bg-gray-900 text-white rounded-lg hover:bg-gray-800"
+              className="flex-1 px-6 py-3 bg-stone-900 text-white font-bold rounded-lg hover:bg-stone-800 transition-colors shadow-lg"
             >
-              Add to List
+              Add Item
             </button>
             <button
               onClick={onClose}
-              className="px-4 py-3 bg-white border-2 border-gray-300 rounded-lg hover:border-gray-400"
+              className="px-6 py-3 border border-stone-200 text-stone-600 font-bold rounded-lg hover:bg-stone-50 transition-colors"
             >
               Cancel
             </button>
@@ -1723,48 +1688,111 @@ function FlightCard({
   onDelete: () => void;
 }) {
   return (
-    <div className="bg-white border border-gray-200 rounded-lg p-5 shadow-sm hover:shadow-md transition-shadow relative flex flex-col h-full">
-      <div className="flex justify-between items-start mb-2">
-        <div>
-          <h4 className="text-lg font-bold text-gray-900">{flight.airline}</h4>
-          <p className="text-gray-600 text-sm font-medium">{flight.flightNumber}</p>
+    <div className="group bg-white border border-stone-200 rounded-xl p-6 shadow-sm hover:shadow-md transition-all relative flex flex-col h-full hover:border-stone-300">
+      
+      {/* Header */}
+      <div className="flex justify-between items-start mb-4">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-full bg-stone-100 flex items-center justify-center text-stone-600">
+            <Plane size={18} />
+          </div>
+          <div>
+             <h4 className="text-lg font-serif font-bold text-stone-900">{flight.airline}</h4>
+             <p className="text-stone-500 text-xs font-bold uppercase tracking-wider">{flight.flightNumber}</p>
+          </div>
         </div>
         {flight.status !== "confirmed" ? (
           <button
             onClick={(e) => { e.stopPropagation(); onConfirm(); }}
-            className="bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold px-3 py-1.5 rounded"
+            className="bg-stone-900 hover:bg-stone-800 text-white text-xs font-bold px-3 py-1.5 rounded-full transition-colors"
           >
             Confirm
           </button>
         ) : (
-          <span className="bg-green-100 text-green-800 text-xs font-bold px-2 py-1 rounded">
-            Confirmed
+          <span className="bg-emerald-100 text-emerald-800 text-xs font-bold px-3 py-1 rounded-full flex items-center gap-1">
+            <Check size={12} strokeWidth={3} /> Confirmed
           </span>
         )}
       </div>
 
-      <div className="flex-1 space-y-1 mb-4">
-        <p className="text-gray-800 text-sm">{flight.departure} ➝ {flight.arrival}</p>
-        <p className="text-gray-500 text-xs">
-          {flight.date} {flight.time && `@ ${flight.time}`}
-        </p>
-        {flight.price && <p className="text-gray-700 text-sm font-medium">Price: {flight.price}</p>}
-        {flight.details && <p className="text-gray-500 text-xs mt-2">{flight.details}</p>}
-        <div className="pt-2 mt-2">
+      <div className="flex-1 space-y-5 mb-4">
+        
+        {/* Route Visualization */}
+        <div className="flex items-center justify-between text-stone-800 px-1">
+           <div className="text-center">
+              <span className="block text-2xl font-serif">{flight.departure}</span>
+              <span className="text-xs text-stone-400 font-bold uppercase">Depart</span>
+           </div>
+           
+           {/* Duration Line */}
+           <div className="flex-1 flex flex-col items-center px-4">
+              {flight.duration && (
+                 <span className="text-[10px] font-bold text-stone-400 uppercase tracking-wider mb-1">{flight.duration}</span>
+              )}
+              <div className="w-full border-t border-stone-300 relative">
+                 <Plane size={12} className="absolute -top-[6px] left-1/2 -ml-1.5 text-stone-300 rotate-90" />
+              </div>
+           </div>
+
+           <div className="text-center">
+              <span className="block text-2xl font-serif">{flight.arrival}</span>
+              <span className="text-xs text-stone-400 font-bold uppercase">Arrive</span>
+           </div>
+        </div>
+
+        {/* Times Grid */}
+        <div className="grid grid-cols-2 gap-3 text-sm">
+           {/* Departure Info */}
+           <div className="bg-stone-50 px-3 py-2.5 rounded-lg">
+              <span className="block text-xs text-stone-400 uppercase font-bold mb-0.5">Departure</span>
+              <div className="font-bold text-stone-800">{flight.time}</div>
+              <div className="text-xs text-stone-500">
+                {new Date(flight.date).toLocaleDateString(undefined, {month:'short', day:'numeric'})}
+              </div>
+           </div>
+
+           {/* Arrival Info */}
+           <div className="bg-stone-50 px-3 py-2.5 rounded-lg text-right">
+              <span className="block text-xs text-stone-400 uppercase font-bold mb-0.5">Arrival</span>
+              <div className="font-bold text-stone-800">{flight.arrivalTime || "—"}</div>
+              <div className="text-xs text-stone-500">
+                {flight.arrivalDate ? new Date(flight.arrivalDate).toLocaleDateString(undefined, {month:'short', day:'numeric'}) : "—"}
+              </div>
+           </div>
+        </div>
+
+        {/* Cost & Details */}
+        {(flight.price || flight.details) && (
+          <div className="flex flex-wrap items-baseline gap-6 pt-2 text-sm text-stone-600">
+            {flight.price && (
+               <div className="flex-shrink-0">
+                 Cost: <span className="font-bold text-stone-900 text-base">{flight.price}</span>
+               </div>
+            )}
+            {flight.details && (
+               <div className="italic text-stone-500 leading-relaxed">
+                 "{flight.details}"
+               </div>
+            )}
+          </div>
+        )}
+        
+        <div className="pt-2 border-t border-stone-100">
            <TripAuthorInfo uid={flight.createdByUid} createdAt={flight.createdAt} />
         </div>
       </div>
 
-      <div className="flex justify-end gap-3 text-xs font-medium border-t pt-3 mt-auto">
+      {/* Footer Actions */}
+      <div className="flex justify-end gap-3 text-xs font-bold uppercase tracking-wide border-t border-stone-100 pt-4 mt-auto">
         <button 
           onClick={(e) => { e.stopPropagation(); onEdit(); }} 
-          className="text-blue-600 hover:text-blue-800"
+          className="text-stone-400 hover:text-stone-900 transition-colors"
         >
           Edit
         </button>
         <button 
           onClick={(e) => { e.stopPropagation(); onDelete(); }} 
-          className="text-red-500 hover:text-red-700"
+          className="text-red-300 hover:text-red-600 transition-colors"
         >
           Delete
         </button>
@@ -2043,34 +2071,26 @@ type HomePageProps = {
   onDeleteTrip: (tripId: number) => void;
   onRespondInvite: (trip: TripData, accept: boolean) => void; // ⭐ NEW PROP
 };
-
 function HomePage({
   trips,
   loading,
   onSelectTrip,
   onCreateTrip,
   onDeleteTrip,
-  onRespondInvite, // ⭐ NEW
+  onRespondInvite,
 }: HomePageProps) {
   
-  // Add 'invited' to the filter list
   const [filter, setFilter] = useState("all"); 
   const [showNewTripDialog, setShowNewTripDialog] = useState(false);
 
-  // ⭐ UPDATED FILTER LOGIC
+  // Filter logic remains the same...
   const filteredTrips = trips.filter((trip) => {
-    if (filter === "invited") {
-      return trip.isPendingInvite; // Only show pending invites
-    }
-    
-    // For other tabs, HIDE pending invites
+    if (filter === "invited") return trip.isPendingInvite;
     if (trip.isPendingInvite) return false;
-
     if (filter === "all") return true;
     return trip.status === filter;
   });
 
-  // Calculate invite count for the badge
   const inviteCount = trips.filter(t => t.isPendingInvite).length;
 
   const handleCreateTrip = async (data: TripFormData) => {
@@ -2079,59 +2099,83 @@ function HomePage({
   };
 
   return (
-    <div className="min-h-screen bg-[#f5f1e8] ">
-      {/* ... Header (Keep same) ... */}
-      <div className="bg-[#f5f1e8] border-b border-[#d4c5a0] py-16 px-8">
-        <div className="max-w-[90%] mx-auto text-center">
-             {/* ... (Keep existing header content) ... */}
-             <h1 className="text-6xl font-serif text-gray-900 mb-4">Travel Chronicles</h1>
-             <p className="text-gray-800 text-lg mb-8">Collecting memories from around the world.</p>
+    <div className="min-h-screen bg-[#FDFCF8] font-sans selection:bg-rose-100 flex flex-col">
+      {/* 1. Load Google Fonts */}
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;500;700&family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400&display=swap');
+        
+        .font-serif { font-family: 'Playfair Display', serif; }
+        .font-sans { font-family: 'DM Sans', sans-serif; }
+      `}</style>
+
+      {/* 2. Hero Section - COMPACT VERSION */}
+      <div className="relative border-b border-stone-200 bg-white pt-10 pb-8 px-8 overflow-hidden shrink-0">
+        {/* Decorative background element */}
+        <div className="absolute top-0 left-0 w-full h-1.5 bg-gradient-to-r from-rose-400 via-orange-300 to-blue-400" />
+        
+        <div className="max-w-4xl mx-auto text-center relative z-10">
+             {/* BIGGER BADGE */}
+             <div className="inline-block mb-4 px-6 py-2 rounded-full bg-stone-100 text-stone-700 text-sm font-bold tracking-widest uppercase shadow-sm border border-stone-200">
+               Your Travel Journal
+             </div>
+             
+             {/* SMALLER HEADLINE */}
+             <h1 className="text-5xl md:text-6xl font-serif text-stone-900 mb-4 tracking-tight leading-tight">
+               Collect Moments.
+             </h1>
+             
+             <p className="text-stone-500 text-lg font-light mb-6 max-w-xl mx-auto leading-relaxed">
+               Your personal archive of adventures and memories.
+             </p>
+             
              <button
               onClick={() => setShowNewTripDialog(true)}
-              className="mx-auto px-6 py-3 bg-gray-900 text-white rounded-lg flex items-center gap-2"
+              className="group relative inline-flex items-center gap-2 px-6 py-3 bg-stone-900 text-white rounded-full hover:bg-stone-800 transition-all shadow-lg hover:shadow-xl hover:-translate-y-0.5 text-sm font-medium tracking-wide"
             >
-              <Plus size={20} /> Add New Journey
+              <Plus size={18} className="text-rose-200" /> 
+              <span>Start New Journey</span>
             </button>
         </div>
       </div>
 
-      <div className="max-w-[90%] mx-auto px-8 py-12">
-        <div className="flex items-center justify-between mb-8">
+      {/* 3. Main Content Area - REDUCED WHITESPACE */}
+      <div className="max-w-7xl mx-auto px-6 py-8 w-full flex-1">
+        
+        {/* Filter Tabs - REDUCED MARGIN */}
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6 border-b border-stone-100 pb-3">
           <div>
-            <h2 className="text-3xl font-serif text-gray-900">My Journeys</h2>
-            <p className="text-gray-800 italic">
-              {trips.filter(t => !t.isPendingInvite).length} adventures collected
+            <h2 className="text-2xl font-serif text-stone-900">Your Journeys</h2>
+            <p className="text-stone-500 text-sm font-light">
+              {trips.filter(t => !t.isPendingInvite).length} adventures recorded
             </p>
           </div>
           
-          {/* ⭐ UPDATED FILTER BUTTONS */}
-          <div className="flex gap-2">
+          <div className="flex gap-1 p-1 bg-stone-100 rounded-lg self-start md:self-auto">
             {["all", "upcoming", "ongoing", "completed"].map((f) => (
               <button
                 key={f}
                 onClick={() => setFilter(f)}
-                className={`px-4 py-2 rounded-lg border-2 transition-colors capitalize ${
+                className={`px-4 py-1.5 rounded-md text-xs font-bold uppercase tracking-wide transition-all ${
                   filter === f
-                    ? "bg-gray-900 text-white border-gray-900"
-                    : "bg-white border-gray-300 hover:border-gray-400"
+                    ? "bg-white text-stone-900 shadow-sm"
+                    : "text-stone-400 hover:text-stone-700 hover:bg-stone-200/50"
                 }`}
               >
                 {f}
               </button>
             ))}
 
-            {/* ⭐ INVITED TAB */}
             <button
                onClick={() => setFilter("invited")}
-               className={`px-4 py-2 rounded-lg border-2 transition-colors flex items-center gap-2 ${
+               className={`px-4 py-1.5 rounded-md text-xs font-bold uppercase tracking-wide transition-all flex items-center gap-2 ${
                  filter === "invited"
-                   ? "bg-gray-900 text-white border-gray-900"
-                   : "bg-white border-gray-300 hover:border-gray-400"
+                    ? "bg-white text-stone-900 shadow-sm"
+                    : "text-stone-400 hover:text-stone-700 hover:bg-stone-200/50"
                }`}
              >
-               Invited
+               Invites
                {inviteCount > 0 && (
-                 <span className="bg-red-500 text-white text-xs font-bold px-1.5 py-0.5 rounded-full">
+                 <span className="bg-rose-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full leading-none">
                    {inviteCount}
                  </span>
                )}
@@ -2139,23 +2183,30 @@ function HomePage({
           </div>
         </div>
 
+        {/* Grid Area - TIGHTER GRID */}
         {loading ? (
-          <div className="text-center py-20 text-gray-700">Loading...</div>
+          <div className="flex justify-center py-10">
+            <div className="animate-pulse flex flex-col items-center">
+              <div className="w-10 h-10 bg-stone-200 rounded-full mb-3"></div>
+              <div className="h-3 w-24 bg-stone-200 rounded"></div>
+            </div>
+          </div>
         ) : filteredTrips.length === 0 ? (
-          <div className="text-center py-20">
-            <p className="text-gray-700 mb-4">No journeys found in this category.</p>
+          <div className="text-center py-20 bg-white rounded-2xl border border-dashed border-stone-200">
+            <div className="w-12 h-12 bg-stone-50 rounded-full flex items-center justify-center mx-auto mb-3 text-stone-300">
+              <MapPin size={24} />
+            </div>
+            <p className="text-stone-900 font-serif text-lg mb-1">No journeys found</p>
+            <p className="text-stone-500 text-sm">Time to plan your next adventure.</p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 pb-8">
             {filteredTrips.map((trip) => (
               <TripCard
                 key={trip.id}
                 trip={trip}
-                // If invited, disable clicking to open trip (force accept/decline)
                 onClick={() => !trip.isPendingInvite && onSelectTrip(trip)}
                 onDelete={() => onDeleteTrip(trip.id)}
-                
-                // Pass invite props
                 isInvited={trip.isPendingInvite}
                 onAccept={() => onRespondInvite(trip, true)}
                 onDecline={() => onRespondInvite(trip, false)}
@@ -2184,89 +2235,109 @@ type TripCardProps = {
   onAccept?: () => void;
   onDecline?: () => void;
 };
-
 function TripCard({ trip, onClick, onDelete, isInvited, onAccept, onDecline }: TripCardProps) {
-  const statusColors: Record<TripStatus, string> = {
-    upcoming: "bg-amber-100 text-amber-800",
-    ongoing: "bg-green-100 text-green-800",
-    completed: "bg-gray-100 text-gray-800",
+  
+  // Refined Status Badges
+  const statusConfig: Record<TripStatus, { label: string; className: string }> = {
+    upcoming: { label: "Upcoming", className: "bg-amber-100 text-amber-800 border-amber-200" },
+    ongoing:  { label: "Happening Now", className: "bg-emerald-100 text-emerald-800 border-emerald-200" },
+    completed:{ label: "Completed", className: "bg-stone-100 text-stone-600 border-stone-200" },
   };
+
+  const config = statusConfig[trip.status] || statusConfig.upcoming;
 
   return (
     <div
       onClick={onClick}
-      className={`bg-white border-2 border-gray-200 rounded-lg overflow-hidden transition-all group relative ${
-        !isInvited ? "hover:border-gray-400 hover:shadow-xl cursor-pointer" : ""
+      className={`group relative flex flex-col bg-white rounded-2xl transition-all duration-300 ${
+        !isInvited ? "hover:-translate-y-2 cursor-pointer" : ""
       }`}
     >
-      <div className="relative h-48 overflow-hidden">
+      {/* Image Container - Aspect Ratio 4:3 for a classic photo look */}
+      <div className="relative aspect-[4/3] overflow-hidden rounded-2xl shadow-md group-hover:shadow-2xl transition-all duration-500">
+        
+        {/* Status Badge */}
+        <div className="absolute top-4 left-4 z-10">
+          {isInvited ? (
+             <div className="bg-blue-600 text-white px-3 py-1.5 rounded-full shadow-lg text-xs font-bold uppercase tracking-wide flex items-center gap-1.5">
+               <Users size={12} /> Invited
+             </div>
+          ) : (
+             <div className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider border shadow-sm backdrop-blur-md bg-white/90 ${config.className}`}>
+               {config.label}
+             </div>
+          )}
+        </div>
+
         {trip.imageUrl ? (
           <img
             src={trip.imageUrl}
             alt={trip.destination}
-            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+            className="w-full h-full object-cover transform group-hover:scale-110 transition-transform duration-700 ease-in-out"
           />
         ) : (
           <div
-            className={`w-full h-full bg-gradient-to-br ${trip.bgGradient || "from-blue-400 to-purple-400"}`}
+            className={`w-full h-full bg-gradient-to-br ${trip.bgGradient || "from-stone-200 to-stone-300"}`}
           />
         )}
         
-        <div className="absolute top-4 left-4">
-          {isInvited ? (
-             // ⭐ SHOW "INVITED" BADGE
-             <div className="bg-blue-600 text-white px-3 py-1 rounded shadow-lg text-xs font-bold uppercase tracking-wide">
-               Invited
-             </div>
-          ) : (
-             <div className="bg-[#f5f1e8] px-3 py-1 rounded shadow-lg">
-                <span className={`px-2 py-1 rounded text-xs font-medium ${statusColors[trip.status]}`}>
-                  {trip.status || "Upcoming"}
-                </span>
-             </div>
-          )}
-        </div>
+        {/* Gradient Overlay for text readability if you wanted text over image (optional) */}
+        <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
       </div>
 
-      <div className="p-6">
-        <div className="flex items-baseline gap-3 mb-2">
-          <h3 className="text-2xl font-serif text-gray-900">{trip.destination}</h3>
-          <span className="text-gray-700">{trip.year}</span>
+      {/* Content */}
+      <div className="pt-5 px-2 pb-2 flex-1 flex flex-col">
+        <div className="flex justify-between items-start mb-1">
+          <h3 className="text-2xl font-serif text-stone-900 group-hover:text-rose-900 transition-colors">
+            {trip.destination}
+          </h3>
+          <span className="font-serif text-stone-400 text-lg italic">{trip.year}</span>
         </div>
-        <div className="flex items-center gap-2 text-gray-800 mb-4">
-          <MapPin size={14} />
-          <span className="text-sm">{trip.country}</span>
-        </div>
-        <p className="text-gray-700 italic text-sm">"{trip.tagline}"</p>
         
-        <div className="flex justify-end mt-4">
-          {isInvited ? (
-             // ⭐ ACTION BUTTONS FOR INVITE
-             <div className="flex gap-2 w-full">
-               <button 
-                 onClick={(e) => { e.stopPropagation(); onDecline?.(); }}
-                 className="flex-1 py-2 border border-red-200 text-red-600 rounded hover:bg-red-50 text-sm font-medium"
-               >
-                 Decline
-               </button>
-               <button 
-                 onClick={(e) => { e.stopPropagation(); onAccept?.(); }}
-                 className="flex-1 py-2 bg-gray-900 text-white rounded hover:bg-gray-800 text-sm font-medium"
-               >
-                 Accept
-               </button>
-             </div>
-          ) : (
-             <button
-              onClick={(e) => {
-                e.stopPropagation();
-                onDelete();
-              }}
-              className="text-red-500 hover:text-red-700 text-sm"
-            >
-              Delete
-            </button>
-          )}
+        <div className="flex items-center gap-1.5 text-stone-500 text-sm font-medium mb-3 uppercase tracking-wide">
+          <MapPin size={14} className="text-rose-400" />
+          {trip.country}
+        </div>
+
+        <p className="text-stone-600 text-sm leading-relaxed line-clamp-2 mb-4">
+          {trip.tagline}
+        </p>
+
+        {/* Footer Actions */}
+        <div className="mt-auto pt-4 border-t border-stone-100 flex items-center justify-between">
+            <span className="text-xs font-medium text-stone-400">
+               {new Date(trip.startDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })} 
+               {' — '} 
+               {new Date(trip.endDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+            </span>
+
+            {isInvited ? (
+               <div className="flex gap-2">
+                 <button 
+                   onClick={(e) => { e.stopPropagation(); onDecline?.(); }}
+                   className="px-3 py-1.5 rounded-lg border border-rose-200 text-rose-600 hover:bg-rose-50 text-xs font-bold"
+                 >
+                   Decline
+                 </button>
+                 <button 
+                   onClick={(e) => { e.stopPropagation(); onAccept?.(); }}
+                   className="px-3 py-1.5 rounded-lg bg-stone-900 text-white hover:bg-stone-800 text-xs font-bold shadow-md"
+                 >
+                   Accept
+                 </button>
+               </div>
+            ) : (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onDelete();
+                }}
+                className="group/delete p-2 hover:bg-red-50 rounded-full transition-colors"
+                title="Delete Trip"
+              >
+                <Trash2 size={16} className="text-stone-300 group-hover/delete:text-red-500 transition-colors" />
+              </button>
+            )}
         </div>
       </div>
     </div>
@@ -2289,17 +2360,13 @@ type TabId =
   | "budget";
 function TripView({ trip: initialTrip, onBack }: TripViewProps) {
   const [activeTab, setActiveTab] = useState<TabId>("itinerary");
-  
-  // ⭐ 1. Use local state to track the "live" trip data
   const [trip, setTrip] = useState<TripData>(initialTrip);
 
-  // ⭐ 2. Subscribe to the Trip Document for real-time updates
+  // ... (Keep existing useEffect for Snapshot and Summary logic) ...
   useEffect(() => {
-    // This listens to "travelData" collection where key is "trip:123"
     const unsub = onSnapshot(doc(db, "travelData", `trip:${initialTrip.id}`), (doc) => {
       if (doc.exists()) {
         const data = doc.data();
-        // Handle if data is wrapped in { value: "..." } or raw object
         const realData = data.value ? JSON.parse(data.value) : data;
         setTrip((prev) => ({ ...prev, ...realData }));
       }
@@ -2308,7 +2375,6 @@ function TripView({ trip: initialTrip, onBack }: TripViewProps) {
   }, [initialTrip.id]);
 
   const [summary, setSummary] = useState({
-    // ... keep existing summary state ...
     flights: 0,
     hotels: 0,
     activities: 0,
@@ -2317,42 +2383,29 @@ function TripView({ trip: initialTrip, onBack }: TripViewProps) {
     locations: 0
   });
 
-  // ... rest of the function (loadSummary, etc.) remains the same ...
-
+  // ... (Keep existing loadSummary logic) ...
+  // ... (Keep existing dayCount logic) ...
   const loadSummary = async () => {
-    // Helper to fetch all data for a prefix (Generic)
-    const getAll = async (prefix: string) => {
+    // ... paste your existing loadSummary logic here ...
+    // For brevity in this snippet, I am assuming you kept the logic from the previous file.
+     const getAll = async (prefix: string) => {
       const res = await storage.list(prefix);
       if (!res?.keys) return [];
-      
       const promises = res.keys.map((key) => storage.get(key));
       const results = await Promise.all(promises);
-      
-      return results
-        .map((r) => (r?.value ? JSON.parse(r.value) : null))
-        .filter((i) => i !== null);
+      return results.map((r) => (r?.value ? JSON.parse(r.value) : null)).filter((i) => i !== null);
     };
 
     try {
-      // --- FLIGHTS (Confirmed only) ---
       const allFlights = await getAll(`flight:${trip.id}:`);
       const flightCount = allFlights.filter((f: any) => f.status === "confirmed").length;
-
-      // --- HOTELS (Confirmed only) ---
       const allHotels = await getAll(`hotel:${trip.id}:`);
       const hotelCount = allHotels.filter((h: any) => h.status === "confirmed").length;
-
-      // --- PLACES (Confirmed only) ---
       const eats = await getAll(`place:${trip.id}:eat:`);
       const visits = await getAll(`place:${trip.id}:visit:`);
-      // check for 'confirmed' property (boolean) or status string if you used that
       const placeCount = [...eats, ...visits].filter((p: any) => p.confirmed === true).length;
-
-      // --- PHOTOS ---
       const photoRes = await storage.list(`photo:${trip.id}:`);
       const photoCount = photoRes?.keys?.length || 0;
-
-      // --- ACTIVITIES ---
       const itineraryRes = await storage.list(`itinerary:${trip.id}:date:`);
       let activityCount = 0;
       if (itineraryRes?.keys) {
@@ -2364,154 +2417,133 @@ function TripView({ trip: initialTrip, onBack }: TripViewProps) {
           }
         }
       }
-
-      // --- LOCATIONS (From Segments) ---
-      // We use a Set to ensure duplicates (e.g. going to Tokyo twice) are only counted once
-      const uniqueLocations = new Set(
-        trip.segments?.map((s) => s.location.trim()) || []
-      ).size;
-
-      setSummary({
-        flights: flightCount,
-        hotels: hotelCount,
-        activities: activityCount,
-        places: placeCount,
-        photos: photoCount,
-        locations: uniqueLocations,
-      });
-
-    } catch (e) {
-      console.error("Failed to load summary", e);
-    }
+      const uniqueLocations = new Set(trip.segments?.map((s) => s.location.trim()) || []).size;
+      setSummary({ flights: flightCount, hotels: hotelCount, activities: activityCount, places: placeCount, photos: photoCount, locations: uniqueLocations });
+    } catch (e) { console.error(e); }
   };
 
-  useEffect(() => {
-    loadSummary();
-  }, [trip.id, trip.segments]); // Reload if segments change
+  useEffect(() => { loadSummary(); }, [trip.id, trip.segments]);
 
-  const dayCount =
-    Math.ceil(
-      (new Date(trip.endDate).getTime() -
-      new Date(trip.startDate).getTime())
-      / (1000 * 60 * 60 * 24)
-    ) + 1;
+  const dayCount = Math.ceil((new Date(trip.endDate).getTime() - new Date(trip.startDate).getTime()) / (1000 * 60 * 60 * 24)) + 1;
 
 
   const tabs: { id: TabId; label: string; icon: any }[] = [
     { id: "itinerary", label: "Itinerary", icon: Calendar },
-    { id: "places-visit", label: "Places to Visit", icon: MapPin },
-    { id: "places-eat", label: "Places to Eat", icon: Utensils },
+    { id: "places-visit", label: "To Visit", icon: MapPin },
+    { id: "places-eat", label: "To Eat", icon: Utensils },
     { id: "shopping", label: "Shopping", icon: ShoppingBag },
-    { id: "photos", label: "Photos", icon: Camera },
-    { id: "scrapbook", label: "Scrapbook", icon: Sparkles },
+    { id: "photos", label: "Gallery", icon: Camera },
+    { id: "scrapbook", label: "Journal", icon: Sparkles },
     { id: "admin", label: "Admin", icon: PackageCheck },
     { id: "budget", label: "Budget", icon: Wallet },
   ];
 
   return (
-    <div className="min-h-screen bg-[#f5f1e8] [&_button]:cursor-pointer">
-      <div className="bg-white border-b-2 border-gray-200">
-        <div className="max-w-[90%] mx-auto px-8 py-6">
-          
-          <button
+    <div className="min-h-screen bg-[#FDFCF8] font-sans text-stone-900 selection:bg-rose-100 [&_button]:cursor-pointer">
+       {/* Font Style Block (Repeated here to ensure it loads if user lands directly) */}
+       <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;500;700&family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400&display=swap');
+        .font-serif { font-family: 'Playfair Display', serif; }
+        .font-sans { font-family: 'DM Sans', sans-serif; }
+      `}</style>
+
+      {/* 1. HERO HEADER */}
+      <div className="relative h-[40vh] min-h-[300px] w-full group">
+        
+        {/* Back Button (Floating) */}
+        <button
             onClick={onBack}
-            className="flex items-center gap-2 text-gray-800 hover:text-gray-900 mb-4"
-          >
-            <ChevronLeft size={20} />
-            All Trips
-          </button>
-          
-          <div className="flex items-start gap-6">
-            <div className="w-32 h-32 rounded-lg overflow-hidden flex-shrink-0">
-              {trip.imageUrl ? (
-                <img
-                  src={trip.imageUrl}
-                  alt={trip.destination}
-                  className="w-full h-full object-cover"
-                />
-              ) : (
-                <div
-                  className={`w-full h-full bg-gradient-to-br ${trip.bgGradient}`}
-                />
-              )}
-            </div>
+            className="absolute top-6 left-6 z-20 px-4 py-2 bg-white/90 backdrop-blur-md rounded-full shadow-sm hover:bg-white transition-all text-sm font-bold text-stone-800 flex items-center gap-2"
+        >
+            <ChevronLeft size={16} /> All Journeys
+        </button>
 
-            <div className="flex-1 min-w-0">
-              
-              <div className="flex justify-between items-start">
-                
-                <div>
-                  <h1 className="text-4xl font-serif text-gray-900 leading-tight">
-                    {trip.destination} Trip {trip.year}
-                  </h1>
-                  <p className="text-gray-600 mt-1 font-light tracking-wide">
-                    {trip.startDate} — {trip.endDate}
-                  </p>
+        {/* Cover Image */}
+        {trip.imageUrl ? (
+            <img
+            src={trip.imageUrl}
+            alt={trip.destination}
+            className="w-full h-full object-cover brightness-[0.85]"
+            />
+        ) : (
+            <div className={`w-full h-full bg-gradient-to-br ${trip.bgGradient}`} />
+        )}
+        
+        {/* Title Content Overlay */}
+        <div className="absolute bottom-0 left-0 w-full bg-gradient-to-t from-black/60 via-black/30 to-transparent pt-20 pb-8 px-8">
+            <div className="max-w-7xl mx-auto flex items-end justify-between">
+                <div className="text-white">
+                    <div className="flex items-center gap-3 mb-2 opacity-90">
+                        <span className="uppercase tracking-widest text-xs font-bold">{trip.country}</span>
+                        <span>•</span>
+                        <span className="font-serif italic">{trip.year}</span>
+                    </div>
+                    <h1 className="text-5xl md:text-7xl font-serif mb-2 tracking-tight">{trip.destination}</h1>
+                    <p className="text-white/80 text-lg font-light max-w-xl">{trip.tagline}</p>
                 </div>
 
-                <div className="ml-4">
-                  <NotificationToggle tripId={trip.id} />
+                {/* Notification Toggle (styled dark) */}
+                <div className="mb-2">
+                    <NotificationToggle tripId={trip.id} />
                 </div>
-                
-              </div>
-
-              {/* ⭐ UPDATED STATS ROW */}
-              <div className="mt-3 text-sm text-gray-600 font-medium tracking-wide">
-                <span>{dayCount} days</span>
-                <span className="mx-2 text-gray-300">•</span>
-                
-                {/* NEW: Locations Count */}
-                <span>{summary.locations} locations</span>
-                <span className="mx-2 text-gray-300">•</span>
-
-                <span>{summary.flights} flights</span>
-                <span className="mx-2 text-gray-300">•</span>
-                <span>{summary.hotels} hotels</span>
-                <span className="mx-2 text-gray-300">•</span>
-                <span>{summary.activities} activities</span>
-                <span className="mx-2 text-gray-300">•</span>
-                <span>{summary.places} places</span>
-                <span className="mx-2 text-gray-300">•</span>
-                <span>{summary.photos} photos</span>
-              </div>
             </div>
-          </div>
         </div>
       </div>
 
-      <div className="bg-white border-b-2 border-gray-200 sticky top-0 z-10">
-        <div className="max-w-[90%] mx-auto px-8">
-          <div className="flex gap-8 overflow-x-auto">
-            {tabs.map((tab) => {
+      {/* 2. STATS BAR */}
+      <div className="border-b border-stone-200 bg-white sticky top-0 z-30 shadow-sm">
+        <div className="max-w-7xl mx-auto px-6 py-4 flex flex-col md:flex-row md:items-center justify-between gap-4">
+            
+            {/* Stats */}
+            <div className="flex items-center gap-6 text-sm text-stone-500 font-medium overflow-x-auto no-scrollbar">
+                <span className="text-stone-900">{dayCount} Days</span>
+                <span className="h-4 w-px bg-stone-200" />
+                <span>{summary.locations} Locations</span>
+                <span>{summary.flights} Flights</span>
+                <span>{summary.activities} Activities</span>
+                <span>{summary.places} Places</span>
+            </div>
 
-              const Icon = tab.icon;
-              return (
-                <button
-                  key={tab.id}
-                  onClick={() => setActiveTab(tab.id)}
-                  className={`flex items-center gap-2 px-4 py-4 border-b-4 transition-colors whitespace-nowrap ${
-                    activeTab === tab.id
-                      ? "border-gray-900 text-gray-900"
-                      : "border-transparent text-gray-800 hover:text-gray-900"
-                  }`}
-                >
-                  <Icon size={18} />
-                  <span className="font-medium">{tab.label}</span>
-                </button>
-              );
-            })}
-          </div>
+            {/* Dates */}
+            <div className="text-stone-400 text-sm font-medium whitespace-nowrap">
+                {new Date(trip.startDate).toLocaleDateString(undefined, { month: 'long', day: 'numeric' })} 
+                {' — '} 
+                {new Date(trip.endDate).toLocaleDateString(undefined, { month: 'long', day: 'numeric' })}
+            </div>
+        </div>
+
+        {/* 3. TABS NAVIGATION */}
+        <div className="max-w-7xl mx-auto px-6 overflow-x-auto no-scrollbar">
+            <div className="flex gap-8">
+                {tabs.map((tab) => {
+                const Icon = tab.icon;
+                const isActive = activeTab === tab.id;
+                return (
+                    <button
+                    key={tab.id}
+                    onClick={() => setActiveTab(tab.id)}
+                    className={`group flex items-center gap-2 py-4 border-b-2 transition-all whitespace-nowrap ${
+                        isActive
+                        ? "border-stone-900 text-stone-900"
+                        : "border-transparent text-stone-400 hover:text-stone-600 hover:border-stone-200"
+                    }`}
+                    >
+                    <Icon size={16} className={isActive ? "text-rose-500" : "group-hover:text-stone-500"} />
+                    <span className={`text-sm ${isActive ? "font-bold tracking-wide" : "font-medium"}`}>
+                        {tab.label}
+                    </span>
+                    </button>
+                );
+                })}
+            </div>
         </div>
       </div>
 
-      <div className="max-w-[90%] mx-auto px-8 py-8">
+      {/* 4. CONTENT AREA */}
+      <div className="max-w-7xl w-full mx-auto px-6 py-12">
         {activeTab === "itinerary" && <ItineraryTab trip={trip} />}
-        {activeTab === "places-visit" && (
-          <PlacesTab tripId={trip.id} type="visit" />
-        )}
-        {activeTab === "places-eat" && (
-          <PlacesTab tripId={trip.id} type="eat" />
-        )}
+        {activeTab === "places-visit" && <PlacesTab tripId={trip.id} type="visit" />}
+        {activeTab === "places-eat" && <PlacesTab tripId={trip.id} type="eat" />}
         {activeTab === "shopping" && <ShoppingTab tripId={trip.id} />}
         {activeTab === "photos" && <PhotosTab tripId={trip.id} />}
         {activeTab === "scrapbook" && <ScrapbookTab tripId={trip.id} />}
@@ -2765,98 +2797,85 @@ function ItineraryTab({ trip }: { trip: TripData }) {
     document.body.removeChild(link);
   };
   return (
-    <div className="space-y-6">
-      {/* HEADER CONTROLS */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+    <div className="space-y-8">
+      {/* Header Controls */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
         <div>
-          <h2 className="text-3xl font-serif text-gray-900">Itinerary</h2>
+          <h2 className="text-3xl font-serif text-stone-900 pb-1">Itinerary</h2>
           {viewMode === "timeline" && (
-            <p className="text-gray-800 mt-1">
-              {currentDayData.date} • Day {currentDayData.day}
+            <p className="text-stone-500 mt-3 font-light">
+               Day {currentDayData.day} <span className="text-stone-300 mx-2">•</span> {currentDayData.date}
             </p>
           )}
         </div>
 
-        <div className="flex items-center gap-2 bg-gray-100 p-1 rounded-lg">
-          <button
-            onClick={() => setViewMode("timeline")}
-            className={`px-3 py-1.5 rounded-md text-sm font-medium transition-all ${
-              viewMode === "timeline" ? "bg-white shadow text-gray-900" : "text-gray-500 hover:text-gray-900"
-            }`}
-          >
-            Timeline
-          </button>
-          <button
-            onClick={() => setViewMode("calendar")}
-            className={`px-3 py-1.5 rounded-md text-sm font-medium transition-all ${
-              viewMode === "calendar" ? "bg-white shadow text-gray-900" : "text-gray-500 hover:text-gray-900"
-            }`}
-          >
-            Calendar
-          </button>
-        </div>
-            <div className="flex gap-2">
-          {/* ... existing Manage Locations button ... */}
-          
-          <button
-            onClick={downloadICS}
-            className="px-3 py-2 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 text-sm font-medium flex items-center gap-2"
-            title="Export to Google/Apple Calendar"
-          >
-            <Calendar size={16} /> 
-            Export
-          </button>
+        <div className="flex flex-wrap items-center gap-3">
+            {/* View Toggle */}
+            <div className="bg-stone-100 p-1 rounded-lg flex">
+                {["timeline", "calendar"].map((m) => (
+                    <button
+                        key={m}
+                        onClick={() => setViewMode(m as any)}
+                        className={`px-4 py-1.5 rounded-md text-xs font-bold uppercase tracking-wide transition-all ${
+                            viewMode === m ? "bg-white text-stone-900 shadow-sm" : "text-stone-400 hover:text-stone-600"
+                        }`}
+                    >
+                        {m}
+                    </button>
+                ))}
+            </div>
+            
+            <div className="h-6 w-px bg-stone-200 mx-2" />
 
-          {/* ... existing Add Activity button ... */}
-        </div> 
-        <div className="flex gap-2">
-          <button
-            onClick={() => setShowLocDialog(true)}
-            className="px-3 py-2 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 text-sm font-medium"
-          >
-            Manage Locations
-          </button>
-          {viewMode === "timeline" && (
-            <button
-              onClick={() => setShowAddDialog(true)}
-              className="px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800 flex items-center gap-2"
-            >
-              <Plus size={18} />
-              Add Activity
+            <button onClick={downloadICS} className="p-2 text-stone-400 hover:text-stone-900 transition-colors" title="Export">
+                <Download size={20} />
+            </button>
+            <button onClick={() => setShowLocDialog(true)} className="p-2 text-stone-400 hover:text-stone-900 transition-colors" title="Locations">
+                <MapPin size={20} />
             </button>
             
-          )}
+            {viewMode === "timeline" && (
+                <button
+                onClick={() => setShowAddDialog(true)}
+                className="ml-2 px-5 py-2.5 bg-stone-900 text-white rounded-full hover:bg-stone-800 flex items-center gap-2 text-sm font-medium shadow-lg hover:shadow-xl transition-all"
+                >
+                <Plus size={16} /> Add Activity
+                </button>
+            )}
         </div>
       </div>
 
       {/* ================= TIMELINE VIEW ================= */}
       {viewMode === "timeline" && (
         <>
-          {/* Scrollable Day Tabs */}
-          <div className="flex gap-2 overflow-x-auto pb-4">
+          {/* Day Navigation Pills */}
+          <div className="flex gap-3 overflow-x-auto pb-4 no-scrollbar">
             {days.map((day, index) => {
               const dayLocs = getLocationsForDate(day.date);
+              const isActive = currentDayIndex === index;
               
               return (
                 <button
                   key={day.day}
                   onClick={() => setCurrentDayIndex(index)}
-                  className={`relative px-4 py-2 rounded-full border-2 transition-all whitespace-nowrap min-w-[100px] ${
-                    currentDayIndex === index
-                      ? "bg-gray-900 text-white border-gray-900"
-                      : "bg-white text-gray-700 border-gray-200 hover:border-gray-400"
+                  className={`relative flex-shrink-0 px-5 py-3 rounded-xl transition-all border ${
+                    isActive
+                      ? "bg-stone-900 text-white border-stone-900 shadow-md"
+                      : "bg-white text-stone-500 border-stone-200 hover:border-stone-400 hover:text-stone-900"
                   }`}
                 >
-                  <span className="block text-sm font-bold">Day {day.day}</span>
+                  <div className="flex flex-col items-center">
+                      <span className={`text-[10px] uppercase font-bold tracking-wider ${isActive ? "text-stone-400" : "text-stone-400"}`}>
+                        Day
+                      </span>
+                      <span className="text-xl font-serif leading-none mt-1">{day.day}</span>
+                  </div>
                   
-                  {/* Overlap Indicator Dots */}
+                  {/* Indicator Dots */}
                   {dayLocs.length > 0 && (
-                    <div className="absolute top-0 right-0 -mt-1 -mr-1 flex gap-0.5">
+                    <div className="absolute top-2 right-2 flex gap-1">
                       {dayLocs.map(loc => (
-                         <span 
-                           key={loc.id} 
-                           className={`w-3 h-3 rounded-full border-2 border-white ${loc.color.split(" ")[0]}`} 
-                         />
+                         <span key={loc.id} className={`w-2 h-2 rounded-full ${loc.color.split(" ")[0]}`} />
                       ))}
                     </div>
                   )}
@@ -2865,68 +2884,76 @@ function ItineraryTab({ trip }: { trip: TripData }) {
             })}
           </div>
 
-          {/* STACKED LOCATION BANNERS (Handles Overlaps) */}
-          <div className="space-y-2 mb-4">
+          {/* Location Banners */}
+          <div className="space-y-3">
             {currentLocations.map((loc) => (
-              <div 
-                key={loc.id} 
-                className={`p-4 rounded-lg border-l-4 ${loc.color} flex justify-between items-center`}
-              >
-                <div>
-                  <span className="text-xs font-bold uppercase tracking-wider opacity-70">Location</span>
-                  <h3 className="text-xl font-serif font-semibold">{loc.location}</h3>
-                </div>
-                <MapPin className="opacity-50" />
+              <div key={loc.id} className={`px-6 py-3 rounded-lg flex justify-between items-center text-sm font-medium ${loc.color}`}>
+                 <span>Currently in <span className="font-bold">{loc.location}</span></span>
+                 <MapPin size={16} className="opacity-50" />
               </div>
             ))}
           </div>
 
-          {/* Activity List */}
+          {/* Activity Cards */}
           {currentDayData.items.length === 0 ? (
-            <div className="text-center py-20 bg-white rounded-lg border-2 border-dashed border-gray-300">
-              <p className="text-gray-700 mb-4">No activities planned for Day {currentDayData.day}</p>
-              <button onClick={() => setShowAddDialog(true)} className="px-6 py-3 bg-gray-900 text-white rounded-lg">
-                Add First Activity
+            <div className="text-center py-24 bg-white rounded-2xl border border-dashed border-stone-200">
+              <div className="w-12 h-12 bg-stone-50 rounded-full flex items-center justify-center mx-auto mb-3">
+                 <Clock size={24} className="text-stone-300" />
+              </div>
+              <p className="text-stone-900 font-serif text-lg">Empty Schedule</p>
+              <button onClick={() => setShowAddDialog(true)} className="mt-4 text-rose-600 font-medium hover:underline text-sm">
+                Plan something for Day {currentDayData.day}
               </button>
             </div>
           ) : (
-            <div className="space-y-4">
+            <div className="relative border-l border-stone-200 ml-4 pl-8 space-y-8 py-2">
               {currentDayData.items.map((item) => {
                 const Icon = iconMap[item.iconType] || Clock;
                 return (
-                  <div key={item.id} className="bg-white border-2 border-gray-200 rounded-lg p-6 hover:shadow-md transition-all">
-                    <div className="flex gap-4">
-                      <div className="flex-shrink-0 w-20 text-center">
-                        <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-gray-100 text-gray-700">
-                          <Icon size={24} />
-                        </div>
-                        <p className="text-lg font-semibold mt-2">{item.time || "--:--"}</p>
-                      </div>
-                      <div className="flex-1">
-                        <div className="flex justify-between">
-                            <h3 className="text-xl font-serif text-gray-800">{item.activity}</h3>
-                             <div className="flex gap-2"> {/* ⭐ Wrap buttons in div */}
-                              <button
-                                onClick={() => setEditingActivity(item)} // ⭐ Trigger Edit
-                                className="text-blue-600 hover:text-blue-800 text-sm font-medium"
-                              >
-                                Edit
-                              </button>
-                              <button
-                                onClick={() => deleteActivity(currentDayData.date, item.id)}
-                                className="text-red-500 hover:text-red-700 text-sm"
-                              >
-                                Delete
-                              </button>
+                  <div key={item.id} className="relative group">
+                    {/* Timeline Dot */}
+                    <div className="absolute -left-[41px] top-6 w-5 h-5 rounded-full border-4 border-[#FDFCF8] bg-stone-300 group-hover:bg-stone-900 transition-colors" />
+                    
+                    <div className="bg-white rounded-xl p-6 border border-stone-100 shadow-sm hover:shadow-md transition-all group-hover:border-stone-300">
+                        <div className="flex gap-5">
+                            {/* Time Column */}
+                            <div className="flex-shrink-0 w-16 pt-1">
+                                <span className="block text-lg font-bold text-stone-900">{item.time || "—"}</span>
+                                <div className="mt-2 text-stone-300">
+                                    <Icon size={20} />
+                                </div>
+                            </div>
+
+                            {/* Content Column */}
+                            <div className="flex-1 min-w-0">
+                                <div className="flex justify-between items-start mb-1">
+                                    <h3 className="text-xl font-serif text-stone-900 group-hover:text-rose-900 transition-colors">
+                                        {item.activity}
+                                    </h3>
+                                    
+                                    {/* Action Buttons (Hidden until hover) */}
+                                    <div className="flex gap-3 opacity-0 group-hover:opacity-100 transition-opacity">
+                                        <button onClick={() => setEditingActivity(item)} className="text-xs font-bold text-stone-400 hover:text-stone-900 uppercase">Edit</button>
+                                        <button onClick={() => deleteActivity(currentDayData.date, item.id)} className="text-xs font-bold text-red-300 hover:text-red-500 uppercase">Delete</button>
+                                    </div>
+                                </div>
+
+                                <div className="flex items-center gap-1.5 text-stone-500 text-sm font-medium mb-3">
+                                    <MapPin size={14} className="text-rose-400" />
+                                    {item.location}
+                                </div>
+
+                                {item.notes && (
+                                    <div className="bg-stone-50 px-4 py-3 rounded-lg text-stone-600 text-sm italic border border-stone-100">
+                                        "{item.notes}"
+                                    </div>
+                                )}
+                                
+                                <div className="mt-4 pt-4 border-t border-stone-50 flex items-center gap-2">
+                                    <TripAuthorInfo uid={item.createdByUid} createdAt={item.createdAt} />
+                                </div>
                             </div>
                         </div>
-                        <p className="text-gray-600 flex items-center gap-1 mt-1"><MapPin size={14}/> {item.location}</p>
-                        {item.notes && <p className="mt-2 text-sm text-gray-500 bg-gray-50 p-2 rounded">{item.notes}</p>}
-                        {/* ⭐ ADD THIS: Author Info */}
-                        <div className="mt-3 pt-3 border-t border-gray-100">
-                          <TripAuthorInfo uid={item.createdByUid} createdAt={item.createdAt} />
-                        </div>
-                      </div>
                     </div>
                   </div>
                 );
@@ -2936,62 +2963,81 @@ function ItineraryTab({ trip }: { trip: TripData }) {
         </>
       )}
 
-      {/* ================= CALENDAR VIEW ================= */}
+      {/* ================= CALENDAR VIEW (Simplified) ================= */}
       {viewMode === "calendar" && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {days.map((day) => {
-            const dayLocs = getLocationsForDate(day.date);
-            
-            return (
-              <div
-                key={day.date}
-                className="min-h-[200px] bg-white border-2 border-gray-200 rounded-lg p-2 flex flex-col hover:shadow-md transition-shadow cursor-pointer"
-                onClick={() => {
-                   setCurrentDayIndex(day.day - 1);
-                   setViewMode("timeline"); 
-                }}
-              >
-                {/* Date Header */}
-                <div className="flex justify-between items-start mb-2 pb-2 border-b border-gray-100">
-                  <div className="flex flex-col">
-                    <span className="font-bold text-lg">Day {day.day}</span>
-                    <span className="text-xs text-gray-400">{day.date}</span>
-                  </div>
-                </div>
+             const dayLocs = getLocationsForDate(day.date);
 
-                {/* Location Bars (Stacked for overlaps) */}
-                <div className="flex flex-col gap-1 mb-2">
-                  {dayLocs.map(loc => (
-                    <div 
-                      key={loc.id} 
-                      className={`text-[10px] uppercase font-bold px-2 py-1 rounded truncate ${loc.color}`}
-                    >
-                      {loc.location}
+             return (
+               <div 
+                  key={day.date} 
+                  onClick={() => { setCurrentDayIndex(day.day - 1); setViewMode("timeline"); }}
+                  className="group bg-white border border-stone-200 rounded-xl hover:border-stone-400 hover:shadow-lg cursor-pointer transition-all min-h-[180px] flex flex-col relative overflow-hidden"
+               >
+                  {/* ⭐ NEW: Segmented Color Bar at the Top */}
+                  {dayLocs.length > 0 ? (
+                    <div className="absolute top-0 left-0 right-0 h-3 flex w-full">
+                      {dayLocs.map((loc) => (
+                        <div 
+                          key={loc.id} 
+                          // Extract the 'bg-xxx' class from your stored color string
+                          className={`flex-1 h-full ${loc.color.split(" ")[0]}`} 
+                          title={loc.location} 
+                        />
+                      ))}
                     </div>
-                  ))}
-                </div>
-
-                {/* Items List (Truncated) */}
-                <div className="space-y-1 flex-1 overflow-y-auto custom-scrollbar">
-                  {day.items.length === 0 && (
-                    <div className="h-full flex items-center justify-center text-gray-300 text-xs italic">
-                      Free Day
-                    </div>
+                  ) : (
+                    // Optional: A faint grey bar for days with no location, to keep alignment consistent
+                    <div className="absolute top-0 left-0 right-0 h-3 bg-stone-50" />
                   )}
-                  {day.items.map((item) => (
-                    <div key={item.id} className="text-xs p-1.5 bg-gray-50 rounded truncate flex gap-1 items-center">
-                       <div className="w-1.5 h-1.5 rounded-full bg-gray-400 flex-shrink-0" />
-                       <span className="font-medium text-gray-500">{item.time}</span>
-                       <span className="truncate">{item.activity}</span>
+
+                  {/* Card Content - Added pt-5 to account for the bar */}
+                  <div className="p-4 pt-6 flex-1 flex flex-col">
+                    
+                    {/* Date Header */}
+                    <div className="flex justify-between items-baseline mb-3 border-b border-stone-100 pb-2">
+                        <span className="font-serif font-bold text-xl text-stone-800 group-hover:text-stone-900 transition-colors">
+                          Day {day.day}
+                        </span>
+                        <span className="text-xs font-bold text-stone-400 uppercase tracking-wide">
+                          {new Date(day.date).getDate()}
+                        </span>
                     </div>
-                  ))}
-                </div>
-              </div>
-            );
+                    
+                    {/* Items List */}
+                    <div className="flex-1 space-y-2 overflow-hidden">
+                        {day.items.slice(0, 4).map(i => (
+                            <div key={i.id} className="text-xs text-stone-600 truncate flex items-center gap-2 px-1.5 py-1 rounded hover:bg-stone-50 transition-colors">
+                                <div className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${
+                                  i.iconType === 'eat' ? 'bg-amber-400' :
+                                  i.iconType === 'visit' ? 'bg-emerald-400' :
+                                  'bg-stone-300'
+                                }`} />
+                                <span className="truncate">{i.activity}</span>
+                            </div>
+                        ))}
+                        
+                        {day.items.length > 4 && (
+                          <div className="text-[10px] font-bold text-stone-400 uppercase tracking-wider pl-2 pt-1">
+                            +{day.items.length - 4} more
+                          </div>
+                        )}
+                        
+                        {day.items.length === 0 && (
+                          <div className="h-full flex items-center justify-center">
+                            <span className="text-stone-300 text-xs italic">Free day</span>
+                          </div>
+                        )}
+                    </div>
+                  </div>
+               </div>
+             );
           })}
         </div>
       )}
 
+      {/* ... (Dialogs remain same) ... */}
       {showAddDialog && (
         <ActivityDialog
           onClose={() => setShowAddDialog(false)}
@@ -3171,14 +3217,6 @@ function PlacesTab({ tripId, type }: PlacesTabProps) {
     setEditingPlace(null);
   };
 
-
-  const visitedCount = places.filter((p) => p.visited).length;
-  const bgColor =
-    type === "eat"
-      ? "from-amber-100 to-rose-100"
-      : "from-green-100 to-teal-100";
-  const checkColor = type === "eat" ? "bg-amber-500" : "bg-green-500";
-
   const deletePlace = async (placeId: number) => {
     if (!confirm("Delete this place?")) return;
     
@@ -3188,24 +3226,25 @@ function PlacesTab({ tripId, type }: PlacesTabProps) {
     // Delete actual place
     await deleteKey(`place:${tripId}:${type}:${placeId}`);
   };
-
-
+  const visitedCount = places.filter((p) => p.visited).length;
+  // Refined Accents
+  const accentColor = type === "eat" ? "text-amber-600 bg-amber-50 border-amber-200" : "text-emerald-600 bg-emerald-50 border-emerald-200";
+  const iconColor = type === "eat" ? "text-amber-500" : "text-emerald-500";
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
+    <div className="space-y-8">
+      <div className="flex items-end justify-between border-b border-stone-100 pb-4">
         <div>
-          <h2 className="text-3xl font-serif text-gray-900">
-            {type === "eat" ? "Places to Eat" : "Places to Visit"}
+          <h2 className="text-3xl font-serif text-stone-900">
+            {type === "eat" ? "Culinary Spots" : "Sights to See"}
           </h2>
-          <p className="text-gray-800 mt-1">
-            {visitedCount} of {places.length}{" "}
-            {type === "eat" ? "tried" : "visited"}
+          <p className="text-stone-500 mt-1">
+            {visitedCount} / {places.length} {type === "eat" ? "tasted" : "explored"}
           </p>
         </div>
         <button
           onClick={() => setShowAddDialog(true)}
-          className="px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800 flex items-center gap-2"
+          className="px-5 py-2.5 bg-stone-900 text-white rounded-full hover:bg-stone-800 flex items-center gap-2 text-sm font-medium shadow-lg hover:shadow-xl transition-all"
         >
           <Plus size={18} />
           Add {type === "eat" ? "Restaurant" : "Place"}
@@ -3213,138 +3252,96 @@ function PlacesTab({ tripId, type }: PlacesTabProps) {
       </div>
 
       {places.length === 0 ? (
-        <div className="text-center py-20 bg-white rounded-lg border-2 border-dashed border-gray-300">
-          <p className="text-gray-700 mb-4">No places added yet</p>
-          <button
-            onClick={() => setShowAddDialog(true)}
-            className="px-6 py-3 bg-gray-900 text-white rounded-lg"
-          >
-            Add Your First {type === "eat" ? "Restaurant" : "Place"}
-          </button>
+        <div className="text-center py-24 bg-white rounded-2xl border border-dashed border-stone-200">
+           <p className="text-stone-400 mb-2">No places added yet</p>
+           <button onClick={() => setShowAddDialog(true)} className="text-stone-900 font-bold underline hover:text-rose-600">
+             Start your list
+           </button>
         </div>
       ) : (
-        <div
-          className={`grid gap-6 ${type === "eat" ? "grid-cols-1 md:grid-cols-2 lg:grid-cols-3" : "grid-cols-1 md:grid-cols-2"}`}
-        >
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
           {places.map((place) => (
             <div
               key={place.id}
-              className={`border-2 rounded-lg overflow-hidden transition-all hover:shadow-xl relative ${
+              className={`group bg-white rounded-2xl overflow-hidden border transition-all duration-300 flex flex-col ${
                 place.visited
-                  ? `bg-gradient-to-br ${bgColor} border-gray-300`
-                  : "bg-white border-gray-200"
+                  ? `border-stone-200 opacity-80 hover:opacity-100`
+                  : "border-stone-200 shadow-sm hover:shadow-xl hover:-translate-y-1"
               }`}
             >
-              {place.imageUrl && (
-                <div className="relative h-84 w-full overflow-hidden rounded-t-lg">
-                  <img
-                    src={place.imageUrl}
-                    alt={place.name}
-                    className="w-full h-full object-cover"
-                  />
-                  {place.visited && (
-                    <div
-                      className={`absolute top-4 right-4 ${checkColor} text-white p-2 rounded-full shadow-lg`}
-                    >
-                      <Check size={20} />
+              {/* Image Header */}
+              <div className="relative h-56 overflow-hidden bg-stone-100">
+                {place.imageUrl ? (
+                  <img src={place.imageUrl} alt={place.name} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" />
+                ) : (
+                   <div className="w-full h-full flex items-center justify-center text-stone-300">
+                      <MapPin size={48} />
+                   </div>
+                )}
+                
+                {/* Visited Badge */}
+                {place.visited && (
+                    <div className="absolute top-4 right-4 bg-white/90 backdrop-blur text-stone-900 p-2 rounded-full shadow-md">
+                      <Check size={16} strokeWidth={3} />
                     </div>
-                  )}
-                </div>
-              )}
-              <div className="p-6">
-                <div className="flex items-start justify-between mb-3">
-                  <h3
-                    className={`${type === "eat" ? "text-xl" : "text-2xl"} font-serif text-gray-800`}
-                  >
-                    {place.name}
-                  </h3>
-                  <div className="flex flex-col items-end text-right">
-                    <TripAuthorInfo uid={place.createdByUid} createdAt={place.createdAt} />
-                  </div>
+                )}
 
-                  <div className="flex gap-2">
+                {/* Rating Badge */}
+                {place.rating && (
+                   <div className="absolute bottom-4 left-4 bg-white/90 backdrop-blur px-2 py-1 rounded-md text-xs font-bold flex items-center gap-1 shadow-sm">
+                      <Star size={12} className="fill-amber-400 text-amber-400" />
+                      {place.rating}
+                   </div>
+                )}
+              </div>
+
+              {/* Content */}
+              <div className="p-5 flex-1 flex flex-col">
+                <div className="flex justify-between items-start mb-2">
+                    <h3 className="text-xl font-serif text-stone-900 leading-tight group-hover:text-rose-800 transition-colors">
+                        {place.name}
+                    </h3>
                     {place.link && (
-                      <a
-                        href={place.link}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="flex items-center justify-center w-8 h-8 rounded-full bg-gray-100 hover:bg-gray-200 text-gray-600 transition-colors"
-                        title="Visit Website"
-                      >
-                        <ExternalLink size={14} />
-                      </a>
+                        <a href={place.link} target="_blank" rel="noreferrer" className="text-stone-300 hover:text-stone-900">
+                            <ExternalLink size={16} />
+                        </a>
                     )}
-                    {place.rating && (
-                      <div className="flex items-center gap-1 px-2 py-1 bg-white rounded-lg border border-gray-200 h-8">
-                        <Star
-                          size={14}
-                          className="fill-amber-400 text-amber-400"
-                        />
-                        <span className="text-sm font-medium">
-                          {place.rating}
-                        </span>
-                      </div>
-                    )}
-                  </div>
                 </div>
-                <p className="text-gray-700 mb-4 text-sm">
-                  {place.description}
+
+                <div className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-stone-400 mb-3">
+                    <MapPin size={12} /> {place.address}
+                </div>
+
+                <p className="text-stone-600 text-sm leading-relaxed mb-6 line-clamp-3">
+                    {place.description}
                 </p>
-                <div className="flex items-start gap-2 text-gray-800 mb-4">
-                  <MapPin size={16} className="flex-shrink-0 mt-0.5" />
-                  <span className="text-xs">{place.address}</span>
-                </div>
-                <div className="flex items-center justify-between pt-4 border-t border-gray-200">
 
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="checkbox"
-                      checked={place.visited}
-                      onChange={()=>handleVisitedToggle(place)}
-
-                      className="w-4 h-4 cursor-pointer"
-                    />
-                    <label className="text-sm cursor-pointer">
-                      {place.visited ? "Visited" : "Mark visited"}
+                <div className="mt-auto pt-4 border-t border-stone-100 flex items-center justify-between">
+                    
+                    {/* Checkbox */}
+                    <label className="flex items-center gap-2 cursor-pointer group/check">
+                        <div className={`w-5 h-5 rounded border transition-colors flex items-center justify-center ${
+                            place.visited ? "bg-stone-900 border-stone-900 text-white" : "border-stone-300 group-hover/check:border-stone-900"
+                        }`}>
+                            {place.visited && <Check size={12} />}
+                        </div>
+                        <input type="checkbox" checked={place.visited} onChange={()=>handleVisitedToggle(place)} className="hidden" />
+                        <span className="text-xs font-bold uppercase text-stone-400 group-hover/check:text-stone-900">Visited</span>
                     </label>
-                  </div>
 
-                  <div className="flex gap-2 text-sm font-medium">
-                  {/* ⭐ Modify Button (Always visible) */}
-                  <button
-                    onClick={() => setEditingPlace(place)}
-                    className="text-blue-600 hover:text-blue-800"
-                  >
-                    Modify
-                  </button>
-
-                  {!place.confirmed ? (
-                    <button
-                      onClick={() => setConfirmingPlace(place)}
-                      className="px-3 py-1 bg-gray-900 text-white rounded hover:bg-gray-800"
-                    >
-                      Confirm
-                    </button>
-                  ) : (
-                    // ⭐ Unconfirm Button
-                    <button
-                      onClick={() => unconfirmPlace(place)}
-                      className="px-3 py-1 bg-amber-100 text-amber-800 rounded hover:bg-amber-200"
-                    >
-                      Unconfirm
-                    </button>
-                  )}
-
-                  <button
-                    onClick={() => deletePlace(place.id)}
-                    className="text-red-500 hover:text-red-700"
-                  >
-                    Delete
-                  </button>
+                    {/* Actions Menu */}
+                    <div className="flex gap-3 text-xs font-bold uppercase tracking-wide">
+                        <button onClick={() => setEditingPlace(place)} className="text-stone-400 hover:text-stone-900">Edit</button>
+                        
+                        {!place.confirmed ? (
+                            <button onClick={() => setConfirmingPlace(place)} className="text-rose-400 hover:text-rose-600">Confirm</button>
+                        ) : (
+                            <button onClick={() => unconfirmPlace(place)} className="text-amber-500 hover:text-amber-700">Unconfirm</button>
+                        )}
+                        
+                        <button onClick={() => deletePlace(place.id)} className="text-stone-300 hover:text-red-500">Delete</button>
+                    </div>
                 </div>
-
-                </div>
-
               </div>
             </div>
           ))}
@@ -3643,9 +3640,9 @@ function ShoppingTab({ tripId }: { tripId: number }) {
           {categories.map((category) => (
             <div
               key={category}
-              className="bg-white border-2 border-gray-200 rounded-lg overflow-hidden h-fit"
+              className="bg-white border border-stone-200 shadow-sm rounded-lg overflow-hidden h-fit"
             >
-              <div className="bg-gradient-to-r from-teal-50 to-blue-50 px-6 py-4 border-b border-gray-100">
+              <div className="bg-stone-50 px-6 py-4 border-b border-gray-100">
                 <h3 className="font-serif text-xl text-gray-900">{category}</h3>
               </div>
 
@@ -3665,7 +3662,7 @@ function ShoppingTab({ tripId }: { tripId: number }) {
                         type="checkbox"
                         checked={item.bought}
                         onChange={() => handleToggleClick(item)}
-                        className="mt-1 w-4 h-4 rounded border-gray-300 text-teal-600 focus:ring-teal-500 cursor-pointer"
+                        className="mt-1 w-4 h-4 rounded border-gray-300 text-stone-900 focus:ring-stone-900 cursor-pointer"
                       />
 
                       <div className="flex-1 min-w-0">
@@ -3683,7 +3680,7 @@ function ShoppingTab({ tripId }: { tripId: number }) {
                           <div className="flex items-center gap-2">
                             {/* Show cost if bought */}
                             {item.bought && item.cost !== undefined && (
-                                <span className="text-xs font-semibold text-teal-700 bg-teal-100 px-2 py-0.5 rounded">
+                                <span className="text-xs font-semibold text-amber-800 bg-amber-100 px-2 py-0.5 rounded">
                                     {item.cost === 0 ? "Free" : `£${item.cost}`}
                                 </span>
                             )}
@@ -4128,7 +4125,6 @@ function ScrapbookTab({ tripId }: ScrapbookTabProps) {
     </div>
   );
 }
-
 function HotelCard({
   hotel,
   onConfirm,
@@ -4141,53 +4137,76 @@ function HotelCard({
   onDelete: () => void;
 }) {
   return (
-    <div className="bg-white border border-gray-200 rounded-lg p-5 shadow-sm hover:shadow-md transition-shadow relative flex flex-col h-full">
-      <div className="flex justify-between items-start mb-2">
-        <h4 className="text-lg font-bold text-gray-900 leading-tight pr-2">{hotel.name}</h4>
+    <div className="group bg-white border border-stone-200 rounded-xl p-6 shadow-sm hover:shadow-md transition-all relative flex flex-col h-full hover:border-stone-300">
+      
+      {/* Header */}
+      <div className="flex justify-between items-start mb-4">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-full bg-stone-100 flex items-center justify-center text-stone-600">
+            <Hotel size={18} />
+          </div>
+          <h4 className="text-lg font-serif font-bold text-stone-900 leading-tight">{hotel.name}</h4>
+        </div>
+        
         {hotel.status !== "confirmed" ? (
           <button
             onClick={(e) => { e.stopPropagation(); onConfirm(); }}
-            className="bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold px-3 py-1.5 rounded flex-shrink-0"
+            className="bg-stone-900 hover:bg-stone-800 text-white text-xs font-bold px-3 py-1.5 rounded-full flex-shrink-0"
           >
             Confirm
           </button>
         ) : (
-          <span className="bg-green-100 text-green-800 text-xs font-bold px-2 py-1 rounded flex-shrink-0">
-            Confirmed
+          <span className="bg-emerald-100 text-emerald-800 text-xs font-bold px-3 py-1 rounded-full flex items-center gap-1 flex-shrink-0">
+             <Check size={12} strokeWidth={3} /> Confirmed
           </span>
         )}
       </div>
 
-      <p className="text-gray-600 text-xs mb-3">{hotel.address}</p>
+      {/* Address */}
+      <div className="flex items-start gap-2 text-stone-500 text-sm mb-5">
+        <MapPin size={14} className="mt-0.5 flex-shrink-0" />
+        <span className="leading-snug">{hotel.address}</span>
+      </div>
 
-      <div className="flex-1 space-y-1 mb-4">
-        <div className="text-sm text-gray-700">
-          <span className="text-gray-500 text-xs block">Check-in:</span> {hotel.checkIn}
-        </div>
-        <div className="text-sm text-gray-700">
-          <span className="text-gray-500 text-xs block">Check-out:</span> {hotel.checkOut}
+      <div className="flex-1 space-y-4 mb-4">
+        
+        {/* Dates - Side by Side Layout */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+          <div className="bg-stone-50 px-3 py-2.5 rounded-lg flex items-center gap-2">
+             <span className="text-xs text-stone-400 uppercase font-bold whitespace-nowrap">Check-in</span>
+             <span className="font-bold text-stone-600">{hotel.checkIn}</span>
+          </div>
+          <div className="bg-stone-50 px-3 py-2.5 rounded-lg flex items-center gap-2">
+             <span className="text-xs text-stone-400 uppercase font-bold whitespace-nowrap">Check-out</span>
+             <span className="font-bold text-stone-600">{hotel.checkOut}</span>
+          </div>
         </div>
         
-        {hotel.price && <p className="text-gray-900 text-sm font-medium mt-2">Price: {hotel.price}</p>}
-        {hotel.details && <p className="text-gray-500 text-xs mt-1 italic">{hotel.details}</p>}
-        <div className="pt-2 mt-2">
+        {/* Cost & Details - Larger Font & Horizontal Gap */}
+        {(hotel.price || hotel.details) && (
+          <div className="flex flex-wrap items-baseline gap-6 pt-2 text-sm text-stone-600">
+             {hotel.price && (
+               <div className="flex-shrink-0">
+                 Cost: <span className="font-bold text-stone-600 text-base">{hotel.price}</span>
+               </div>
+             )}
+             {hotel.details && (
+               <div className="italic text-stone-500 leading-relaxed">
+                 "{hotel.details}"
+               </div>
+             )}
+          </div>
+        )}
+
+        <div className="pt-2 border-t border-stone-100">
            <TripAuthorInfo uid={hotel.createdByUid} createdAt={hotel.createdAt} />
         </div>
       </div>
 
-      <div className="flex justify-end gap-3 text-xs font-medium border-t pt-3 mt-auto">
-        <button 
-          onClick={(e) => { e.stopPropagation(); onEdit(); }} 
-          className="text-blue-600 hover:text-blue-800"
-        >
-          Edit
-        </button>
-        <button 
-          onClick={(e) => { e.stopPropagation(); onDelete(); }} 
-          className="text-red-500 hover:text-red-700"
-        >
-          Delete
-        </button>
+      {/* Footer Actions */}
+      <div className="flex justify-end gap-3 text-xs font-bold uppercase tracking-wide border-t border-stone-100 pt-4 mt-auto">
+        <button onClick={(e) => { e.stopPropagation(); onEdit(); }} className="text-stone-400 hover:text-stone-900 transition-colors">Edit</button>
+        <button onClick={(e) => { e.stopPropagation(); onDelete(); }} className="text-red-300 hover:text-red-600 transition-colors">Delete</button>
       </div>
     </div>
   );
@@ -4197,7 +4216,6 @@ type DocumentDialogProps = {
   onClose: () => void;
   onAdd: (data: Omit<DocumentData, "id" | "createdAt" | "createdByUid">) => void;
 };
-
 function DocumentDialog({ onClose, onAdd }: DocumentDialogProps) {
   const [name, setName] = useState("");
   const [category, setCategory] = useState<DocumentData["category"]>("Tickets");
@@ -4207,23 +4225,16 @@ function DocumentDialog({ onClose, onAdd }: DocumentDialogProps) {
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-
-    // Firestore document limit is 1MB. Safety check for 900KB.
     if (file.size > 900 * 1024) {
-      setError("File is too large (Max 900KB). Please compress it first.");
+      setError("File is too large (Max 900KB).");
       return;
     }
     setError("");
-
     const reader = new FileReader();
     reader.onload = (event) => {
       const result = event.target?.result;
       if (typeof result === "string") {
-        setFileData({
-          url: result,
-          name: file.name,
-          type: file.type,
-        });
+        setFileData({ url: result, name: file.name, type: file.type });
       }
     };
     reader.readAsDataURL(file);
@@ -4234,39 +4245,33 @@ function DocumentDialog({ onClose, onAdd }: DocumentDialogProps) {
       setError("Please provide a name and upload a file.");
       return;
     }
-
-    onAdd({
-      name,
-      category,
-      fileUrl: fileData.url,
-      fileName: fileData.name,
-      fileType: fileData.type,
-    });
+    onAdd({ name, category, fileUrl: fileData.url, fileName: fileData.name, fileType: fileData.type });
   };
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-lg max-w-md w-full p-6">
-        <h3 className="text-2xl font-serif mb-4">Upload Document</h3>
-        
-        <div className="space-y-4">
+    <div className="fixed inset-0 bg-stone-900/40 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-8 animate-in zoom-in-95 duration-200">
+        <h3 className="text-2xl font-serif text-stone-900 mb-6">Upload Document</h3>
+
+        <div className="space-y-5">
           <div>
-            <label className="block text-sm font-medium mb-1">Document Name</label>
+            <label className="block text-xs font-bold uppercase tracking-wider text-stone-500 mb-1.5">Document Name</label>
             <input
               type="text"
+              autoFocus
               value={name}
               onChange={(e) => setName(e.target.value)}
-              className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg focus:border-gray-900 outline-none"
-              placeholder="e.g., Flight Tickets to Tokyo"
+              className="w-full px-4 py-2.5 border border-stone-300 rounded-lg focus:border-stone-900 outline-none"
+              placeholder="e.g. Flight Confirmations"
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium mb-1">Category</label>
+            <label className="block text-xs font-bold uppercase tracking-wider text-stone-500 mb-1.5">Category</label>
             <select
               value={category}
               onChange={(e) => setCategory(e.target.value as any)}
-              className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg focus:border-gray-900 outline-none"
+              className="w-full px-4 py-2.5 border border-stone-300 rounded-lg focus:border-stone-900 outline-none bg-white cursor-pointer"
             >
               <option value="Tickets">Tickets</option>
               <option value="Reservations">Reservations</option>
@@ -4277,29 +4282,44 @@ function DocumentDialog({ onClose, onAdd }: DocumentDialogProps) {
           </div>
 
           <div>
-            <label className="block text-sm font-medium mb-1">File (PDF, Image)</label>
-            <input
-              type="file"
-              accept=".pdf,.jpg,.jpeg,.png"
-              onChange={handleFileChange}
-              className="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-gray-100 file:text-gray-700 hover:file:bg-gray-200"
-            />
-            {error && <p className="text-red-500 text-xs mt-1">{error}</p>}
-            {fileData && !error && (
-              <p className="text-green-600 text-xs mt-1">✓ {fileData.name} ready to upload</p>
-            )}
+            <label className="block text-xs font-bold uppercase tracking-wider text-stone-500 mb-1.5">File (PDF, Image)</label>
+            <div className="relative group cursor-pointer">
+              <input
+                type="file"
+                accept=".pdf,.jpg,.jpeg,.png"
+                onChange={handleFileChange}
+                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+              />
+              <div className={`w-full border-2 border-dashed rounded-xl p-6 flex flex-col items-center justify-center text-center transition-all ${
+                  fileData ? "border-emerald-500 bg-emerald-50" : "border-stone-300 hover:border-stone-400"
+              }`}>
+                  {fileData ? (
+                      <div className="text-emerald-700 font-medium flex flex-col items-center">
+                         <FileText size={32} className="mb-2" />
+                         <span className="text-sm">{fileData.name}</span>
+                      </div>
+                  ) : (
+                      <div className="text-stone-400 group-hover:text-stone-600">
+                          <FileText size={32} className="mx-auto mb-2" />
+                          <span className="text-sm font-medium">Click to upload</span>
+                          <span className="block text-xs mt-1 opacity-70">Max 900KB</span>
+                      </div>
+                  )}
+              </div>
+            </div>
+            {error && <p className="text-rose-500 text-xs mt-2 font-medium">{error}</p>}
           </div>
 
           <div className="flex gap-3 pt-4">
             <button
               onClick={handleSubmit}
-              className="flex-1 px-4 py-3 bg-gray-900 text-white rounded-lg hover:bg-gray-800"
+              className="flex-1 px-6 py-3 bg-stone-900 text-white font-bold rounded-lg hover:bg-stone-800 transition-colors shadow-lg"
             >
               Upload
             </button>
             <button
               onClick={onClose}
-              className="px-4 py-3 bg-white border-2 border-gray-300 rounded-lg hover:border-gray-400"
+              className="px-6 py-3 border border-stone-200 text-stone-600 font-bold rounded-lg hover:bg-stone-50 transition-colors"
             >
               Cancel
             </button>
@@ -4309,7 +4329,6 @@ function DocumentDialog({ onClose, onAdd }: DocumentDialogProps) {
     </div>
   );
 }
-
 function TransportCard({
   transport,
   onConfirm,
@@ -4322,54 +4341,58 @@ function TransportCard({
   onDelete: () => void;
 }) {
   return (
-    <div className="bg-white border border-gray-200 rounded-lg p-5 shadow-sm hover:shadow-md transition-shadow relative flex flex-col h-full">
-      <div className="flex justify-between items-start mb-2">
-        <div>
-          <h4 className="text-lg font-bold text-gray-900">{transport.type}</h4>
-          {transport.code && <p className="text-gray-500 text-xs">{transport.code}</p>}
+    <div className="group bg-white border border-stone-200 rounded-xl p-6 shadow-sm hover:shadow-md transition-all relative flex flex-col h-full hover:border-stone-300">
+      <div className="flex justify-between items-start mb-4">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-full bg-stone-100 flex items-center justify-center text-stone-600">
+            <Train size={18} />
+          </div>
+          <div>
+            <h4 className="text-lg font-serif font-bold text-stone-900">{transport.type}</h4>
+            {transport.code && <p className="text-stone-400 text-xs font-bold uppercase tracking-wider">{transport.code}</p>}
+          </div>
         </div>
         {transport.status !== "confirmed" ? (
           <button
             onClick={(e) => { e.stopPropagation(); onConfirm(); }}
-            className="bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold px-3 py-1.5 rounded"
+            className="bg-stone-900 hover:bg-stone-800 text-white text-xs font-bold px-3 py-1.5 rounded-full"
           >
             Confirm
           </button>
         ) : (
-          <span className="bg-green-100 text-green-800 text-xs font-bold px-2 py-1 rounded">
-            Confirmed
+          <span className="bg-emerald-100 text-emerald-800 text-xs font-bold px-3 py-1 rounded-full flex items-center gap-1">
+             <Check size={12} strokeWidth={3} /> Confirmed
           </span>
         )}
       </div>
 
-      <div className="flex-1 space-y-1 mb-4">
-        <p className="text-gray-800 text-sm font-medium">{transport.departure} ➝ {transport.arrival}</p>
-        <p className="text-gray-500 text-xs">{transport.date} {transport.time}</p>
-        {transport.price && <p className="text-gray-700 text-sm mt-1">Price: {transport.price}</p>}
-        {transport.details && <p className="text-gray-500 text-xs italic mt-1">{transport.details}</p>}
-        <div className="pt-2 mt-2">
+      <div className="flex-1 space-y-3 mb-4">
+        <div className="flex items-center gap-2 text-stone-800 font-medium bg-stone-50 p-3 rounded-lg">
+           <span>{transport.departure}</span>
+           <span className="text-stone-300">➝</span>
+           <span>{transport.arrival}</span>
+        </div>
+        
+        <p className="text-stone-500 text-sm pl-1">{transport.date} {transport.time && `@ ${transport.time}`}</p>
+        
+        {(transport.price || transport.details) && (
+          <div className="text-xs text-stone-500 space-y-1 pt-1 pl-1">
+            {transport.price && <p>Cost: <span className="font-medium text-stone-900">{transport.price}</span></p>}
+            {transport.details && <p className="italic">"{transport.details}"</p>}
+          </div>
+        )}
+        <div className="pt-2 border-t border-stone-100">
            <TripAuthorInfo uid={transport.createdByUid} createdAt={transport.createdAt} />
         </div>
       </div>
 
-      <div className="flex justify-end gap-3 text-xs font-medium border-t pt-3 mt-auto">
-        <button 
-          onClick={(e) => { e.stopPropagation(); onEdit(); }} 
-          className="text-blue-600 hover:text-blue-800"
-        >
-          Edit
-        </button>
-        <button 
-          onClick={(e) => { e.stopPropagation(); onDelete(); }} 
-          className="text-red-500 hover:text-red-700"
-        >
-          Delete
-        </button>
+      <div className="flex justify-end gap-3 text-xs font-bold uppercase tracking-wide border-t border-stone-100 pt-4 mt-auto">
+        <button onClick={(e) => { e.stopPropagation(); onEdit(); }} className="text-stone-400 hover:text-stone-900">Edit</button>
+        <button onClick={(e) => { e.stopPropagation(); onDelete(); }} className="text-red-300 hover:text-red-600">Delete</button>
       </div>
     </div>
   );
 }
-
 export type StoredFlight = FlightData & { 
   id: number;
   cost?: string | number;               // Add this
@@ -4671,156 +4694,147 @@ function AdminTab({ tripId }: { tripId: number }) {
     }
   };
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       {/* HEADER */}
-      <div>
-        <h2 className="text-3xl font-serif text-gray-900">Trip Administration</h2>
-        <p className="text-gray-800 mt-1">All your important trip details in one place</p>
+      <div className="border-b border-stone-100 pb-5">
+        <h2 className="text-3xl font-serif text-stone-900 pb-2">Trip Administration</h2>
+        <p className="text-stone-500 mt-1 font-light">Manage logistics, documents, and fellow travelers.</p>
       </div>
-      
-
-
-      
-
-      {/* SUBTABS NAVIGATION */}
-      <div className="flex gap-2 border-b-2 border-gray-200 overflow-x-auto">
-        {/* ADD MEMBERS TAB HERE */}
+      <div className="text-stone-500 mt-1 font-light"></div>
+      {/* PILL NAVIGATION (Cleaner than underline) */}
+      <div className="flex flex-wrap gap-2">
         <button
           onClick={() => setActiveSubTab("members")}
-          className={`flex items-center gap-2 px-4 py-3 border-b-4 whitespace-nowrap ${
+          className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm font-bold transition-all ${
             activeSubTab === "members"
-              ? "border-gray-900 text-gray-900"
-              : "border-transparent text-gray-800 hover:text-gray-900"
+              ? "bg-stone-900 text-white shadow-md"
+              : "bg-white text-stone-500 border border-stone-200 hover:border-stone-400 hover:text-stone-900"
           }`}
         >
-          <Users size={18} />
-          Members
+          <Users size={16} /> Members
         </button>
-        {(
-          [
-            { id: "flights", label: "Flights", icon: Plane },
-            { id: "hotels", label: "Hotels", icon: Hotel },
-            { id: "transport", label: "Transport", icon: Train },
-            { id: "documents", label: "Documents", icon: FileText },
-            { id: "packing", label: "Packing", icon: PackageCheck },
-          ] as const
-        ).map((tab) => {
+
+        {[
+          { id: "flights", label: "Flights", icon: Plane },
+          { id: "hotels", label: "Accommodations", icon: Hotel },
+          { id: "transport", label: "Transport", icon: Train },
+          { id: "documents", label: "Documents", icon: FileText },
+          { id: "packing", label: "Packing List", icon: PackageCheck },
+        ].map((tab) => {
           const Icon = tab.icon;
+          // Cast tab.id to satisfy TypeScript if needed, or rely on loose matching
           return (
-            <button
+             <button
               key={tab.id}
-              onClick={() => setActiveSubTab(tab.id)}
-              className={`flex items-center gap-2 px-4 py-3 border-b-4 whitespace-nowrap ${
+              onClick={() => setActiveSubTab(tab.id as any)}
+              className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm font-bold transition-all ${
                 activeSubTab === tab.id
-                  ? "border-gray-900 text-gray-900"
-                  : "border-transparent text-gray-800 hover:text-gray-900"
+                  ? "bg-stone-900 text-white shadow-md"
+                  : "bg-white text-stone-500 border border-stone-200 hover:border-stone-400 hover:text-stone-900"
               }`}
             >
-              <Icon size={18} />
-              {tab.label}
+              <Icon size={16} /> {tab.label}
             </button>
           );
         })}
       </div>
-      {/* === MEMBERS VIEW (NEW) === */}
+      {/* === MEMBERS VIEW === */}
       {activeSubTab === "members" && (
         <div className="space-y-8 max-w-2xl">
           
-          {/* 1. Invite Section */}
-          <div className="bg-blue-50 border border-blue-100 rounded-lg p-6">
-            <h3 className="text-lg font-serif font-semibold mb-2">Invite Travelers</h3>
-            <div className="flex gap-2">
+          {/* 1. Invite Section (Updated Style) */}
+          <div className="bg-white border border-stone-200 rounded-2xl p-8 shadow-sm">
+            <h3 className="text-xl font-serif text-stone-900 mb-2">Invite Travelers</h3>
+            <p className="text-stone-500 text-sm mb-6">
+              Add friends to this trip to share the itinerary and expenses.
+            </p>
+            
+            <div className="flex gap-3">
               <input
                 type="email"
                 placeholder="Enter email address"
                 value={inviteEmail}
                 onChange={(e) => {
                   setInviteEmail(e.target.value);
-                  setInviteStatus("idle"); // reset status on type
+                  setInviteStatus("idle");
                 }}
-                className="flex-1 border-2 border-white shadow-sm rounded-lg px-4 py-2 focus:border-blue-300 outline-none"
+                className="flex-1 border border-stone-300 rounded-lg px-4 py-3 focus:border-stone-900 focus:ring-1 focus:ring-stone-900 outline-none transition-all placeholder:text-stone-400"
               />
               <button
                 onClick={async () => {
-                  if (!inviteEmail) return;
-                  const user = auth.currentUser;
-                  if (!user) return;
-
-                  try {
-                    const tripSnap = await storage.get(`trip:${tripId}`);
-                    if (tripSnap?.value) {
-                      const tripData = JSON.parse(tripSnap.value);
-                      const currentInvites = tripData.invites || [];
-                      
-                      // Check if already invited or member
-                      // Note: This is a basic check. Ideally you check against UIDs too if you had the email map.
-                      if (currentInvites.includes(inviteEmail)) {
-                         setInviteStatus("error");
-                         setInviteMsg("User already invited.");
-                         return;
-                      }
-
-                      const updated = {
-                        ...tripData,
-                        invites: [...currentInvites, inviteEmail],
-                      };
-                      await storage.set(`trip:${tripId}`, updated);
-                      
-                      setInviteStatus("success");
-                      setInviteMsg(`Invite sent to ${inviteEmail}`);
-                      setInviteEmail("");
-                      loadMembers(); // Refresh list
-                    }
-                  } catch (e) {
-                    console.error("Invite failed", e);
-                    setInviteStatus("error");
-                    setInviteMsg("Failed to send invite.");
-                  }
+                   /* ... keep existing invite logic ... */
+                   if (!inviteEmail) return;
+                   const user = auth.currentUser;
+                   if (!user) return;
+                   try {
+                     const tripSnap = await storage.get(`trip:${tripId}`);
+                     if (tripSnap?.value) {
+                       const tripData = JSON.parse(tripSnap.value);
+                       const currentInvites = tripData.invites || [];
+                       if (currentInvites.includes(inviteEmail)) {
+                          setInviteStatus("error");
+                          setInviteMsg("User already invited.");
+                          return;
+                       }
+                       const updated = {
+                         ...tripData,
+                         invites: [...currentInvites, inviteEmail],
+                       };
+                       await storage.set(`trip:${tripId}`, updated);
+                       setInviteStatus("success");
+                       setInviteMsg(`Invite sent to ${inviteEmail}`);
+                       setInviteEmail("");
+                       loadMembers(); 
+                     }
+                   } catch (e) {
+                     setInviteStatus("error");
+                     setInviteMsg("Failed to send invite.");
+                   }
                 }}
-                className="px-6 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition-colors shadow-sm"
+                className="px-6 py-3 bg-stone-900 text-white font-bold rounded-lg hover:bg-stone-800 transition-all shadow-md hover:shadow-lg"
               >
                 Send Invite
               </button>
             </div>
             
-            {/* Visual Feedback Area */}
+            {/* Visual Feedback */}
             {inviteStatus !== "idle" && (
-              <div className={`mt-3 flex items-center gap-2 text-sm font-medium animate-in slide-in-from-top-2 ${
-                inviteStatus === "success" ? "text-green-600" : "text-red-600"
+              <div className={`mt-4 flex items-center gap-2 text-sm font-bold animate-in slide-in-from-top-2 ${
+                inviteStatus === "success" ? "text-emerald-600" : "text-rose-600"
               }`}>
-                {inviteStatus === "success" ? <CheckCircle size={16} /> : <XCircle size={16} />}
+                {inviteStatus === "success" ? <CheckCircle size={18} /> : <XCircle size={18} />}
                 {inviteMsg}
               </div>
             )}
           </div>
 
-          {/* 2. Members List */}
+          {/* 2. Members List (Keep existing logic, just ensure styling matches) */}
           <div>
-            <h3 className="text-xl font-serif mb-4">Who's going?</h3>
-            <div className="bg-white border-2 border-gray-200 rounded-lg overflow-hidden divide-y divide-gray-100">
+            <h3 className="text-xl font-serif text-stone-900 mb-4">Who's going?</h3>
+            <div className="bg-white border border-stone-200 rounded-xl overflow-hidden divide-y divide-stone-100 shadow-sm">
               {memberList.map((member) => (
-                <div key={member.id} className="p-4 flex items-center justify-between hover:bg-gray-50 transition-colors">
+                <div key={member.id} className="p-4 flex items-center justify-between hover:bg-stone-50 transition-colors">
                   <div className="flex items-center gap-3">
-                    <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-lg ${
+                    <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-lg shadow-sm ${
                       member.status === "Member" 
-                        ? "bg-gray-900 text-white" 
+                        ? "bg-stone-900 text-white" 
                         : "bg-amber-100 text-amber-700"
                     }`}>
                       {member.name.charAt(0).toUpperCase()}
                     </div>
                     <div>
-                      <p className="font-medium text-gray-900">
-                        {member.name} {member.isMe && <span className="text-gray-400 font-normal">(You)</span>}
+                      <p className="font-bold text-stone-900">
+                        {member.name} {member.isMe && <span className="text-stone-400 font-normal">(You)</span>}
                       </p>
                       {member.status === "Invited" && (
-                        <p className="text-xs text-gray-500">{member.email}</p>
+                        <p className="text-xs text-stone-500">{member.email}</p>
                       )}
                     </div>
                   </div>
                   
                   <span className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wide ${
                     member.status === "Member" 
-                      ? "bg-green-100 text-green-700" 
+                      ? "bg-emerald-100 text-emerald-700" 
                       : "bg-amber-100 text-amber-700"
                   }`}>
                     {member.status}
@@ -4829,7 +4843,6 @@ function AdminTab({ tripId }: { tripId: number }) {
               ))}
             </div>
           </div>
-
         </div>
       )}
       {/* === FLIGHTS VIEW === */}
@@ -4839,7 +4852,7 @@ function AdminTab({ tripId }: { tripId: number }) {
             <h3 className="text-xl font-serif">Flights</h3>
             <button
               onClick={() => { setEditingFlight(null); setShowFlightDialog(true); }}
-              className="px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800 flex items-center gap-2"
+              className="px-5 py-2 bg-stone-900 text-white rounded-full hover:bg-stone-800 text-sm font-bold shadow-lg hover:shadow-xl transition-all flex items-center gap-2"
             >
               <Plus size={18} /> Add Flight
             </button>
@@ -4870,7 +4883,7 @@ function AdminTab({ tripId }: { tripId: number }) {
             <h3 className="text-xl font-serif">Accommodations</h3>
             <button
               onClick={() => { setEditingHotel(null); setShowHotelDialog(true); }}
-              className="px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800 flex items-center gap-2"
+              className="px-5 py-2 bg-stone-900 text-white rounded-full hover:bg-stone-800 text-sm font-bold shadow-lg hover:shadow-xl transition-all flex items-center gap-2"
             >
               <Plus size={18} /> Add Hotel
             </button>
@@ -4901,7 +4914,7 @@ function AdminTab({ tripId }: { tripId: number }) {
             <h3 className="text-xl font-serif">Transport</h3>
             <button
               onClick={() => { setEditingTransport(null); setShowTransportDialog(true); }}
-              className="px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800 flex items-center gap-2"
+              className="px-5 py-2 bg-stone-900 text-white rounded-full hover:bg-stone-800 text-sm font-bold shadow-lg hover:shadow-xl transition-all flex items-center gap-2"
             >
               <Plus size={18} /> Add Transport
             </button>
@@ -4932,7 +4945,7 @@ function AdminTab({ tripId }: { tripId: number }) {
             <h3 className="text-xl font-serif">Trip Documents</h3>
             <button
               onClick={() => setShowDocumentDialog(true)}
-              className="px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800 flex items-center gap-2"
+              className="px-5 py-2 bg-stone-900 text-white rounded-full hover:bg-stone-800 text-sm font-bold shadow-lg hover:shadow-xl transition-all flex items-center gap-2"
             >
               <Plus size={18} /> Upload Doc
             </button>
@@ -4992,7 +5005,7 @@ function AdminTab({ tripId }: { tripId: number }) {
               </div>
               <button
                 onClick={() => setShowPackingDialog(true)}
-                className="px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800 flex items-center gap-2"
+                className="px-5 py-2 bg-stone-900 text-white rounded-full hover:bg-stone-800 text-sm font-bold shadow-lg hover:shadow-xl transition-all flex items-center gap-2"
               >
                 <Plus size={18} /> Add Item
               </button>
@@ -5328,112 +5341,142 @@ function BudgetTab({ tripId }: { tripId: number }) {
   const totalRemaining = limits.total - totalSpent;
 
   return (
-    <div className="space-y-6">
-      <h2 className="text-3xl font-serif text-gray-900">Budget</h2>
-
-      <div className="flex gap-2 mb-4">
-        <button
-          onClick={() => setMode("shared")}
-          className={`px-3 py-1 rounded ${
-            mode === "shared" ? "bg-gray-900 text-white" : "bg-gray-200"
-          }`}
-        >
-          Trip Budget
-        </button>
-
-        <button
-          onClick={() => setMode("mine")}
-          className={`px-3 py-1 rounded ${
-            mode === "mine" ? "bg-gray-900 text-white" : "bg-gray-200"
-          }`}
-        >
-          My Spending
-        </button>
+    <div className="space-y-8 max-w-3xl mx-auto"> {/* Centered layout */}
+      
+      <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 border-b border-stone-100 pb-5">
+        <div>
+           <h2 className="text-3xl font-serif text-stone-900">Financials</h2>
+           <p className="text-stone-500 mt-3">Track shared expenses and personal spending.</p>
+        </div>
+        
+        {/* Toggle Pills */}
+        <div className="flex bg-stone-100 p-1 rounded-lg">
+           <button
+             onClick={() => setMode("shared")}
+             className={`px-4 py-1.5 rounded-md text-sm font-bold transition-all ${
+               mode === "shared" ? "bg-white shadow-sm text-stone-900" : "text-stone-400 hover:text-stone-600"
+             }`}
+           >
+             Shared Budget
+           </button>
+           <button
+             onClick={() => setMode("mine")}
+             className={`px-4 py-1.5 rounded-md text-sm font-bold transition-all ${
+               mode === "mine" ? "bg-white shadow-sm text-stone-900" : "text-stone-400 hover:text-stone-600"
+             }`}
+           >
+             My Spending
+           </button>
+        </div>
       </div>
 
-      <div className="flex gap-2">
-        <button
-          onClick={() => setShowExpenseDialog(true)}
-          className="px-4 py-2 bg-gray-900 text-white rounded-lg"
-        >
-          Add Expense
-        </button>
-
+      {/* Action Bar */}
+      <div className="flex justify-end gap-3">
         <button
           onClick={() => setEditingBudget((v) => !v)}
-          className="px-4 py-2 border rounded-lg"
+          className="px-4 py-2 text-stone-500 hover:text-stone-900 text-sm font-medium transition-colors"
         >
-          {editingBudget ? "Done" : "Modify Budget"}
+          {editingBudget ? "Done Editing" : "Adjust Limits"}
+        </button>
+        <button
+          onClick={() => setShowExpenseDialog(true)}
+          className="px-5 py-2 bg-stone-900 text-white rounded-full hover:bg-stone-800 text-sm font-bold shadow-lg hover:shadow-xl transition-all flex items-center gap-2"
+        >
+          <Plus size={16} /> Add Expense
         </button>
       </div>
 
+      {/* Budget Summary Card */}
       {!editingBudget && limits.total > 0 && (
-        <div className="bg-gray-50 border rounded-lg p-4 text-sm flex justify-between">
-          <span>Total budget</span>
-          <span>
-            £{limits.total.toFixed(2)}
-            <span className="text-gray-500 ml-2">
-              Remaining £{totalRemaining.toFixed(2)}
-            </span>
-          </span>
+        <div className="bg-stone-900 text-white rounded-2xl p-8 shadow-xl relative overflow-hidden">
+           {/* Decorative circle */}
+           <div className="absolute -top-10 -right-10 w-40 h-40 bg-white/5 rounded-full blur-2xl" />
+           
+           <div className="relative z-10">
+             <div className="text-stone-400 text-sm font-bold uppercase tracking-widest mb-1">Remaining Budget</div>
+             <div className="text-5xl font-serif mb-6">£{totalRemaining.toFixed(2)}</div>
+             
+             <div className="flex gap-8 border-t border-white/10 pt-4">
+                <div>
+                   <div className="text-xs text-stone-500 uppercase font-bold">Total Budget</div>
+                   <div className="text-lg">£{limits.total.toFixed(2)}</div>
+                </div>
+                <div>
+                   <div className="text-xs text-stone-500 uppercase font-bold">Total Spent</div>
+                   <div className="text-lg">£{totalSpent.toFixed(2)}</div>
+                </div>
+             </div>
+           </div>
         </div>
       )}
 
+      {/* Limits Editor */}
       {editingBudget && (
-        <div className="bg-white border-2 rounded-lg p-4 space-y-3">
-          <div className="font-semibold">Budget Limits</div>
-
-          <div className="flex justify-between items-center">
-            <span>Total budget</span>
-            <input
-              type="number"
-              value={limits.total}
-              onChange={(e) =>
-                saveLimits({ ...limits, total: Number(e.target.value) })
-              }
-              className="w-32 border rounded px-2 py-1 text-right"
-            />
+        <div className="bg-stone-50 rounded-xl p-6 border border-stone-200 animate-in fade-in slide-in-from-top-2">
+          <h4 className="font-serif text-lg mb-4 text-stone-900">Set Budget Limits</h4>
+          <div className="grid gap-4">
+             <div className="flex justify-between items-center bg-white p-3 rounded-lg border border-stone-200">
+                <span className="font-bold text-stone-700">Total Cap</span>
+                <input
+                  type="number"
+                  value={limits.total}
+                  onChange={(e) => saveLimits({ ...limits, total: Number(e.target.value) })}
+                  className="w-32 text-right outline-none font-serif text-lg"
+                />
+             </div>
+             <div className="h-px bg-stone-200 my-2" />
+             {Object.keys(budget).map((cat) => (
+                <div key={cat} className="flex justify-between items-center text-sm">
+                   <span className="capitalize text-stone-600">{cat}</span>
+                   <div className="flex items-center gap-2">
+                      <span className="text-stone-400">£</span>
+                      <input
+                        type="number"
+                        value={limits[cat as keyof BudgetLimits]}
+                        onChange={(e) => saveLimits({ ...limits, [cat]: Number(e.target.value) })}
+                        className="w-24 text-right bg-transparent border-b border-stone-300 focus:border-stone-900 outline-none transition-colors"
+                      />
+                   </div>
+                </div>
+             ))}
           </div>
+        </div>
+      )}
 
-          {Object.keys(budget).map((cat) => (
-            <div key={cat} className="flex justify-between items-center">
-              <span>{cat[0].toUpperCase() + cat.slice(1)}</span>
-
-              <input
-                type="number"
-                value={limits[cat as keyof BudgetLimits]}
-                onChange={(e) =>
-                  saveLimits({
-                    ...limits,
-                    [cat]: Number(e.target.value),
-                  })
-                }
-                className="w-32 border rounded px-2 py-1 text-right"
-              />
+      {/* Detailed Breakdown */}
+      <div className="bg-white border border-stone-200 rounded-2xl p-8 shadow-sm">
+        <h3 className="font-serif text-xl mb-6 border-b border-stone-100 pb-2">Expenses Breakdown</h3>
+        <div className="space-y-8">
+          {Object.entries(budget).map(([name, data]) => (
+            <div key={name}>
+               <div className="flex justify-between items-baseline mb-2">
+                  <span className="text-stone-400 text-xs font-bold uppercase tracking-wider">{name}</span>
+                  <span className="font-serif text-lg font-medium text-stone-900">£{data.total.toFixed(2)}</span>
+               </div>
+               
+               {data.items.length > 0 ? (
+                 <div className="bg-stone-50 rounded-lg p-3 space-y-2">
+                    {data.items.map((i, idx) => (
+                      <div key={idx} className="flex justify-between text-sm text-stone-600">
+                        <span>{i.label}</span>
+                        <span className="font-mono text-stone-500">£{i.amount.toFixed(2)}</span>
+                      </div>
+                    ))}
+                 </div>
+               ) : (
+                 <div className="h-1 bg-stone-100 rounded-full overflow-hidden">
+                    {/* Empty state bar */}
+                 </div>
+               )}
             </div>
           ))}
         </div>
-      )}
-
-      <div className="bg-white border-2 rounded-lg p-6 space-y-6">
-        {Object.entries(budget).map(([name, data]) => (
-          <div key={name}>
-            <Row
-              label={name[0].toUpperCase() + name.slice(1)}
-              value={data.total}
-            />
-
-            {data.items.map((i, idx) => (
-              <div
-                key={idx}
-                className="ml-6 text-sm text-gray-600 flex justify-between"
-              >
-                <span>{i.label}</span>
-                <span>£{i.amount.toFixed(2)}</span>
-              </div>
-            ))}
-          </div>
-        ))}
+        
+        <div className="mt-8 pt-6 border-t border-stone-100 flex justify-between items-center">
+           <span className="font-serif text-xl text-stone-900">Total Spent</span>
+           <span className="font-serif text-2xl text-stone-900">£{totalSpent.toFixed(2)}</span>
+        </div>
+      </div>
         {showExpenseDialog && (
           <ExpenseDialog
             mode={mode}
@@ -5453,7 +5496,7 @@ function BudgetTab({ tripId }: { tripId: number }) {
           value={Object.values(budget).reduce((a, b) => a + b.total, 0)}
         />
       </div>
-    </div>
+    
   );
 }
 
