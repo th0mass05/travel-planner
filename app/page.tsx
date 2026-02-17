@@ -3440,7 +3440,6 @@ type ShoppingTabProps = {
 };
 
 
-// 1. Define the simple dialog component (Paste this right above ShoppingTab or inside it)
 function SimpleCostDialog({
   itemName,
   onClose,
@@ -3453,30 +3452,27 @@ function SimpleCostDialog({
   const [cost, setCost] = useState("");
 
   const handleSave = () => {
-    // Basic validation to ensure we save a number
     const val = parseFloat(cost);
     if (!isNaN(val)) {
       onSave(val);
     } else {
-      // If empty or invalid, just close or save 0 depending on preference
-      // Here we'll treat empty as cancel or 0
       onSave(0);
     }
   };
 
   return (
-    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-      <div className="bg-white rounded-xl shadow-xl w-[400px] p-6 space-y-4 animate-in fade-in zoom-in duration-200">
+    <div className="fixed inset-0 bg-stone-900/40 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-8 animate-in zoom-in-95 duration-200">
         
-        <div>
-          <h3 className="text-xl font-serif text-gray-900">Item Acquired</h3>
-          <p className="text-gray-500 text-sm mt-1">
-            How much did you spend on <span className="font-semibold text-gray-900">{itemName}</span>?
+        <div className="mb-6">
+          <h3 className="text-xl font-serif text-stone-900">Item Acquired</h3>
+          <p className="text-stone-500 text-sm mt-1">
+            How much did you spend on <span className="font-bold text-stone-800">{itemName}</span>?
           </p>
         </div>
 
-        <div className="relative">
-          <span className="absolute left-3 top-2.5 text-gray-500">£</span>
+        <div className="relative mb-6">
+          <span className="absolute left-4 top-3 text-stone-400 font-serif text-lg">£</span>
           <input
             type="number"
             autoFocus
@@ -3487,22 +3483,22 @@ function SimpleCostDialog({
               if (e.key === "Enter") handleSave();
               if (e.key === "Escape") onClose();
             }}
-            className="w-full border-2 border-gray-200 rounded-lg pl-8 pr-3 py-2 text-lg focus:border-gray-900 outline-none transition-colors"
+            className="w-full border border-stone-300 rounded-xl pl-8 pr-4 py-3 text-2xl font-serif focus:border-stone-900 focus:ring-1 focus:ring-stone-900 outline-none transition-all placeholder:text-stone-200 text-stone-900"
           />
         </div>
 
-        <div className="flex justify-end gap-3 pt-2">
-          <button
-            onClick={onClose}
-            className="px-4 py-2 bg-white border-2 border-gray-200 text-gray-700 rounded-lg hover:border-gray-300 transition-colors"
-          >
-            Cancel
-          </button>
+        <div className="flex gap-3">
           <button
             onClick={handleSave}
-            className="px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition-colors"
+            className="flex-1 px-4 py-3 bg-stone-900 text-white font-bold rounded-lg hover:bg-stone-800 transition-colors shadow-lg"
           >
             Save
+          </button>
+          <button
+            onClick={onClose}
+            className="px-4 py-3 border border-stone-200 text-stone-600 font-bold rounded-lg hover:bg-stone-50 transition-colors"
+          >
+            Cancel
           </button>
         </div>
 
@@ -3510,8 +3506,6 @@ function SimpleCostDialog({
     </div>
   );
 }
-
-// 2. The Updated ShoppingTab
 function ShoppingTab({ tripId }: { tripId: number }) {
   type ShoppingItem = ShoppingData & {
     id: number;
@@ -3523,29 +3517,21 @@ function ShoppingTab({ tripId }: { tripId: number }) {
 
   const [items, setItems] = useState<ShoppingItem[]>([]);
   const [showAddDialog, setShowAddDialog] = useState(false);
-  
-  // Track which item we are currently marking as bought
   const [buyingItem, setBuyingItem] = useState<ShoppingItem | null>(null);
 
   useEffect(() => {
     const user = auth.currentUser;
     if (!user) return;
 
-    // This listens for ANY change to shopping items
     const unsubscribe = storage.subscribeToList(
       `shopping:${tripId}:user:${user.uid}:`, 
       (newItems) => {
-        // Automatically sorts and updates state whenever DB changes
         setItems(newItems.sort((a: any, b: any) => b.id - a.id));
       }
     );
-
-    return () => unsubscribe(); // Cleanup when tab closes
+    return () => unsubscribe();
   }, [tripId]);
 
-  
-
-  // Updated addItem (No longer needs manual loadItems call)
   const addItem = async (itemData: ShoppingData) => {
     const user = auth.currentUser;
     if (!user) return;
@@ -3558,14 +3544,9 @@ function ShoppingTab({ tripId }: { tripId: number }) {
       createdAt: new Date().toISOString(),
     };
 
-    // Just save. The listener above will update the UI automatically.
-    await storage.set(
-      `shopping:${tripId}:user:${user.uid}:${newItem.id}`,
-      newItem
-    );
+    await storage.set(`shopping:${tripId}:user:${user.uid}:${newItem.id}`, newItem);
   };
 
-  // Updated deleteItem (No longer needs manual loadItems call)
   const deleteItem = async (id: number) => {
     const user = auth.currentUser;
     if (!user) return;
@@ -3576,18 +3557,11 @@ function ShoppingTab({ tripId }: { tripId: number }) {
     const user = auth.currentUser;
     if (!user) return;
 
-    // If currently bought -> Unbuy immediately (remove cost)
     if (item.bought) {
       const updated = { ...item, bought: false };
       delete updated.cost;
-
-      await storage.set(
-        `shopping:${tripId}:user:${user.uid}:${item.id}`,
-        updated
-      );
-      
+      await storage.set(`shopping:${tripId}:user:${user.uid}:${item.id}`, updated);
     } else {
-      // If currently NOT bought -> Open the Simple Cost Dialog
       setBuyingItem(item);
     }
   };
@@ -3597,37 +3571,27 @@ function ShoppingTab({ tripId }: { tripId: number }) {
     const user = auth.currentUser;
     if (!user) return;
 
-    const updated: ShoppingItem = {
-      ...buyingItem,
-      bought: true,
-      cost: amount
-    };
-
-    await storage.set(
-      `shopping:${tripId}:user:${user.uid}:${buyingItem.id}`,
-      updated
-    );
-    
+    const updated: ShoppingItem = { ...buyingItem, bought: true, cost: amount };
+    await storage.set(`shopping:${tripId}:user:${user.uid}:${buyingItem.id}`, updated);
     setBuyingItem(null);
-    
   };
 
-  // Group items by category
   const categories = [...new Set(items.map((i) => i.category))].sort();
   const boughtCount = items.filter((i) => i.bought).length;
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
+    <div className="space-y-8">
+      {/* Header */}
+      <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 border-b border-stone-100 pb-4">
         <div>
-          <h2 className="text-3xl font-serif text-gray-900">My Shopping List</h2>
-          <p className="text-gray-800 mt-1">
-            {boughtCount} of {items.length} items acquired
+          <h2 className="text-3xl font-serif text-stone-900">My Wishlist</h2>
+          <p className="text-stone-500 mt-1">
+            {boughtCount} / {items.length} items acquired
           </p>
         </div>
         <button
           onClick={() => setShowAddDialog(true)}
-          className="px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800 flex items-center gap-2"
+          className="px-5 py-2.5 bg-stone-900 text-white rounded-full hover:bg-stone-800 flex items-center gap-2 text-sm font-medium shadow-lg hover:shadow-xl transition-all"
         >
           <Plus size={18} />
           Add Item
@@ -3635,100 +3599,100 @@ function ShoppingTab({ tripId }: { tripId: number }) {
       </div>
 
       {items.length === 0 ? (
-        <div className="bg-white border-2 border-dashed border-gray-300 rounded-lg p-12 text-center">
-          <div className="w-16 h-16 rounded-full bg-teal-100 flex items-center justify-center mb-4 mx-auto">
-            <ShoppingBag size={32} className="text-teal-600" />
+        <div className="text-center py-24 bg-white rounded-2xl border border-dashed border-stone-200">
+          <div className="w-16 h-16 rounded-full bg-stone-50 flex items-center justify-center mb-4 mx-auto text-stone-300">
+            <ShoppingBag size={32} />
           </div>
-          <h3 className="text-xl font-semibold text-gray-800 mb-2">
+          <h3 className="text-xl font-serif text-stone-900 mb-2">
             Personal Wishlist
           </h3>
-          <p className="text-gray-800 mb-4">
+          <p className="text-stone-500 mb-6 max-w-sm mx-auto">
             Items you add here are private and only appear in your personal budget.
           </p>
           <button
             onClick={() => setShowAddDialog(true)}
-            className="px-6 py-3 bg-gray-900 text-white rounded-lg"
+            className="text-stone-900 font-bold underline hover:text-stone-600"
           >
-            Add First Item
+            Start your list
           </button>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
           {categories.map((category) => (
             <div
               key={category}
-              className="bg-white border border-stone-200 shadow-sm rounded-lg overflow-hidden h-fit"
+              className="bg-white border border-stone-200 shadow-sm rounded-2xl overflow-hidden h-fit flex flex-col"
             >
-              <div className="bg-stone-50 px-6 py-4 border-b border-gray-100">
-                <h3 className="font-serif text-xl text-gray-900">{category}</h3>
+              <div className="bg-stone-50 px-6 py-4 border-b border-stone-100">
+                <h3 className="font-serif text-lg text-stone-900">{category}</h3>
               </div>
 
-              <div className="p-4 space-y-3">
+              <div className="p-2">
                 {items
                   .filter((item) => item.category === category)
                   .map((item) => (
                     <div
                       key={item.id}
-                      className={`group flex items-start gap-3 p-3 rounded-lg border transition-all ${
+                      className={`group flex items-start gap-3 p-3 rounded-xl transition-all border mb-2 last:mb-0 ${
                         item.bought
-                          ? "bg-gray-50 border-gray-200"
-                          : "bg-white border-gray-200 hover:border-teal-300 hover:shadow-sm"
+                          ? "bg-stone-50 border-transparent opacity-75 hover:opacity-100"
+                          : "bg-white border-transparent hover:border-stone-200 hover:shadow-sm"
                       }`}
                     >
                       <input
                         type="checkbox"
                         checked={item.bought}
                         onChange={() => handleToggleClick(item)}
-                        className="mt-1 w-4 h-4 rounded border-gray-300 text-stone-900 focus:ring-stone-900 cursor-pointer"
+                        className="mt-1.5 w-4 h-4 rounded border-stone-300 text-stone-900 focus:ring-stone-900 cursor-pointer accent-stone-900"
                       />
 
                       <div className="flex-1 min-w-0">
-                        <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-start justify-between gap-2">
                           <span
-                            className={`font-medium truncate ${
+                            className={`font-medium leading-snug transition-colors ${
                               item.bought
-                                ? "line-through text-gray-500"
-                                : "text-gray-900"
+                                ? "line-through text-stone-400"
+                                : "text-stone-900"
                             }`}
                           >
                             {item.item}
                           </span>
                           
-                          <div className="flex items-center gap-2">
-                            {/* Show cost if bought */}
+                          <div className="flex items-center gap-2 flex-shrink-0">
+                            {/* Cost Badge */}
                             {item.bought && item.cost !== undefined && (
-                                <span className="text-xs font-semibold text-amber-800 bg-amber-100 px-2 py-0.5 rounded">
+                                <span className="text-[10px] font-bold uppercase tracking-wider text-amber-800 bg-amber-100 px-2 py-0.5 rounded-full">
                                     {item.cost === 0 ? "Free" : `£${item.cost}`}
                                 </span>
                             )}
 
+                            {/* Link */}
                             {item.link && (
                               <a
                                 href={item.link}
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className="text-gray-400 hover:text-teal-600 transition-colors"
+                                className="text-stone-300 hover:text-stone-900 transition-colors"
                               >
                                 <ExternalLink size={14} />
                               </a>
                             )}
+                            
+                            {/* Delete */}
                             <button
                               onClick={() => deleteItem(item.id)}
-                              className="text-red-500 hover:text-red-700 text-xs"
+                              className="text-stone-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all"
                             >
-                              Delete
+                              <Trash2 size={14} />
                             </button>
                           </div>
                         </div>
 
                         {item.notes && (
-                          <p className="text-sm text-gray-600 mt-1 break-words">
+                          <p className="text-xs text-stone-500 mt-1 line-clamp-2">
                             {item.notes}
                           </p>
                         )}
-                        <div className="mt-1">
-                          <TripAuthorInfo uid={item.createdByUid} createdAt={item.createdAt} />
-                        </div>
                       </div>
                     </div>
                   ))}
@@ -3758,7 +3722,6 @@ function ShoppingTab({ tripId }: { tripId: number }) {
     </div>
   );
 }
-
 
 function CostDialog({
   item,
