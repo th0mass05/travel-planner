@@ -470,9 +470,11 @@ const compressImage = (file: File): Promise<string> => {
       img.src = event.target?.result as string;
       img.onload = () => {
         const canvas = document.createElement("canvas");
-        // Resize to max 800px width/height while keeping aspect ratio
-        const MAX_WIDTH = 800;
-        const MAX_HEIGHT = 800;
+        
+        // ⭐ UPDATED: Increased from 800 to 1920 for clear HD banners
+        const MAX_WIDTH = 1920;
+        const MAX_HEIGHT = 1920;
+        
         let width = img.width;
         let height = img.height;
 
@@ -493,9 +495,8 @@ const compressImage = (file: File): Promise<string> => {
         const ctx = canvas.getContext("2d");
         ctx?.drawImage(img, 0, 0, width, height);
         
-        // Compress to JPEG at 70% quality
-        // This usually reduces a 5MB photo to ~50-100KB
-        const dataUrl = canvas.toDataURL("image/jpeg", 0.7);
+        // ⭐ UPDATED: Increased quality to 0.8 (80%) for sharper details
+        const dataUrl = canvas.toDataURL("image/jpeg", 0.8);
         resolve(dataUrl);
       };
       img.onerror = (error) => reject(error);
@@ -1258,185 +1259,172 @@ function ActivityDialog({ onClose, onAdd, initialData }: ActivityDialogProps) {
     </div>
   );
 }
-
-type NewTripDialogProps = {
+// Add/Replace this component
+type TripDialogProps = {
+  initialData?: TripData; // If present, we are editing
   onClose: () => void;
-  onCreate: (data: TripFormData) => void | Promise<void>;
+  onSubmit: (data: TripFormData) => Promise<void>;
 };
 
+function TripDialog({ initialData, onClose, onSubmit }: TripDialogProps) {
+  const [formData, setFormData] = useState<TripFormData>(
+    initialData
+      ? {
+          destination: initialData.destination,
+          country: initialData.country,
+          startDate: initialData.startDate,
+          endDate: initialData.endDate,
+          year: initialData.year, // Keep as number
+          tagline: initialData.tagline,
+          imageUrl: initialData.imageUrl || "",
+          bgGradient: initialData.bgGradient || "from-stone-200 to-stone-300",
+          status: initialData.status || "upcoming",
+        }
+      : {
+          destination: "",
+          country: "",
+          startDate: "",
+          endDate: "",
+          year: new Date().getFullYear(), // ⭐ FIX: Removed .toString()
+          tagline: "",
+          imageUrl: "",
+          bgGradient: "from-rose-100 to-teal-100",
+          status: "upcoming",
+        }
+  );
 
-function NewTripDialog({ onClose, onCreate }: NewTripDialogProps) {
-  const [formData, setFormData] = useState<TripFormData>({
-    destination: "",
-    country: "",
-    year: new Date().getFullYear(),
-    tagline: "",
-    startDate: "",
-    endDate: "",
-    status: "upcoming",
-    imageUrl: "",
-    bgGradient: "from-blue-400 to-purple-400",
-  });
-
-
-  // Inside NewTripDialog ...
+  const [loading, setLoading] = useState(false);
 
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file) return;
-
-    try {
-      const compressedBase64 = await compressImage(file);
-      setFormData(prev => ({
-        ...prev,
-        imageUrl: compressedBase64,
-      }));
-    } catch (err) {
-      console.error("Image compression failed", err);
+    if (file) {
+      try {
+        const compressed = await compressImage(file); // Uses your existing helper
+        setFormData({ ...formData, imageUrl: compressed });
+      } catch (err) {
+        console.error(err);
+      }
     }
   };
 
-  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    onCreate(formData);
+  const handleSubmit = async () => {
+    if (!formData.destination || !formData.startDate || !formData.endDate) {
+      alert("Please fill in the destination and dates.");
+      return;
+    }
+    setLoading(true);
+    await onSubmit(formData);
+    setLoading(false);
   };
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-lg max-w-2xl w-full p-8 max-h-[90vh] overflow-y-auto">
-        <h2 className="text-3xl font-serif mb-6">Create New Journey</h2>
-        <div className="space-y-4">
+    <div className="fixed inset-0 bg-stone-900/40 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg p-8 animate-in zoom-in-95 duration-200 max-h-[90vh] overflow-y-auto">
+        <h3 className="text-2xl font-serif text-stone-900 mb-6">
+          {initialData ? "Edit Journey" : "Start New Journey"}
+        </h3>
+
+        <div className="space-y-5">
+          {/* Destination & Country */}
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium mb-1">
-                Destination
-              </label>
+              <label className="block text-xs font-bold uppercase tracking-wider text-stone-500 mb-1.5">Destination</label>
               <input
+                autoFocus
                 type="text"
-                required
                 value={formData.destination}
-                onChange={(e) =>
-                  setFormData({ ...formData, destination: e.target.value })
-                }
-                className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg focus:border-gray-900 outline-none"
-                placeholder="e.g., Tokyo"
+                onChange={(e) => setFormData({ ...formData, destination: e.target.value })}
+                className="w-full px-4 py-2.5 border border-stone-300 rounded-lg focus:border-stone-900 outline-none"
+                placeholder="e.g. Kyoto"
               />
             </div>
             <div>
-              <label className="block text-sm font-medium mb-1">Country</label>
+              <label className="block text-xs font-bold uppercase tracking-wider text-stone-500 mb-1.5">Country</label>
               <input
                 type="text"
-                required
                 value={formData.country}
-                onChange={(e) =>
-                  setFormData({ ...formData, country: e.target.value })
-                }
-                className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg focus:border-gray-900 outline-none"
-                placeholder="e.g., Japan"
+                onChange={(e) => setFormData({ ...formData, country: e.target.value })}
+                className="w-full px-4 py-2.5 border border-stone-300 rounded-lg focus:border-stone-900 outline-none"
+                placeholder="e.g. Japan"
               />
             </div>
           </div>
 
-          <div>
-            <label className="block text-sm font-medium mb-1">Tagline</label>
-            <input
-              type="text"
-              required
-              value={formData.tagline}
-              onChange={(e) =>
-                setFormData({ ...formData, tagline: e.target.value })
-              }
-              className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg focus:border-gray-900 outline-none"
-              placeholder="A short description of your trip"
-            />
-          </div>
-
+          {/* Dates */}
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium mb-1">
-                Start Date
-              </label>
+              <label className="block text-xs font-bold uppercase tracking-wider text-stone-500 mb-1.5">Start Date</label>
               <input
                 type="date"
-                required
                 value={formData.startDate}
-                onChange={(e) =>
-                  setFormData({ ...formData, startDate: e.target.value })
-                }
-                className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg focus:border-gray-900 outline-none"
+                onChange={(e) => setFormData({ ...formData, startDate: e.target.value })}
+                className="w-full px-4 py-2.5 border border-stone-300 rounded-lg focus:border-stone-900 outline-none"
               />
             </div>
             <div>
-              <label className="block text-sm font-medium mb-1">End Date</label>
+              <label className="block text-xs font-bold uppercase tracking-wider text-stone-500 mb-1.5">End Date</label>
               <input
                 type="date"
-                required
                 value={formData.endDate}
-                onChange={(e) =>
-                  setFormData({ ...formData, endDate: e.target.value })
-                }
-                className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg focus:border-gray-900 outline-none"
+                onChange={(e) => setFormData({ ...formData, endDate: e.target.value })}
+                className="w-full px-4 py-2.5 border border-stone-300 rounded-lg focus:border-stone-900 outline-none"
               />
             </div>
           </div>
 
+          {/* Tagline */}
           <div>
-            <label className="block text-sm font-medium mb-1">
-              Trip Image (optional)
-            </label>
-            <input
-              type="file"
-              accept="image/*"
-              onChange={handleImageUpload}
-              className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg focus:border-gray-900 outline-none file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-gray-100 file:text-gray-700 hover:file:bg-gray-200"
+            <label className="block text-xs font-bold uppercase tracking-wider text-stone-500 mb-1.5">Tagline / Caption</label>
+            <textarea
+              value={formData.tagline}
+              onChange={(e) => setFormData({ ...formData, tagline: e.target.value })}
+              className="w-full px-4 py-2.5 border border-stone-300 rounded-lg focus:border-stone-900 outline-none"
+              placeholder="e.g. Cherry blossoms and ancient temples..."
+              rows={2}
             />
-            {formData.imageUrl && (
-              <div className="mt-2">
-                <img
-                  src={formData.imageUrl}
-                  alt="Preview"
-                  className="w-32 h-32 object-cover rounded-lg border-2 border-gray-200"
-                />
-              </div>
-            )}
           </div>
 
+          {/* Cover Image */}
           <div>
-            <label className="block text-sm font-medium mb-1">Status</label>
-            <select
-              value={formData.status}
-              onChange={(e: React.ChangeEvent<HTMLSelectElement>) =>
-                setFormData({ ...formData, status: e.target.value as TripStatus })
-              }
-              className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg focus:border-gray-900 outline-none"
-            >
-              <option value="upcoming">Upcoming</option>
-              <option value="ongoing">Ongoing</option>
-              <option value="completed">Completed</option>
-            </select>
+            <label className="block text-xs font-bold uppercase tracking-wider text-stone-500 mb-1.5">Cover Image</label>
+            <div className="relative group cursor-pointer">
+              <input
+                type="file"
+                accept="image/*"
+                onChange={handleImageUpload}
+                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+              />
+              <div className={`w-full h-32 border-2 border-dashed rounded-xl flex items-center justify-center overflow-hidden transition-all ${
+                  formData.imageUrl ? "border-stone-900" : "border-stone-300 hover:border-stone-400"
+              }`}>
+                {formData.imageUrl ? (
+                  <img src={formData.imageUrl} alt="Cover" className="w-full h-full object-cover" />
+                ) : (
+                  <div className="text-stone-400 flex flex-col items-center">
+                    <Camera size={24} className="mb-2" />
+                    <span className="text-xs font-bold">Upload Cover Photo</span>
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
 
-          <form onSubmit={handleSubmit}>
-            <div className="flex gap-4 pt-4">
-
-              <button
-                type="submit"
-                className="flex-1 px-6 py-3 bg-gray-900 text-white rounded-lg hover:bg-gray-800"
-              >
-                Create Journey
-              </button>
-
-              <button
-                type="button"
-                onClick={onClose}
-                className="px-6 py-3 bg-white border-2 border-gray-300 rounded-lg hover:border-gray-400"
-              >
-                Cancel
-              </button>
-
-            </div>
-          </form>
-
+          {/* Buttons */}
+          <div className="flex gap-3 pt-4">
+            <button
+              onClick={handleSubmit}
+              disabled={loading}
+              className="flex-1 px-6 py-3 bg-stone-900 text-white font-bold rounded-lg hover:bg-stone-800 transition-colors shadow-lg disabled:opacity-50"
+            >
+              {loading ? "Saving..." : initialData ? "Update Journey" : "Create Journey"}
+            </button>
+            <button
+              onClick={onClose}
+              className="px-6 py-3 border border-stone-200 text-stone-600 font-bold rounded-lg hover:bg-stone-50 transition-colors"
+            >
+              Cancel
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -1846,7 +1834,25 @@ export default function TravelJournal() {
     return unsub;
   }, []);
 
+  const updateTrip = async (tripId: number, data: TripFormData) => {
+    const user = auth.currentUser;
+    if (!user) return;
 
+    // 1. Get the existing trip so we don't lose members/id/created info
+    const existing = trips.find(t => t.id === tripId);
+    if (!existing) return;
+
+    const updatedTrip: TripData = {
+      ...existing, // Keep ID, ownerId, members, etc.
+      ...data,     // Overwrite title, image, dates, etc.
+    };
+
+    // 2. Save to DB
+    await storage.set(`trip:${tripId}`, updatedTrip);
+
+    // 3. Refresh the UI list
+    await loadTrips(user.uid);
+  };
   const loadTrips = async (uid: string) => {
     setLoading(true);
     const userEmail = auth.currentUser?.email;
@@ -2038,6 +2044,7 @@ export default function TravelJournal() {
           setCurrentView("trip");
         }}
         onCreateTrip={createTrip}
+        onUpdateTrip={updateTrip}
         onDeleteTrip={deleteTrip}
         onRespondInvite={handleRespondToInvite}
       />
@@ -2068,6 +2075,7 @@ type HomePageProps = {
   loading: boolean;
   onSelectTrip: (trip: TripData) => void;
   onCreateTrip: (trip: TripFormData) => Promise<TripData>;
+  onUpdateTrip: (tripId: number, data: TripFormData) => Promise<void>;
   onDeleteTrip: (tripId: number) => void;
   onRespondInvite: (trip: TripData, accept: boolean) => void; // ⭐ NEW PROP
 };
@@ -2076,13 +2084,35 @@ function HomePage({
   loading,
   onSelectTrip,
   onCreateTrip,
+  onUpdateTrip,
   onDeleteTrip,
   onRespondInvite,
 }: HomePageProps) {
   
   const [filter, setFilter] = useState("all"); 
-  const [showNewTripDialog, setShowNewTripDialog] = useState(false);
+  const [showTripDialog, setShowTripDialog] = useState(false);
+  const [editingTrip, setEditingTrip] = useState<TripData | null>(null);
+  const handleSaveTrip = async (data: TripFormData) => {
+    if (editingTrip) {
+      // ⭐ Use the prop from parent to update and reload
+      await onUpdateTrip(editingTrip.id, data);
+    } else {
+      // Create new trip
+      await onCreateTrip(data);
+    }
+    setShowTripDialog(false);
+    setEditingTrip(null);
+  };
 
+  const openCreate = () => {
+    setEditingTrip(null);
+    setShowTripDialog(true);
+  };
+
+  const openEdit = (trip: TripData) => {
+    setEditingTrip(trip);
+    setShowTripDialog(true);
+  };
   // Filter logic remains the same...
   const filteredTrips = trips.filter((trip) => {
     if (filter === "invited") return trip.isPendingInvite;
@@ -2093,10 +2123,7 @@ function HomePage({
 
   const inviteCount = trips.filter(t => t.isPendingInvite).length;
 
-  const handleCreateTrip = async (data: TripFormData) => {
-    await onCreateTrip(data);
-    setShowNewTripDialog(false);
-  };
+  
 
   return (
     <div className="min-h-screen bg-[#FDFCF8] font-sans selection:bg-rose-100 flex flex-col">
@@ -2129,7 +2156,7 @@ function HomePage({
              </p>
              
              <button
-              onClick={() => setShowNewTripDialog(true)}
+              onClick={openCreate}
               className="group relative inline-flex items-center gap-2 px-6 py-3 bg-stone-900 text-white rounded-full hover:bg-stone-800 transition-all shadow-lg hover:shadow-xl hover:-translate-y-0.5 text-sm font-medium tracking-wide"
             >
               <Plus size={18} className="text-rose-200" /> 
@@ -2207,7 +2234,8 @@ function HomePage({
                 trip={trip}
                 onClick={() => !trip.isPendingInvite && onSelectTrip(trip)}
                 onDelete={() => onDeleteTrip(trip.id)}
-                isInvited={trip.isPendingInvite}
+                isInvited={trip.isPendingInvite || false}
+                onEdit={() => openEdit(trip)}
                 onAccept={() => onRespondInvite(trip, true)}
                 onDecline={() => onRespondInvite(trip, false)}
               />
@@ -2216,34 +2244,39 @@ function HomePage({
         )}
       </div>
 
-      {showNewTripDialog && (
-        <NewTripDialog
-          onClose={() => setShowNewTripDialog(false)}
-          onCreate={handleCreateTrip}
+      {showTripDialog && (
+        <TripDialog
+          initialData={editingTrip || undefined}
+          onClose={() => {
+            setShowTripDialog(false);
+            setEditingTrip(null);
+          }}
+          onSubmit={handleSaveTrip}
         />
       )}
     </div>
   );
 }
 
+
+// Update the props definition
 type TripCardProps = {
   trip: TripData;
   onClick: () => void;
   onDelete: () => void;
-  // ⭐ NEW PROPS
-  isInvited?: boolean;
+  onEdit: () => void; // ⭐ Add this
+  isInvited: boolean;
   onAccept?: () => void;
   onDecline?: () => void;
 };
-function TripCard({ trip, onClick, onDelete, isInvited, onAccept, onDecline }: TripCardProps) {
-  
-  // Refined Status Badges
+
+function TripCard({ trip, onClick, onDelete, onEdit, isInvited, onAccept, onDecline }: TripCardProps) {
+  // ... (keep existing statusConfig and config logic) ...
   const statusConfig: Record<TripStatus, { label: string; className: string }> = {
     upcoming: { label: "Upcoming", className: "bg-amber-100 text-amber-800 border-amber-200" },
     ongoing:  { label: "Happening Now", className: "bg-emerald-100 text-emerald-800 border-emerald-200" },
     completed:{ label: "Completed", className: "bg-stone-100 text-stone-600 border-stone-200" },
   };
-
   const config = statusConfig[trip.status] || statusConfig.upcoming;
 
   return (
@@ -2253,90 +2286,74 @@ function TripCard({ trip, onClick, onDelete, isInvited, onAccept, onDecline }: T
         !isInvited ? "hover:-translate-y-2 cursor-pointer" : ""
       }`}
     >
-      {/* Image Container - Aspect Ratio 4:3 for a classic photo look */}
+      {/* ... (Keep existing Image Container & Content Header) ... */}
       <div className="relative aspect-[4/3] overflow-hidden rounded-2xl shadow-md group-hover:shadow-2xl transition-all duration-500">
-        
-        {/* Status Badge */}
-        <div className="absolute top-4 left-4 z-10">
+         {/* ... keep existing image logic ... */}
+         {trip.imageUrl ? (
+          <img src={trip.imageUrl} alt={trip.destination} className="w-full h-full object-cover transform group-hover:scale-110 transition-transform duration-700 ease-in-out" />
+        ) : (
+          <div className={`w-full h-full bg-gradient-to-br ${trip.bgGradient || "from-stone-200 to-stone-300"}`} />
+        )}
+        {/* ... keep badge logic ... */}
+         <div className="absolute top-4 left-4 z-10">
           {isInvited ? (
-             <div className="bg-blue-600 text-white px-3 py-1.5 rounded-full shadow-lg text-xs font-bold uppercase tracking-wide flex items-center gap-1.5">
-               <Users size={12} /> Invited
-             </div>
+             <div className="bg-blue-600 text-white px-3 py-1.5 rounded-full shadow-lg text-xs font-bold uppercase tracking-wide flex items-center gap-1.5"><Users size={12} /> Invited</div>
           ) : (
-             <div className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider border shadow-sm backdrop-blur-md bg-white/90 ${config.className}`}>
-               {config.label}
-             </div>
+             <div className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider border shadow-sm backdrop-blur-md bg-white/90 ${config.className}`}>{config.label}</div>
           )}
         </div>
-
-        {trip.imageUrl ? (
-          <img
-            src={trip.imageUrl}
-            alt={trip.destination}
-            className="w-full h-full object-cover transform group-hover:scale-110 transition-transform duration-700 ease-in-out"
-          />
-        ) : (
-          <div
-            className={`w-full h-full bg-gradient-to-br ${trip.bgGradient || "from-stone-200 to-stone-300"}`}
-          />
-        )}
-        
-        {/* Gradient Overlay for text readability if you wanted text over image (optional) */}
-        <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
       </div>
 
-      {/* Content */}
       <div className="pt-5 px-2 pb-2 flex-1 flex flex-col">
+        {/* ... (Keep existing text content) ... */}
         <div className="flex justify-between items-start mb-1">
-          <h3 className="text-2xl font-serif text-stone-900 group-hover:text-rose-900 transition-colors">
-            {trip.destination}
-          </h3>
+          <h3 className="text-2xl font-serif text-stone-900 group-hover:text-rose-900 transition-colors">{trip.destination}</h3>
           <span className="font-serif text-stone-400 text-lg italic">{trip.year}</span>
         </div>
-        
         <div className="flex items-center gap-1.5 text-stone-500 text-sm font-medium mb-3 uppercase tracking-wide">
-          <MapPin size={14} className="text-rose-400" />
-          {trip.country}
+          <MapPin size={14} className="text-rose-400" />{trip.country}
         </div>
-
-        <p className="text-stone-600 text-sm leading-relaxed line-clamp-2 mb-4">
-          {trip.tagline}
-        </p>
+        <p className="text-stone-600 text-sm leading-relaxed line-clamp-2 mb-4">{trip.tagline}</p>
 
         {/* Footer Actions */}
         <div className="mt-auto pt-4 border-t border-stone-100 flex items-center justify-between">
             <span className="text-xs font-medium text-stone-400">
-               {new Date(trip.startDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })} 
-               {' — '} 
-               {new Date(trip.endDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+               {new Date(trip.startDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })} — {new Date(trip.endDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
             </span>
 
             {isInvited ? (
                <div className="flex gap-2">
-                 <button 
-                   onClick={(e) => { e.stopPropagation(); onDecline?.(); }}
-                   className="px-3 py-1.5 rounded-lg border border-rose-200 text-rose-600 hover:bg-rose-50 text-xs font-bold"
-                 >
-                   Decline
-                 </button>
-                 <button 
-                   onClick={(e) => { e.stopPropagation(); onAccept?.(); }}
-                   className="px-3 py-1.5 rounded-lg bg-stone-900 text-white hover:bg-stone-800 text-xs font-bold shadow-md"
-                 >
-                   Accept
-                 </button>
+                 {/* ... keep invite buttons ... */}
+                 <button onClick={(e) => { e.stopPropagation(); onDecline?.(); }} className="px-3 py-1.5 rounded-lg border border-rose-200 text-rose-600 hover:bg-rose-50 text-xs font-bold">Decline</button>
+                 <button onClick={(e) => { e.stopPropagation(); onAccept?.(); }} className="px-3 py-1.5 rounded-lg bg-stone-900 text-white hover:bg-stone-800 text-xs font-bold shadow-md">Accept</button>
                </div>
             ) : (
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onDelete();
-                }}
-                className="group/delete p-2 hover:bg-red-50 rounded-full transition-colors"
-                title="Delete Trip"
-              >
-                <Trash2 size={16} className="text-stone-300 group-hover/delete:text-red-500 transition-colors" />
-              </button>
+              <div className="flex gap-1">
+                {/* ⭐ Edit Button */}
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onEdit();
+                  }}
+                  className="p-2 hover:bg-stone-100 rounded-full transition-colors text-stone-300 hover:text-stone-600"
+                  title="Edit Trip"
+                >
+                  {/* You might need to import Pencil from lucide-react */}
+                  <span className="text-xs font-bold">Edit</span> 
+                </button>
+
+                {/* Delete Button */}
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onDelete();
+                  }}
+                  className="p-2 hover:bg-red-50 rounded-full transition-colors group/delete"
+                  title="Delete Trip"
+                >
+                  <Trash2 size={16} className="text-stone-300 group-hover/delete:text-red-500 transition-colors" />
+                </button>
+              </div>
             )}
         </div>
       </div>
