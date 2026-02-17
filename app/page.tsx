@@ -321,17 +321,19 @@ function PlaceDialog({ onClose, onAdd, type }: PlaceDialogProps) {
   });
 
 
-  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // Inside PlaceDialog ...
+
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        const result = event.target?.result;
-        if (typeof result === "string") {
-          setFormData({ ...formData, imageUrl: result });
-        }
-      };
-      reader.readAsDataURL(file);
+      try {
+        // Compress image before setting state
+        const compressedBase64 = await compressImage(file);
+        setFormData({ ...formData, imageUrl: compressedBase64 });
+      } catch (err) {
+        console.error("Image compression failed", err);
+        alert("Failed to load image. Please try another.");
+      }
     }
   };
 
@@ -455,6 +457,50 @@ function PlaceDialog({ onClose, onAdd, type }: PlaceDialogProps) {
   );
 }
 
+// Helper to compress images before saving
+const compressImage = (file: File): Promise<string> => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onload = (event) => {
+      const img = new Image();
+      img.src = event.target?.result as string;
+      img.onload = () => {
+        const canvas = document.createElement("canvas");
+        // Resize to max 800px width/height while keeping aspect ratio
+        const MAX_WIDTH = 800;
+        const MAX_HEIGHT = 800;
+        let width = img.width;
+        let height = img.height;
+
+        if (width > height) {
+          if (width > MAX_WIDTH) {
+            height *= MAX_WIDTH / width;
+            width = MAX_WIDTH;
+          }
+        } else {
+          if (height > MAX_HEIGHT) {
+            width *= MAX_HEIGHT / height;
+            height = MAX_HEIGHT;
+          }
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext("2d");
+        ctx?.drawImage(img, 0, 0, width, height);
+        
+        // Compress to JPEG at 70% quality
+        // This usually reduces a 5MB photo to ~50-100KB
+        const dataUrl = canvas.toDataURL("image/jpeg", 0.7);
+        resolve(dataUrl);
+      };
+      img.onerror = (error) => reject(error);
+    };
+    reader.onerror = (error) => reject(error);
+  });
+};
+
 // Add this new component to handle "Who and When"
 function TripAuthorInfo({ 
   uid, 
@@ -521,25 +567,21 @@ function PhotoDialog({ onClose, onAdd }: PhotoDialogProps) {
     location: "",
   });
 
-  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // Inside PhotoDialog ...
+
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    const reader = new FileReader();
-
-    reader.onload = () => {
-      const result = reader.result;
-
-      // ✅ ensure it's actually a string before saving
-      if (typeof result === "string") {
-        setFormData(prev => ({
-          ...prev,
-          url: result,
-        }));
-      }
-    };
-
-    reader.readAsDataURL(file);
+    try {
+      const compressedBase64 = await compressImage(file);
+      setFormData(prev => ({
+        ...prev,
+        url: compressedBase64,
+      }));
+    } catch (err) {
+      console.error("Image compression failed", err);
+    }
   };
 
 
@@ -1270,23 +1312,21 @@ function NewTripDialog({ onClose, onCreate }: NewTripDialogProps) {
   });
 
 
-  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // Inside NewTripDialog ...
+
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    const reader = new FileReader();
-
-    reader.onload = (event: ProgressEvent<FileReader>) => {
-      const result = event.target?.result;
-      if (typeof result === "string") {
-        setFormData(prev => ({
-          ...prev,
-          imageUrl: result,   // ✅ correct field
-        }));
-      }
-    };
-
-    reader.readAsDataURL(file);
+    try {
+      const compressedBase64 = await compressImage(file);
+      setFormData(prev => ({
+        ...prev,
+        imageUrl: compressedBase64,
+      }));
+    } catch (err) {
+      console.error("Image compression failed", err);
+    }
   };
 
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
