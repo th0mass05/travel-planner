@@ -10,8 +10,7 @@ import useUserName from "./hooks/useUserName";
 import CreatorBadge from "./hooks/CreatorBadge";
 import { formatDistanceToNow } from "date-fns";
 import emailjs from "@emailjs/browser";
-
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback} from "react";
 import {
   Calendar,
   MapPin,
@@ -401,25 +400,7 @@ function PlaceDialog({ onClose, onAdd, type, initialData }: PlaceDialogProps) {
               placeholder="https://..."
             />
           </div>
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium mb-1">
-                Rating (optional)
-              </label>
-              <input
-                type="number"
-                step="0.1"
-                min="0"
-                max="5"
-                value={formData.rating}
-                onChange={(e) =>
-                  setFormData({ ...formData, rating: e.target.value })
-                }
-                className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg focus:border-gray-900 outline-none"
-                placeholder="e.g., 4.5"
-              />
-            </div>
-          </div>
+          
           <div>
             <label className="block text-sm font-medium mb-1">
               Image (optional)
@@ -721,7 +702,7 @@ function FlightDialog({ onClose, onAdd, initialData }: FlightDialogProps) {
                  <label className="block text-[10px] font-bold uppercase text-stone-500 mb-1">Airport</label>
                  <input
                     value={formData.departure}
-                    onChange={(e) => setFormData({ ...formData, departure: e.target.value })}
+                    onChange={(e) => setFormData({ ...formData, departure: e.target.value.toUpperCase() })}
                     className="w-full px-3 py-2 border border-stone-300 rounded-md focus:border-stone-900 outline-none text-sm font-bold uppercase"
                     placeholder="LHR"
                  />
@@ -732,7 +713,15 @@ function FlightDialog({ onClose, onAdd, initialData }: FlightDialogProps) {
                     <input
                       type="date"
                       value={formData.date}
-                      onChange={(e) => setFormData({ ...formData, date: e.target.value })}
+                      onChange={(e) => {
+                        const newDate = e.target.value;
+                        setFormData({ 
+                          ...formData, 
+                          date: newDate,
+                          // 👇 Auto-fill arrival date in the state if it's empty
+                          arrivalDate: formData.arrivalDate || newDate 
+                        });
+                      }}
                       className="w-full px-2 py-2 border border-stone-300 rounded-md focus:border-stone-900 outline-none text-sm"
                     />
                   </div>
@@ -759,7 +748,7 @@ function FlightDialog({ onClose, onAdd, initialData }: FlightDialogProps) {
                  <label className="block text-[10px] font-bold uppercase text-stone-500 mb-1">Airport</label>
                  <input
                     value={formData.arrival}
-                    onChange={(e) => setFormData({ ...formData, arrival: e.target.value })}
+                    onChange={(e) => setFormData({ ...formData, arrival: e.target.value.toUpperCase() })}
                     className="w-full px-3 py-2 border border-stone-300 rounded-md focus:border-stone-900 outline-none text-sm font-bold uppercase"
                     placeholder="JFK"
                  />
@@ -838,7 +827,8 @@ function FlightDialog({ onClose, onAdd, initialData }: FlightDialogProps) {
 
           <div className="flex gap-3 pt-4">
             <button
-              onClick={() => onAdd(formData)}
+              onClick={() => onAdd({ ...formData, arrivalDate: formData.arrivalDate || formData.date })}
+              
               className="flex-1 px-6 py-3 bg-stone-900 text-white font-bold rounded-lg hover:bg-stone-800 transition-colors shadow-lg"
             >
               {initialData ? "Save Changes" : "Add Flight"}
@@ -908,7 +898,15 @@ function HotelDialog({ onClose, onAdd, initialData }: HotelDialogProps) {
               <input
                 type="date"
                 value={formData.checkIn}
-                onChange={(e) => setFormData({ ...formData, checkIn: e.target.value })}
+                onChange={(e) => {
+                  const newDate = e.target.value;
+                  setFormData({ 
+                    ...formData, 
+                    checkIn: newDate,
+                    // 👇 Auto-fill check-out in the state if it's empty
+                    checkOut: formData.checkOut || newDate 
+                  });
+                }}
                 className="w-full px-4 py-2.5 border border-stone-300 rounded-lg focus:border-stone-900 outline-none"
               />
             </div>
@@ -982,7 +980,7 @@ function HotelDialog({ onClose, onAdd, initialData }: HotelDialogProps) {
 
           <div className="flex gap-3 pt-4">
             <button
-              onClick={() => onAdd(formData)}
+              onClick={() => onAdd({ ...formData, checkOut: formData.checkOut || formData.checkIn })}
               className="flex-1 px-6 py-3 bg-stone-900 text-white font-bold rounded-lg hover:bg-stone-800 transition-colors shadow-lg"
             >
               {initialData ? "Save Changes" : "Add Hotel"}
@@ -1294,7 +1292,7 @@ function TripDialog({ initialData, onClose, onSubmit }: TripDialogProps) {
   );
 
   const [loading, setLoading] = useState(false);
-
+  const [error, setError] = useState("");
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
@@ -1308,10 +1306,13 @@ function TripDialog({ initialData, onClose, onSubmit }: TripDialogProps) {
   };
 
   const handleSubmit = async () => {
+    setError(""); // 👈 Clear any previous errors
+
     if (!formData.destination || !formData.startDate || !formData.endDate) {
-      alert("Please fill in the destination and dates.");
+      setError("Please fill in the destination, start date, and end date."); // 👈 Nice inline error
       return;
     }
+    
     setLoading(true);
     await onSubmit(formData);
     setLoading(false);
@@ -1333,7 +1334,7 @@ function TripDialog({ initialData, onClose, onSubmit }: TripDialogProps) {
                 autoFocus
                 type="text"
                 value={formData.destination}
-                onChange={(e) => setFormData({ ...formData, destination: e.target.value })}
+                onChange={(e) => { setFormData({ ...formData, destination: e.target.value }); setError(""); }}
                 className="w-full px-4 py-2.5 border border-stone-300 rounded-lg focus:border-stone-900 outline-none"
                 placeholder="e.g. Kyoto"
               />
@@ -1408,7 +1409,11 @@ function TripDialog({ initialData, onClose, onSubmit }: TripDialogProps) {
               </div>
             </div>
           </div>
-
+          {error && (
+            <div className="p-3 bg-rose-50 border border-rose-100 text-rose-600 text-sm font-medium rounded-lg animate-in fade-in slide-in-from-bottom-2">
+              {error}
+            </div>
+          )}
           {/* Buttons */}
           <div className="flex gap-3 pt-4">
             <button
@@ -1667,11 +1672,13 @@ const addToItineraryStorage = async (
 function FlightCard({
   flight,
   onConfirm,
+  onUnconfirm,
   onEdit,
   onDelete
 }: {
   flight: StoredFlight;
   onConfirm: () => void;
+  onUnconfirm: () => void;
   onEdit: () => void;
   onDelete: () => void;
 }) {
@@ -1772,6 +1779,14 @@ function FlightCard({
 
       {/* Footer Actions */}
       <div className="flex justify-end gap-3 text-xs font-bold uppercase tracking-wide border-t border-stone-100 pt-4 mt-auto">
+        {flight.status === "confirmed" && (
+           <button 
+             onClick={(e) => { e.stopPropagation(); onUnconfirm(); }} 
+             className="text-amber-500 hover:text-amber-700 transition-colors"
+           >
+             Unconfirm
+           </button>
+        )}
         <button 
           onClick={(e) => { e.stopPropagation(); onEdit(); }} 
           className="text-stone-400 hover:text-stone-900 transition-colors"
@@ -3150,16 +3165,14 @@ function PlacesTab({ tripId, type }: PlacesTabProps) {
 
 
   const handleVisitedToggle = async (place: StoredPlace) => {
-
     // ===== UNVISIT =====
     if (place.visited) {
-
       const updated = { ...place, visited:false };
       delete updated.cost;
       delete updated.paidBy;
+      delete updated.rating; // 👈 ADD THIS LINE
 
       await storage.set(`place:${tripId}:${type}:${place.id}`, updated);
-      
       return;
     }
 
@@ -3203,16 +3216,16 @@ function PlacesTab({ tripId, type }: PlacesTabProps) {
     await removeFromItineraryBySource(tripId, `place:${place.id}`);
 
     // 2. Update Place status
-    // ⭐ KEY CHANGE: Set visited to false and remove cost data
     const updated = { 
       ...place, 
       confirmed: false, 
       visited: false 
     };
     
-    // Clean up financial data since it's no longer "visited"
+    // Clean up financial & rating data since it's no longer "visited"
     delete updated.cost;
     delete updated.paidBy;
+    delete updated.rating; // 👈 ADD THIS LINE
 
     await storage.set(`place:${tripId}:${type}:${place.id}`, updated);
   };
@@ -3386,15 +3399,20 @@ function PlacesTab({ tripId, type }: PlacesTabProps) {
       )}
       {costDialogPlace && (
         <CostDialog
-          item={{ item: costDialogPlace.name }}
+          item={{ 
+            item: costDialogPlace.name,
+            currentRating: costDialogPlace.rating // Pass existing rating if any
+          }}
           tripId={tripId}
+          showRating={true} // 👈 Turn on the rating field!
           onClose={() => setCostDialogPlace(null)}
-          onSave={async (cost, paidBy) => {
+          onSave={async (cost, paidBy, rating) => { // 👈 Accept the rating
             const updated: StoredPlace = {
               ...costDialogPlace!,
               visited: true,
               cost: Number(cost),
-              paidBy
+              paidBy,
+              rating // 👈 Save the rating to the place
             };
 
             await storage.set(
@@ -3402,7 +3420,6 @@ function PlacesTab({ tripId, type }: PlacesTabProps) {
               updated
             );
 
-            // ⭐ FIX: Only ask for date/time if it hasn't been confirmed yet
             if (!updated.confirmed) {
               setConfirmingPlace(updated);
             }
@@ -3450,16 +3467,23 @@ function SimpleCostDialog({
   onSave: (amount: number) => void;
 }) {
   const [cost, setCost] = useState("");
+  const [error, setError] = useState("");
 
   const handleSave = () => {
+    setError(""); // Clear previous errors
     const val = parseFloat(cost);
+    
+    if (val < 0) {
+      setError("Cost cannot be negative."); // 👈 Inline error
+      return;
+    }
+
     if (!isNaN(val)) {
       onSave(val);
     } else {
       onSave(0);
     }
   };
-
   return (
     <div className="fixed inset-0 bg-stone-900/40 backdrop-blur-sm flex items-center justify-center p-4 z-50">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-8 animate-in zoom-in-95 duration-200">
@@ -3475,10 +3499,11 @@ function SimpleCostDialog({
           <span className="absolute left-4 top-3 text-stone-400 font-serif text-lg">£</span>
           <input
             type="number"
+            min="0"
             autoFocus
             placeholder="0.00"
             value={cost}
-            onChange={(e) => setCost(e.target.value)}
+            onChange={(e) => { setCost(e.target.value); setError(""); }}
             onKeyDown={(e) => {
               if (e.key === "Enter") handleSave();
               if (e.key === "Escape") onClose();
@@ -3486,7 +3511,11 @@ function SimpleCostDialog({
             className="w-full border border-stone-300 rounded-xl pl-8 pr-4 py-3 text-2xl font-serif focus:border-stone-900 focus:ring-1 focus:ring-stone-900 outline-none transition-all placeholder:text-stone-200 text-stone-900"
           />
         </div>
-
+        {error && (
+          <div className="text-rose-600 text-sm font-medium mb-4 text-center animate-in fade-in">
+            {error}
+          </div>
+        )}
         <div className="flex gap-3">
           <button
             onClick={handleSave}
@@ -3727,20 +3756,24 @@ function CostDialog({
   item,
   tripId,
   onClose,
-  onSave
+  onSave,
+  showRating = false // 👈 NEW: Controls if rating shows
 }:{
-  item:{ item:string },
+  item:{ item:string, currentRating?: string }, // 👈 NEW: Accepts existing rating
   tripId:number,
+  showRating?: boolean,
   onClose:()=>void,
-  onSave:(cost:string, paidBy:{uid:string,amount:number}[])=>void
+  onSave:(cost:string, paidBy:{uid:string,amount:number}[], rating?: string)=>void // 👈 NEW: Passes rating back
 }){
   const [noCost,setNoCost] = useState(false);
-
   const [cost,setCost]=useState("");
+  const [rating, setRating] = useState(item.currentRating || ""); // 👈 NEW: Rating state
   const [members,setMembers]=useState<string[]>([]);
   const [selected,setSelected]=useState<string[]>([]);
   const [mode,setMode]=useState<"equal"|"custom">("equal");
   const [custom,setCustom]=useState<Record<string,string>>({});
+  const [hoverRating, setHoverRating] = useState(0);
+  const [error, setError] = useState("");
 
   useEffect(()=>{
     const load=async()=>{
@@ -3758,40 +3791,43 @@ function CostDialog({
   };
 
   const save = async () => {
-
+    setError(""); // 👈 Clear any previous errors first
     if(!noCost && !cost) return;
 
     const numericCost = noCost ? 0 : Number(cost || 0);
 
+    if (numericCost < 0) {
+      setError("Cost cannot be negative."); // 👈 Nice inline error
+      return;
+    }
+
+    if (!noCost && selected.length === 0) {
+      setError("Please select at least one person who paid."); // 👈 Nice inline error
+      return;
+    }
+
     let paidBy:{uid:string;amount:number}[] = [];
 
     if(!noCost){
-
       if(mode==="equal"){
-
         const each = numericCost / selected.length;
-
         paidBy = selected.map(uid=>({
           uid,
           amount:each
         }));
-
       }else{
-
         paidBy = selected.map(uid=>({
           uid,
           amount:Number(custom[uid] || 0)
         }));
-
       }
-
     }
 
     await onSave(
       String(numericCost),
-      paidBy
+      paidBy,
+      rating
     );
-
   };
 
 
@@ -3800,6 +3836,38 @@ function CostDialog({
     <div className="bg-white rounded-xl shadow-xl w-[460px] p-6 space-y-5">
       
       <h3 className="text-xl font-serif">Add cost</h3>
+      {/* INTERACTIVE 5-STAR RATING */}
+      {showRating && (
+        <div className="mb-2">
+           <p className="font-medium mb-2">Rating</p>
+           <div className="flex gap-1">
+             {[1, 2, 3, 4, 5].map((star) => {
+               const currentVal = Number(rating) || 0;
+               // Star is active if it's <= the hovered star, OR <= the saved rating
+               const isActive = star <= (hoverRating || currentVal);
+               
+               return (
+                 <button
+                   key={star}
+                   type="button" // Prevents accidentally submitting forms
+                   onClick={() => setRating(String(star))}
+                   onMouseEnter={() => setHoverRating(star)}
+                   onMouseLeave={() => setHoverRating(0)}
+                   className={`p-1 transition-all hover:scale-110 ${
+                     isActive ? "text-amber-400" : "text-stone-200"
+                   }`}
+                 >
+                   <Star 
+                     size={28} 
+                     className={isActive ? "fill-amber-400" : ""} 
+                     strokeWidth={isActive ? 0 : 2} 
+                   />
+                 </button>
+               );
+             })}
+           </div>
+        </div>
+      )}
       <label className="flex items-center gap-2 text-sm font-medium">
         <input
           type="checkbox"
@@ -3812,10 +3880,11 @@ function CostDialog({
 
       <input
         type="number"
+        min="0"
         placeholder="Total cost"
         value={noCost ? "0" : cost}
         disabled={noCost}
-        onChange={e=>setCost(e.target.value)}
+        onChange={e => { setCost(e.target.value); setError(""); }}
         className="w-full border-2 rounded-lg px-3 py-2 disabled:bg-gray-100"
       />
 
@@ -3830,7 +3899,7 @@ function CostDialog({
               <input
                 type="checkbox"
                 checked={selected.includes(uid)}
-                onChange={()=>toggle(uid)}
+                onChange={() => { toggle(uid); setError(""); }}
               />
               <CreatorBadge uid={uid}/>
             </label>
@@ -3876,8 +3945,14 @@ function CostDialog({
           ))}
         </div>
       )}
+      
+      {error && (
+        <div className="text-rose-600 text-sm font-medium bg-rose-50 p-3 rounded-lg border border-rose-100 animate-in fade-in slide-in-from-bottom-2">
+          {error}
+        </div>
+      )}
 
-      <div className="flex justify-end gap-2">
+      <div className="flex justify-end gap-2 mt-2">
         <button onClick={onClose} className="border px-4 py-2 rounded">Cancel</button>
         <button onClick={save} className="bg-gray-900 text-white px-4 py-2 rounded">Save</button>
       </div>
@@ -4108,11 +4183,13 @@ function ScrapbookTab({ tripId }: ScrapbookTabProps) {
 function HotelCard({
   hotel,
   onConfirm,
+  onUnconfirm,
   onEdit,
   onDelete
 }: {
   hotel: StoredHotel;
   onConfirm: () => void;
+  onUnconfirm: () => void;
   onEdit: () => void;
   onDelete: () => void;
 }) {
@@ -4185,6 +4262,14 @@ function HotelCard({
 
       {/* Footer Actions */}
       <div className="flex justify-end gap-3 text-xs font-bold uppercase tracking-wide border-t border-stone-100 pt-4 mt-auto">
+        {hotel.status === "confirmed" && (
+           <button 
+             onClick={(e) => { e.stopPropagation(); onUnconfirm(); }} 
+             className="text-amber-500 hover:text-amber-700 transition-colors"
+           >
+             Unconfirm
+           </button>
+        )}
         <button onClick={(e) => { e.stopPropagation(); onEdit(); }} className="text-stone-400 hover:text-stone-900 transition-colors">Edit</button>
         <button onClick={(e) => { e.stopPropagation(); onDelete(); }} className="text-red-300 hover:text-red-600 transition-colors">Delete</button>
       </div>
@@ -4312,11 +4397,13 @@ function DocumentDialog({ onClose, onAdd }: DocumentDialogProps) {
 function TransportCard({
   transport,
   onConfirm,
+  onUnconfirm,
   onEdit,
   onDelete
 }: {
   transport: StoredTransport;
   onConfirm: () => void;
+  onUnconfirm: () => void;
   onEdit: () => void;
   onDelete: () => void;
 }) {
@@ -4367,6 +4454,14 @@ function TransportCard({
       </div>
 
       <div className="flex justify-end gap-3 text-xs font-bold uppercase tracking-wide border-t border-stone-100 pt-4 mt-auto">
+        {transport.status === "confirmed" && (
+           <button 
+             onClick={(e) => { e.stopPropagation(); onUnconfirm(); }} 
+             className="text-amber-500 hover:text-amber-700 transition-colors"
+           >
+             Unconfirm
+           </button>
+        )}
         <button onClick={(e) => { e.stopPropagation(); onEdit(); }} className="text-stone-400 hover:text-stone-900">Edit</button>
         <button onClick={(e) => { e.stopPropagation(); onDelete(); }} className="text-red-300 hover:text-red-600">Delete</button>
       </div>
@@ -4429,7 +4524,16 @@ function AdminTab({ tripId }: { tripId: number }) {
     status: "Member" | "Invited";
     isMe?: boolean;
   };
-  
+  const addToItinerary = async (date: string, item: Omit<ItineraryItem, 'id'>) => {
+    if (!date) return;
+    const key = `itinerary:${tripId}:date:${date}`;
+    const existing = await storage.get(key);
+    const targetDay = existing?.value ? JSON.parse(existing.value) : { date, items: [] };
+
+    targetDay.items.push({ id: Date.now(), ...item });
+    targetDay.items.sort((a: any, b: any) => (a.time || "").localeCompare(b.time || ""));
+    await storage.set(key, targetDay);
+  };
   const [memberList, setMemberList] = useState<MemberDisplay[]>([]);
   const [inviteStatus, setInviteStatus] = useState<"idle" | "success" | "error">("idle");
   const [inviteMsg, setInviteMsg] = useState("");
@@ -4512,7 +4616,29 @@ function AdminTab({ tripId }: { tripId: number }) {
       unsubPacking();
     };
   }, [tripId, packingMode]);
+  const unconfirmFlight = async (flight: StoredFlight) => {
+    await removeFromItineraryBySource(tripId, `flight:${flight.id}`);
+    const updated = { ...flight, status: "potential" as any };
+    delete updated.cost;
+    delete updated.paidBy;
+    await storage.set(`flight:${tripId}:${flight.id}`, updated);
+  };
 
+  const unconfirmHotel = async (hotel: StoredHotel) => {
+    await removeFromItineraryBySource(tripId, `hotel:${hotel.id}`);
+    const updated = { ...hotel, status: "potential" as any };
+    delete updated.cost;
+    delete updated.paidBy;
+    await storage.set(`hotel:${tripId}:${hotel.id}`, updated);
+  };
+
+  const unconfirmTransport = async (transport: StoredTransport) => {
+    await removeFromItineraryBySource(tripId, `transport:${transport.id}`);
+    const updated = { ...transport, status: "potential" as any };
+    delete updated.cost;
+    delete updated.paidBy;
+    await storage.set(`transport:${tripId}:${transport.id}`, updated);
+  };
   // --- ACTIONS ---
 
   // FLIGHTS
@@ -4853,6 +4979,7 @@ function AdminTab({ tripId }: { tripId: number }) {
                 key={flight.id}
                 flight={flight}
                 onConfirm={() => setCostDialogFlight(flight)}
+                onUnconfirm={() => unconfirmFlight(flight)}
                 onDelete={() => deleteFlight(flight.id)}
                 onEdit={() => {
                   setEditingFlight(flight);
@@ -4884,6 +5011,7 @@ function AdminTab({ tripId }: { tripId: number }) {
                 key={hotel.id}
                 hotel={hotel}
                 onConfirm={() => setCostDialogHotel(hotel)}
+                onUnconfirm={() => unconfirmHotel(hotel)}
                 onDelete={() => deleteHotel(hotel.id)}
                 onEdit={() => {
                   setEditingHotel(hotel);
@@ -4915,6 +5043,7 @@ function AdminTab({ tripId }: { tripId: number }) {
                 key={t.id}
                 transport={t}
                 onConfirm={() => setCostDialogTransport(t)}
+                onUnconfirm={() => unconfirmTransport(t)}
                 onDelete={() => deleteTransport(t.id)}
                 onEdit={() => {
                   setEditingTransport(t);
@@ -5111,6 +5240,15 @@ function AdminTab({ tripId }: { tripId: number }) {
           onSave={async (cost, paidBy) => {
             const updated = { ...costDialogFlight, status: "confirmed", cost, paidBy };
             await storage.set(`flight:${tripId}:${costDialogFlight.id}`, updated);
+            await addToItinerary(updated.date, {
+              time: updated.time || "",
+              activity: `Flight: ${updated.airline} ${updated.flightNumber}`,
+              location: updated.departure,
+              notes: `Arriving at ${updated.arrival}`,
+              iconType: "flight",
+              sourceId: `flight:${updated.id}`,
+              createdAt: new Date().toISOString()
+            });
             setCostDialogFlight(null);
           }}
         />
@@ -5124,6 +5262,15 @@ function AdminTab({ tripId }: { tripId: number }) {
           onSave={async (cost, paidBy) => {
             const updated = { ...costDialogHotel, status: "confirmed", cost, paidBy };
             await storage.set(`hotel:${tripId}:${costDialogHotel.id}`, updated);
+            await addToItinerary(updated.checkIn, {
+              time: "15:00", // Default standard check-in time
+              activity: `Check-in: ${updated.name}`,
+              location: updated.address,
+              notes: `Conf: ${updated.confirmationNumber || "N/A"}`,
+              iconType: "hotel",
+              sourceId: `hotel:${updated.id}`,
+              createdAt: new Date().toISOString()
+            });
             setCostDialogHotel(null);
           }}
         />
@@ -5137,6 +5284,15 @@ function AdminTab({ tripId }: { tripId: number }) {
           onSave={async (cost, paidBy) => {
             const updated = { ...costDialogTransport, status: "confirmed", cost, paidBy };
             await storage.set(`transport:${tripId}:${costDialogTransport.id}`, updated);
+            await addToItinerary(updated.date || "", {
+              time: updated.time || "",
+              activity: `${updated.type} to ${updated.arrival}`,
+              location: updated.departure,
+              notes: updated.details || "",
+              iconType: "transport",
+              sourceId: `transport:${updated.id}`,
+              createdAt: new Date().toISOString()
+            });
             setCostDialogTransport(null);
           }}
         />
@@ -5144,7 +5300,10 @@ function AdminTab({ tripId }: { tripId: number }) {
     </div>
   );
 }
+
+// Assuming imports for auth, storage, Plus icon, etc. exist
 function BudgetTab({ tripId }: { tripId: number }) {
+  // --- TYPES ---
   type BudgetLimits = {
     total: number;
     accommodation: number;
@@ -5155,32 +5314,18 @@ function BudgetTab({ tripId }: { tripId: number }) {
     other: number;
   };
 
-  const [limits, setLimits] = useState<BudgetLimits>({
-    total: 0,
-    accommodation: 0,
-    travel: 0,
-    food: 0,
-    shopping: 0,
-    miscellaneous: 0,
-    other: 0,
-  });
-
-  const [editingBudget, setEditingBudget] = useState(false);
-  const [showExpenseDialog, setShowExpenseDialog] = useState(false);
-
-  type BudgetMode = "shared" | "mine";
-  const [mode, setMode] = useState<BudgetMode>("shared");
-
   type BudgetItem = {
     label: string;
     amount: number;
+    id?: number;
+    sourceKey?: string;
   };
 
   type BudgetCategory = {
     total: number;
     items: BudgetItem[];
   };
-  
+
   type BudgetState = {
     accommodation: BudgetCategory;
     travel: BudgetCategory;
@@ -5189,6 +5334,12 @@ function BudgetTab({ tripId }: { tripId: number }) {
     miscellaneous: BudgetCategory;
     other: BudgetCategory;
   };
+
+  // --- STATE ---
+  const [loading, setLoading] = useState(true);
+  const [limits, setLimits] = useState<BudgetLimits>({
+    total: 0, accommodation: 0, travel: 0, food: 0, shopping: 0, miscellaneous: 0, other: 0,
+  });
 
   const [budget, setBudget] = useState<BudgetState>({
     accommodation: { total: 0, items: [] },
@@ -5199,51 +5350,65 @@ function BudgetTab({ tripId }: { tripId: number }) {
     other: { total: 0, items: [] },
   });
 
+  const [editingBudget, setEditingBudget] = useState(false);
+  const [showExpenseDialog, setShowExpenseDialog] = useState(false);
+  const [mode, setMode] = useState<"shared" | "mine">("shared");
+
   const myUid = auth.currentUser?.uid;
 
-  // ✅ FIX 1: Robust price parser that handles Numbers AND Strings
-  const parsePrice = (p?: string | number) => {
-    if (typeof p === "number") return p;
+  // --- HELPERS ---
+  const handleDeleteExpense = async (sourceKey: string) => {
+    if (!confirm("Delete this expense?")) return;
+    await deleteKey(sourceKey); // Uses your existing global deleteKey helper
+    await loadData(); // Instantly refresh the budget
+  };
+  const toCents = (p?: string | number): number => {
+    if (typeof p === "number") return Math.round(p * 100);
     if (!p) return 0;
-    // robustly handle string inputs like "£1,200.00" or "$500"
-    return Number(String(p).replace(/[^\d.]/g, "")) || 0;
+    const clean = String(p).replace(/[^\d.-]/g, "");
+    const parsed = parseFloat(clean);
+    return isNaN(parsed) ? 0 : Math.round(parsed * 100);
   };
 
-  const getMyShare = (cost: string | number, paidBy?: { uid: string; amount: number }[]) => {
-    // If we have explicit split data, use that
-    if (paidBy && myUid) {
-      const me = paidBy.find((p) => p.uid === myUid);
-      return me?.amount || 0;
-    }
-    // Fallback: if no split data, parse the full cost
-    return parsePrice(cost);
-  };
+  const fromCents = (cents: number): number => cents / 100;
 
-  const loadLimits = async () => {
+  // --- DATA LOADING ---
+  const loadData = useCallback(async () => {
+    let isActive = true; 
+    setLoading(true);
+
     try {
-      const snap = await storage.get(`budgetLimits:${tripId}:${mode}`);
-      if (snap?.value) {
-        setLimits(JSON.parse(snap.value));
+      const [
+        limitSnap,
+        hotels,
+        flights,
+        transports,
+        eats,
+        visits,
+        shopping,
+        sharedExpenses,
+        personalExpenses
+      ] = await Promise.all([
+        storage.get(`budgetLimits:${tripId}:${mode}`),
+        storage.getAll<StoredHotel>(`hotel:${tripId}:`),
+        storage.getAll<StoredFlight>(`flight:${tripId}:`),
+        storage.getAll<StoredTransport>(`transport:${tripId}:`),
+        storage.getAll<StoredPlace>(`place:${tripId}:eat:`),
+        storage.getAll<StoredPlace>(`place:${tripId}:visit:`),
+        (mode === "mine" && myUid) ? storage.getAll<any>(`shopping:${tripId}:user:${myUid}:`) : Promise.resolve([]),
+        (mode === "shared") ? storage.getAll<any>(`expense:${tripId}:shared:`) : Promise.resolve([]),
+        (mode === "mine" && myUid) ? storage.getAll<any>(`expense:${tripId}:user:${myUid}:`) : Promise.resolve([])
+      ]);
+
+      if (!isActive) return;
+      
+      if (limitSnap?.value) {
+        setLimits(JSON.parse(limitSnap.value));
       } else {
-        // Reset limits if none found
-        setLimits({
-          total: 0,
-          accommodation: 0,
-          travel: 0,
-          food: 0,
-          shopping: 0,
-          miscellaneous: 0,
-          other: 0,
-        });
+        setLimits({ total: 0, accommodation: 0, travel: 0, food: 0, shopping: 0, miscellaneous: 0, other: 0 });
       }
-    } catch (e) {
-      console.error("Error loading limits", e);
-    }
-  };
 
-  const loadBudget = async () => {
-    try {
-      const newBudget: BudgetState = {
+      const newBudgetState: any = {
         accommodation: { total: 0, items: [] },
         travel: { total: 0, items: [] },
         food: { total: 0, items: [] },
@@ -5252,123 +5417,154 @@ function BudgetTab({ tripId }: { tripId: number }) {
         other: { total: 0, items: [] },
       };
 
-      const addItem = (
-        cat: keyof typeof newBudget,
+      const processItem = (
+        category: keyof BudgetState,
         label: string,
         cost: string | number,
-        paidBy?: any
+        paidBy?: { uid: string; amount: number }[],
+        manualData?: { id: number, sourceKey: string } // 👈 NEW
       ) => {
-        let amount = 0;
-        if (mode === "mine") {
-          if (!myUid) return;
-          if (paidBy && Array.isArray(paidBy)) {
-             const me = paidBy.find((p: any) => p.uid === myUid);
-             if (me) amount = me.amount;
-          } 
-        } else {
-          amount = parsePrice(cost);
+        let cents = 0;
+
+        if (mode === "shared") {
+          cents = toCents(cost);
+        } else if (mode === "mine" && myUid) {
+          if (paidBy && Array.isArray(paidBy) && paidBy.length > 0) {
+            const me = paidBy.find(p => p.uid === myUid);
+            if (me) cents = toCents(me.amount);
+          } else {
+             cents = 0; 
+          }
         }
 
-        if (amount > 0) {
-          newBudget[cat].total += amount;
-          newBudget[cat].items.push({ label, amount });
+        if (cents !== 0) {
+           newBudgetState[category].total += cents;
+           newBudgetState[category].items.push({ 
+             label, 
+             amount: fromCents(cents),
+             id: manualData?.id,              // 👈 NEW
+             sourceKey: manualData?.sourceKey // 👈 NEW
+           });
         }
       };
 
-      // --- 1. HOTELS ---
-      const hotels = await storage.getAll<StoredHotel>(`hotel:${tripId}:`);
       hotels.forEach(h => {
         if (h.status === "confirmed") {
-          // Use ?? "" to ensure we never pass undefined to addItem
-          addItem("accommodation", h.name || "Hotel", h.cost ?? h.price ?? "", h.paidBy);
+            processItem("accommodation", h.name || "Hotel", h.cost ?? h.price ?? 0, h.paidBy);
         }
       });
 
-      // --- 2. FLIGHTS ---
-      const flights = await storage.getAll<StoredFlight>(`flight:${tripId}:`);
       flights.forEach(f => {
         if (f.status === "confirmed") {
-          addItem("travel", `${f.airline} ${f.flightNumber}`, f.cost ?? f.price ?? "", f.paidBy);
+            processItem("travel", `${f.airline} ${f.flightNumber}`, f.cost ?? f.price ?? 0, f.paidBy);
         }
       });
-      
-      // --- 3. TRANSPORT ---
-      const transports = await storage.getAll<StoredTransport>(`transport:${tripId}:`);
+
       transports.forEach(t => {
         if (t.status === "confirmed") {
-          addItem("travel", `${t.type} ${t.code || ""}`, t.cost ?? t.price ?? "", t.paidBy);
+            processItem("travel", `${t.type} ${t.code || ""}`, t.cost ?? t.price ?? 0, t.paidBy);
         }
       });
-
-      // --- 4. SHOPPING (Personal Only) ---
-      if (mode === "mine" && myUid) {
-        const shoppingItems = await storage.getAll<any>(`shopping:${tripId}:user:${myUid}:`);
-        shoppingItems.forEach(s => {
-            if (s.bought && s.cost) {
-                newBudget.shopping.total += Number(s.cost);
-                newBudget.shopping.items.push({ 
-                  label: s.item, 
-                  amount: Number(s.cost) 
-                });
-            }
-        });
-      }
-
-      // --- 5. PLACES ---
-      const [eats, visits] = await Promise.all([
-          storage.getAll<StoredPlace>(`place:${tripId}:eat:`),
-          storage.getAll<StoredPlace>(`place:${tripId}:visit:`)
-      ]);
 
       eats.forEach(p => {
         if (p.visited) {
-            addItem("food", p.name, p.cost ?? p.price ?? "", p.paidBy);
+            processItem("food", p.name, p.cost ?? p.price ?? 0, p.paidBy);
         }
       });
 
       visits.forEach(p => {
         if (p.visited) {
-            addItem("other", p.name, p.cost ?? p.price ?? "", p.paidBy);
+            processItem("other", p.name, p.cost ?? p.price ?? 0, p.paidBy);
         }
       });
 
-      // --- 6. MANUAL EXPENSES ---
-      if (mode === "shared") {
-        const sharedExpenses = await storage.getAll<any>(`expense:${tripId}:shared:`);
-        sharedExpenses.forEach(e => {
-             addItem((e.category as keyof BudgetState) || "other", e.label, e.amount, e.paidBy);
-        });
-      }
+      shopping.forEach(s => {
+        if (s.bought && s.cost) {
+          const cents = toCents(s.cost);
+          newBudgetState.shopping.total += cents;
+          newBudgetState.shopping.items.push({ label: s.item, amount: fromCents(cents) });
+        }
+      });
 
-      if (mode === "mine" && myUid) {
-        const myExpenses = await storage.getAll<any>(`expense:${tripId}:user:${myUid}:`);
-        myExpenses.forEach(e => {
-            addItem((e.category as keyof BudgetState) || "other", e.label, e.amount);
-        });
-      }
+      const processManual = (list: any[], forceMine: boolean) => {
+        list.forEach(e => {
+            const cat = (e.category && newBudgetState[e.category]) ? e.category : "other";
+            
+            // 👈 NEW: Construct the exact storage key so we can delete it later
+            const sourceKey = mode === "shared" 
+                ? `expense:${tripId}:shared:${e.id}`
+                : `expense:${tripId}:user:${myUid}:${e.id}`;
 
-      setBudget(newBudget);
-    } catch (err) {
-      console.error("Budget calculation failed:", err);
+            if (forceMine) {
+                const cents = toCents(e.amount);
+                newBudgetState[cat].total += cents;
+                newBudgetState[cat].items.push({ 
+                  label: e.label, 
+                  amount: fromCents(cents),
+                  id: e.id,             // 👈 NEW
+                  sourceKey: sourceKey  // 👈 NEW
+                });
+            } else {
+                processItem(cat, e.label, e.amount, e.paidBy, { id: e.id, sourceKey }); // 👈 Pass to helper
+            }
+        });
+      };
+
+      processManual(sharedExpenses, false);
+      processManual(personalExpenses, true);
+
+      Object.keys(newBudgetState).forEach(k => {
+          newBudgetState[k].total = fromCents(newBudgetState[k].total);
+      });
+
+      setBudget(newBudgetState);
+      
+    } catch (e) {
+      console.error("Error loading budget", e);
+    } finally {
+      if (isActive) setLoading(false);
     }
-  };
+
+    
+  }, [tripId, mode, myUid]);
 
   useEffect(() => {
-    loadBudget();
-    loadLimits();
-  }, [tripId, mode]);
+    loadData();
+  }, [loadData]);
 
-  const saveLimits = async (newLimits: BudgetLimits) => {
+
+  // --- DEBOUNCED SAVING ---
+  const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  const handleLimitChange = (field: keyof BudgetLimits, value: number) => {
+    const newLimits = { ...limits, [field]: value };
     setLimits(newLimits);
-    await storage.set(`budgetLimits:${tripId}:${mode}`, newLimits);
+
+    if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+    
+    saveTimeoutRef.current = setTimeout(() => {
+        storage.set(`budgetLimits:${tripId}:${mode}`, newLimits).catch(console.error);
+    }, 500);
   };
 
   const totalSpent = Object.values(budget).reduce((a, b) => a + b.total, 0);
   const totalRemaining = limits.total - totalSpent;
 
+  // ✅ FIXED CALCULATION LOGIC
+  // 1. Iterate over known budget categories (accommodation, travel, etc) NOT 'limits' keys
+  // 2. Force Number() on every value to prevent string concatenation bug
+  const subLimitsTotal = Object.keys(budget).reduce((sum, category) => {
+    const val = limits[category as keyof BudgetLimits];
+    return sum + (Number(val) || 0);
+  }, 0);
+    
+  // 3. Force Number() on comparison
+  const isOverCap = subLimitsTotal > (Number(limits.total) || 0);
+
   return (
-    <div className="space-y-8 max-w-3xl mx-auto"> {/* Centered layout */}
+    <div className="space-y-8 max-w-3xl mx-auto">
       
+      {/* HEADER */}
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 border-b border-stone-100 pb-5">
         <div>
            <h2 className="text-3xl font-serif text-stone-900">Financials</h2>
@@ -5396,186 +5592,172 @@ function BudgetTab({ tripId }: { tripId: number }) {
         </div>
       </div>
 
-      {/* Action Bar */}
-      <div className="flex justify-end gap-3">
-        <button
-          onClick={() => setEditingBudget((v) => !v)}
-          className="px-4 py-2 text-stone-500 hover:text-stone-900 text-sm font-medium transition-colors"
-        >
-          {editingBudget ? "Done Editing" : "Adjust Limits"}
-        </button>
-        <button
-          onClick={() => setShowExpenseDialog(true)}
-          className="px-5 py-2 bg-stone-900 text-white rounded-full hover:bg-stone-800 text-sm font-bold shadow-lg hover:shadow-xl transition-all flex items-center gap-2"
-        >
-          <Plus size={16} /> Add Expense
-        </button>
-      </div>
-
-      {/* Budget Summary Card */}
-      {!editingBudget && limits.total > 0 && (
-        <div className="bg-stone-900 text-white rounded-2xl p-8 shadow-xl relative overflow-hidden">
-           {/* Decorative circle */}
-           <div className="absolute -top-10 -right-10 w-40 h-40 bg-white/5 rounded-full blur-2xl" />
-           
-           <div className="relative z-10">
-             <div className="text-stone-400 text-sm font-bold uppercase tracking-widest mb-1">Remaining Budget</div>
-             <div className="text-5xl font-serif mb-6">£{totalRemaining.toFixed(2)}</div>
-             
-             <div className="flex gap-8 border-t border-white/10 pt-4">
-                <div>
-                   <div className="text-xs text-stone-500 uppercase font-bold">Total Budget</div>
-                   <div className="text-lg">£{limits.total.toFixed(2)}</div>
-                </div>
-                <div>
-                   <div className="text-xs text-stone-500 uppercase font-bold">Total Spent</div>
-                   <div className="text-lg">£{totalSpent.toFixed(2)}</div>
-                </div>
-             </div>
-           </div>
-        </div>
-      )}
-
-      {/* Limits Editor */}
-      {editingBudget && (
-        <div className="bg-stone-50 rounded-xl p-6 border border-stone-200 animate-in fade-in slide-in-from-top-2">
-          <h4 className="font-serif text-lg mb-4 text-stone-900">Set Budget Limits</h4>
-          <div className="grid gap-4">
-             <div className="flex justify-between items-center bg-white p-3 rounded-lg border border-stone-200">
-                <span className="font-bold text-stone-700">Total Cap</span>
-                <input
-                  type="number"
-                  value={limits.total}
-                  onChange={(e) => saveLimits({ ...limits, total: Number(e.target.value) })}
-                  className="w-32 text-right outline-none font-serif text-lg"
-                />
-             </div>
-             <div className="h-px bg-stone-200 my-2" />
-             {Object.keys(budget).map((cat) => (
-                <div key={cat} className="flex justify-between items-center text-sm">
-                   <span className="capitalize text-stone-600">{cat}</span>
-                   <div className="flex items-center gap-2">
-                      <span className="text-stone-400">£</span>
-                      <input
-                        type="number"
-                        value={limits[cat as keyof BudgetLimits]}
-                        onChange={(e) => saveLimits({ ...limits, [cat]: Number(e.target.value) })}
-                        className="w-24 text-right bg-transparent border-b border-stone-300 focus:border-stone-900 outline-none transition-colors"
-                      />
-                   </div>
-                </div>
-             ))}
+      {/* Loading State */}
+      {loading && (
+          <div className="py-12 text-center text-stone-400 animate-pulse">
+              Calculating financials...
           </div>
-        </div>
       )}
 
-      {/* Detailed Breakdown */}
-      <div className="bg-white border border-stone-200 rounded-2xl p-8 shadow-sm">
-        <h3 className="font-serif text-xl mb-6 border-b border-stone-100 pb-2">Expenses Breakdown</h3>
-        <div className="space-y-8">
-          {Object.entries(budget).map(([name, data]) => (
-            <div key={name}>
-               <div className="flex justify-between items-baseline mb-2">
-                  <span className="text-stone-400 text-xs font-bold uppercase tracking-wider">{name}</span>
-                  <span className="font-serif text-lg font-medium text-stone-900">£{data.total.toFixed(2)}</span>
-               </div>
-               
-               {data.items.length > 0 ? (
-                 <div className="bg-stone-50 rounded-lg p-3 space-y-2">
-                    {data.items.map((i, idx) => (
-                      <div key={idx} className="flex justify-between text-sm text-stone-600">
-                        <span>{i.label}</span>
-                        <span className="font-mono text-stone-500">£{i.amount.toFixed(2)}</span>
-                      </div>
-                    ))}
-                 </div>
-               ) : (
-                 <div className="h-1 bg-stone-100 rounded-full overflow-hidden">
-                    {/* Empty state bar */}
-                 </div>
-               )}
+      {!loading && (
+        <>
+            {/* Action Bar */}
+            <div className="flex justify-end gap-3">
+                <button
+                  onClick={() => {
+                    // ✅ FIX: Prevent closing if limits are invalid
+                    if (editingBudget && isOverCap) return; 
+                    setEditingBudget((v) => !v);
+                  }}
+                  // ✅ FIX: Visually disable the button
+                  disabled={editingBudget && isOverCap}
+                  className={`px-4 py-2 text-sm font-medium transition-colors ${
+                    editingBudget && isOverCap 
+                      ? "text-stone-300 cursor-not-allowed bg-stone-50" // Disabled style
+                      : "text-stone-500 hover:text-stone-900" // Normal style
+                  }`}
+                >
+                  {editingBudget ? "Done Editing" : "Adjust Limits"}
+                </button>
+                <button
+                onClick={() => setShowExpenseDialog(true)}
+                className="px-5 py-2 bg-stone-900 text-white rounded-full hover:bg-stone-800 text-sm font-bold shadow-lg hover:shadow-xl transition-all flex items-center gap-2"
+                >
+                <Plus size={16} /> Add Expense
+                </button>
             </div>
-          ))}
-        </div>
-        
-        <div className="mt-8 pt-6 border-t border-stone-100 flex justify-between items-center">
-           <span className="font-serif text-xl text-stone-900">Total Spent</span>
-           <span className="font-serif text-2xl text-stone-900">£{totalSpent.toFixed(2)}</span>
-        </div>
-      </div>
-        {showExpenseDialog && (
-          <ExpenseDialog
-            mode={mode}
-            tripId={tripId}
-            onClose={() => setShowExpenseDialog(false)}
-            onSave={async () => {
-              setShowExpenseDialog(false);
-              await loadBudget();
-            }}
-          />
-        )}
 
-        <hr />
+            {/* Budget Summary Card */}
+            {!editingBudget && limits.total > 0 && (
+                <div className="bg-stone-900 text-white rounded-2xl p-8 shadow-xl relative overflow-hidden">
+                    <div className="absolute -top-10 -right-10 w-40 h-40 bg-white/5 rounded-full blur-2xl" />
+                    <div className="relative z-10">
+                        <div className="text-stone-400 text-sm font-bold uppercase tracking-widest mb-1">Remaining Budget</div>
+                        <div className={`text-5xl font-serif mb-6 ${totalRemaining < 0 ? 'text-red-300' : ''}`}>
+                            £{totalRemaining.toFixed(2)}
+                        </div>
+                        
+                        <div className="flex gap-8 border-t border-white/10 pt-4">
+                            <div>
+                                <div className="text-xs text-stone-500 uppercase font-bold">Total Budget</div>
+                                <div className="text-lg">£{limits.total.toFixed(2)}</div>
+                            </div>
+                            <div>
+                                <div className="text-xs text-stone-500 uppercase font-bold">Total Spent</div>
+                                <div className="text-lg">£{totalSpent.toFixed(2)}</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
 
-        <Row
-          label="Total"
-          value={Object.values(budget).reduce((a, b) => a + b.total, 0)}
+            {/* Limits Editor */}
+            {editingBudget && (
+                <div className="bg-stone-50 rounded-xl p-6 border border-stone-200 animate-in fade-in slide-in-from-top-2">
+                <h4 className="font-serif text-lg mb-4 text-stone-900">Set Budget Limits</h4>
+                {isOverCap && (
+                  <span className="text-xs font-bold text-red-500 bg-red-50 px-2 py-1 rounded-md border border-red-100 block mb-4">
+                    Sub-budgets (£{subLimitsTotal.toFixed(2)}) exceed Total Cap (£{Number(limits.total).toFixed(2)})
+                  </span>
+                )}
+                <div className="grid gap-4">
+                    <div className={`flex justify-between items-center bg-white p-3 rounded-lg border ${
+                      // ✅ FIX: Red border if over cap
+                      isOverCap ? "border-red-300 ring-1 ring-red-100" : "border-stone-200"
+                      }`}>
+                        <span className="font-bold text-stone-700">Total Cap</span>
+                        <input
+                        type="number"
+                        value={limits.total || ''}
+                        onChange={(e) => handleLimitChange('total', Number(e.target.value))}
+                        className={`w-32 text-right outline-none font-serif text-lg ${
+                          // ✅ FIX: Red text if over cap
+                          isOverCap ? "text-red-600" : ""
+                        }`}
+                        />
+                    </div>
+                    <div className="h-px bg-stone-200 my-2" />
+                    {Object.keys(budget).map((cat) => (
+                        <div key={cat} className="flex justify-between items-center text-sm">
+                            <span className="capitalize text-stone-600">{cat}</span>
+                            <div className="flex items-center gap-2">
+                            <span className="text-stone-400">£</span>
+                            <input
+                                type="number"
+                                value={limits[cat as keyof BudgetLimits] || ''}
+                                onChange={(e) => handleLimitChange(cat as keyof BudgetLimits, Number(e.target.value))}
+                                className="w-24 text-right bg-transparent border-b border-stone-300 focus:border-stone-900 outline-none transition-colors"
+                            />
+                            </div>
+                        </div>
+                    ))}
+                </div>
+                </div>
+            )}
+
+            {/* Detailed Breakdown */}
+            <div className="bg-white border border-stone-200 rounded-2xl p-8 shadow-sm">
+                <h3 className="font-serif text-xl mb-6 border-b border-stone-100 pb-2">Expenses Breakdown</h3>
+                <div className="space-y-8">
+                {Object.entries(budget).map(([name, data]) => (
+                    <div key={name}>
+                        <div className="flex justify-between items-baseline mb-2">
+                            <span className="text-stone-400 text-xs font-bold uppercase tracking-wider">{name}</span>
+                            <span className="font-serif text-lg font-medium text-stone-900">£{data.total.toFixed(2)}</span>
+                        </div>
+                        
+                        {data.items.length > 0 ? (
+                            <div className="bg-stone-50 rounded-lg p-3 space-y-2">
+                            {data.items.map((i, idx) => (
+                                <div key={i.id || idx} className="group flex justify-between items-center text-sm text-stone-600">
+                                  <span>{i.label}</span>
+                                  <div className="flex items-center gap-3">
+                                    <span className="font-mono text-stone-500">£{i.amount.toFixed(2)}</span>
+                                    
+                                    {/* 👈 NEW: Delete Button (only shows on hover for manual expenses) */}
+                                    {i.sourceKey && (
+                                        <button 
+                                            onClick={() => handleDeleteExpense(i.sourceKey!)}
+                                            className="text-stone-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"
+                                            title="Delete manual expense"
+                                        >
+                                            <Trash2 size={14} />
+                                        </button>
+                                    )}
+                                  </div>
+                                </div>
+                            ))}
+                            </div>
+                        ) : (
+                            <div className="h-1 bg-stone-100 rounded-full overflow-hidden" />
+                        )}
+                    </div>
+                ))}
+                </div>
+                
+                <div className="mt-8 pt-6 border-t border-stone-100 flex justify-between items-center">
+                    <span className="font-serif text-xl text-stone-900">Total Spent</span>
+                    <span className="font-serif text-2xl text-stone-900">£{totalSpent.toFixed(2)}</span>
+                </div>
+            </div>
+        </>
+      )}
+
+      {/* Dialog */}
+      {showExpenseDialog && (
+        <ExpenseDialog
+          mode={mode}
+          tripId={tripId}
+          onClose={() => setShowExpenseDialog(false)}
+          onSave={async () => {
+            setShowExpenseDialog(false);
+            await loadData();
+          }}
         />
-      </div>
-    
-  );
-}
-
-function Row({label,value}:{label:string,value:number}){
-  return(
-    <div className="flex justify-between">
-      <span>{label}</span>
-      <span>£{value.toFixed(2)}</span>
-    </div>
-  )
-}
-
-function Category({
-  title,
-  items
-}:{title:string,items:{label:string,value:number}[]}){
-
-  const total=items.reduce((s,i)=>s+i.value,0);
-
-  if(items.length===0){
-    return(
-      <div>
-        <div className="flex justify-between font-semibold">
-          <span>{title}</span>
-          <span>£0.00</span>
-        </div>
-      </div>
-    );
-  }
-
-  return(
-    <div className="space-y-2">
-
-      <div className="flex justify-between font-semibold text-lg">
-        <span>{title}</span>
-        <span>£{total.toFixed(2)}</span>
-      </div>
-
-      <div className="pl-4 space-y-1 text-sm text-gray-700">
-
-        {items.map((i,idx)=>(
-          <div key={idx} className="flex justify-between">
-            <span>{i.label}</span>
-            <span>£{i.value.toFixed(2)}</span>
-          </div>
-        ))}
-
-      </div>
-
+      )}
     </div>
   );
 }
-
 function ExpenseDialog({
   mode,
   tripId,
