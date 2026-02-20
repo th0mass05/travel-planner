@@ -383,7 +383,7 @@ function PlaceDialog({ onClose, onAdd, type, initialData }: PlaceDialogProps) {
               
               {/* 2. Replace the standard <input> with <Autocomplete> */}
               <Autocomplete
-                apiKey={process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY}
+                apiKey="AIzaSyDMME0iZDobxV4xXZ4LduasN7XCwGG63Yg"
                 defaultValue={formData.address}
                 onPlaceSelected={(place) => {
                   if (place) {
@@ -899,7 +899,7 @@ function HotelDialog({ onClose, onAdd, initialData }: HotelDialogProps) {
           <div>
             <label className="block text-xs font-bold uppercase tracking-wider text-stone-500 mb-1.5">Address</label>
             <Autocomplete
-              apiKey={process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY}
+              apiKey="AIzaSyDMME0iZDobxV4xXZ4LduasN7XCwGG63Yg"
               defaultValue={formData.address}
               onPlaceSelected={(place) => {
                 if (place) {
