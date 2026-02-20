@@ -383,22 +383,24 @@ function PlaceDialog({ onClose, onAdd, type, initialData }: PlaceDialogProps) {
               
               {/* 2. Replace the standard <input> with <Autocomplete> */}
               <Autocomplete
-                apiKey="AIzaSyDMME0iZDobxV4xXZ4LduasN7XCwGG63Yg"
+                apiKey={process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY}
                 defaultValue={formData.address}
                 onPlaceSelected={(place) => {
                   if (place) {
                     setFormData({ 
                       ...formData, 
                       address: place.formatted_address || place.name || "",
-                      // 👇 BONUS: Auto-fills the place name if you haven't typed one yet!
                       name: formData.name || place.name || "", 
-                      // 👇 Captures the EXACT Google Maps page URL
                       googleMapsUrl: place.url 
                     });
                   }
                 }}
                 className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg focus:border-gray-900 outline-none"
                 placeholder="Start typing a place or address..."
+                // 👇 Add this block back! 
+                options={{
+                  types: [] 
+                }}
               />
             </div>
           <div>
@@ -899,7 +901,7 @@ function HotelDialog({ onClose, onAdd, initialData }: HotelDialogProps) {
           <div>
             <label className="block text-xs font-bold uppercase tracking-wider text-stone-500 mb-1.5">Address</label>
             <Autocomplete
-              apiKey="AIzaSyDMME0iZDobxV4xXZ4LduasN7XCwGG63Yg"
+              apiKey={process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY}
               defaultValue={formData.address}
               onPlaceSelected={(place) => {
                 if (place) {
@@ -907,12 +909,16 @@ function HotelDialog({ onClose, onAdd, initialData }: HotelDialogProps) {
                     ...formData, 
                     address: place.formatted_address || place.name || "",
                     name: formData.name || place.name || "", 
-                    googleMapsUrl: place.url // 👈 Captures the EXACT URL
+                    googleMapsUrl: place.url 
                   });
                 }
               }}
               className="w-full px-4 py-2.5 border border-stone-300 rounded-lg focus:border-stone-900 outline-none transition-all"
               placeholder="Start typing hotel address..."
+              // 👇 Add this block back!
+              options={{
+                types: [] 
+              }}
             />
           </div>
 
