@@ -900,12 +900,24 @@ function HotelDialog({ onClose, onAdd, initialData }: HotelDialogProps) {
 
           <div>
             <label className="block text-xs font-bold uppercase tracking-wider text-stone-500 mb-1.5">Address</label>
-            <input
-              type="text"
-              value={formData.address}
-              onChange={(e) => setFormData({ ...formData, address: e.target.value })}
-              className="w-full px-4 py-2.5 border border-stone-300 rounded-lg focus:border-stone-900 outline-none"
-              placeholder="Full Address"
+            <Autocomplete
+              apiKey={process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY}
+              defaultValue={formData.address}
+              onPlaceSelected={(place) => {
+                if (place) {
+                  setFormData({ 
+                    ...formData, 
+                    // Grabs the official formatted address
+                    address: place.formatted_address || place.name || "" 
+                  });
+                }
+              }}
+              // Notice we use the exact same Tailwind classes as your other inputs!
+              className="w-full px-4 py-2.5 border border-stone-300 rounded-lg focus:border-stone-900 outline-none transition-all"
+              placeholder="Start typing hotel address..."
+              options={{
+                types: ["establishment", "geocode"], // establishment is perfect for hotels
+              }}
             />
           </div>
 
@@ -3355,9 +3367,15 @@ function PlacesTab({ tripId, type }: PlacesTabProps) {
                     )}
                 </div>
 
-                <div className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-stone-400 mb-3">
-                    <MapPin size={12} /> {place.address}
-                </div>
+                <a 
+                  href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(place.address)}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-stone-400 mb-3 hover:text-rose-500 transition-colors cursor-pointer w-fit group/link"
+                  >
+                  <MapPin size={12} /> 
+                  <span className="group-hover/link:underline">{place.address}</span>
+              </a>
 
                 <p className="text-stone-600 text-sm leading-relaxed mb-6 line-clamp-3">
                     {place.description}
@@ -4237,10 +4255,15 @@ function HotelCard({
       </div>
 
       {/* Address */}
-      <div className="flex items-start gap-2 text-stone-500 text-sm mb-5">
-        <MapPin size={14} className="mt-0.5 flex-shrink-0" />
-        <span className="leading-snug">{hotel.address}</span>
-      </div>
+        <a 
+            href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(hotel.address)}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-start gap-2 text-stone-500 text-sm mb-5 hover:text-stone-900 transition-colors group/link w-fit"
+        >
+          <MapPin size={14} className="mt-0.5 flex-shrink-0 group-hover/link:text-stone-900 transition-colors" />
+          <span className="leading-snug group-hover/link:underline">{hotel.address}</span>
+        </a>
 
       <div className="flex-1 space-y-4 mb-4">
         
