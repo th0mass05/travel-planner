@@ -138,6 +138,7 @@ export type PlaceData = {
   confirmed?: boolean;
   createdAt?: string;        // ISO date string
   createdByUid?: string | null;
+  googleMapsUrl?: string;
 };
 
 
@@ -190,6 +191,7 @@ export type HotelData = {
   details?: string;    // NEW
   createdByUid?: string | null;
   createdAt?: string;
+  googleMapsUrl?: string;
 
 };
 
@@ -301,6 +303,7 @@ type PlaceFormData = {
   imageUrl: string;
   link: string;
   visited: boolean;
+  googleMapsUrl?: string;
 };
 
 type PlaceDialogProps = {
@@ -380,27 +383,22 @@ function PlaceDialog({ onClose, onAdd, type, initialData }: PlaceDialogProps) {
               
               {/* 2. Replace the standard <input> with <Autocomplete> */}
               <Autocomplete
-                apiKey="AIzaSyDMME0iZDobxV4xXZ4LduasN7XCwGG63Yg"
+                apiKey={process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY}
                 defaultValue={formData.address}
-                
-                // When a user selects a place from the dropdown:
                 onPlaceSelected={(place) => {
-                  setFormData({ 
-                    ...formData, 
-                    // Grab the formatted address from the Google API result
-                    address: place.formatted_address || place.name || "" 
-                  });
+                  if (place) {
+                    setFormData({ 
+                      ...formData, 
+                      address: place.formatted_address || place.name || "",
+                      // 👇 BONUS: Auto-fills the place name if you haven't typed one yet!
+                      name: formData.name || place.name || "", 
+                      // 👇 Captures the EXACT Google Maps page URL
+                      googleMapsUrl: place.url 
+                    });
+                  }
                 }}
-                
-                // Fallback so manual typing still works:
-                onChange={(e) => setFormData({ ...formData, address: e.target.value })}
-                
-                // You can reuse your exact same Tailwind styling!
                 className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg focus:border-gray-900 outline-none"
-                placeholder="Start typing an address..."
-                options={{
-                  types: ["establishment", "geocode"], // Helps filter for actual places/addresses
-                }}
+                placeholder="Start typing a place or address..."
               />
             </div>
           <div>
@@ -907,17 +905,14 @@ function HotelDialog({ onClose, onAdd, initialData }: HotelDialogProps) {
                 if (place) {
                   setFormData({ 
                     ...formData, 
-                    // Grabs the official formatted address
-                    address: place.formatted_address || place.name || "" 
+                    address: place.formatted_address || place.name || "",
+                    name: formData.name || place.name || "", 
+                    googleMapsUrl: place.url // 👈 Captures the EXACT URL
                   });
                 }
               }}
-              // Notice we use the exact same Tailwind classes as your other inputs!
               className="w-full px-4 py-2.5 border border-stone-300 rounded-lg focus:border-stone-900 outline-none transition-all"
               placeholder="Start typing hotel address..."
-              options={{
-                types: ["establishment", "geocode"], // establishment is perfect for hotels
-              }}
             />
           </div>
 
@@ -3368,7 +3363,7 @@ function PlacesTab({ tripId, type }: PlacesTabProps) {
                 </div>
 
                 <a 
-                  href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(place.address)}`}
+                  href={place.googleMapsUrl || `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(place.address)}`}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-stone-400 mb-3 hover:text-rose-500 transition-colors cursor-pointer w-fit group/link"
@@ -4256,7 +4251,7 @@ function HotelCard({
 
       {/* Address */}
         <a 
-            href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(hotel.address)}`}
+            href={hotel.googleMapsUrl || `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(hotel.address)}`}
             target="_blank"
             rel="noopener noreferrer"
             className="flex items-start gap-2 text-stone-500 text-sm mb-5 hover:text-stone-900 transition-colors group/link w-fit"
