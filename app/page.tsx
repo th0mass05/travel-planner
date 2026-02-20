@@ -399,7 +399,9 @@ function PlaceDialog({ onClose, onAdd, type, initialData }: PlaceDialogProps) {
                 placeholder="Start typing a place or address..."
                 // 👇 Add this block back! 
                 options={{
-                  types: [] 
+                  types: [], 
+                  // 👇 Tell Google exactly which pieces of data to return
+                  fields: ["name", "formatted_address", "url", "geometry"] 
                 }}
               />
             </div>
@@ -917,7 +919,9 @@ function HotelDialog({ onClose, onAdd, initialData }: HotelDialogProps) {
               placeholder="Start typing hotel address..."
               // 👇 Add this block back!
               options={{
-                types: [] 
+                types: [], 
+                // 👇 Tell Google exactly which pieces of data to return
+                fields: ["name", "formatted_address", "url", "geometry"] 
               }}
             />
           </div>
