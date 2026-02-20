@@ -391,7 +391,7 @@ function PlaceDialog({ onClose, onAdd, type, initialData }: PlaceDialogProps) {
                       ...formData, 
                       address: place.formatted_address || place.name || "",
                       name: formData.name || place.name || "", 
-                      googleMapsUrl: place.url 
+                      googleMapsUrl: place.url || ""
                     });
                   }
                 }}
@@ -909,7 +909,7 @@ function HotelDialog({ onClose, onAdd, initialData }: HotelDialogProps) {
                     ...formData, 
                     address: place.formatted_address || place.name || "",
                     name: formData.name || place.name || "", 
-                    googleMapsUrl: place.url 
+                    googleMapsUrl: place.url || ""
                   });
                 }
               }}
