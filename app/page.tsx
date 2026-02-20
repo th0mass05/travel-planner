@@ -11,6 +11,7 @@ import CreatorBadge from "./hooks/CreatorBadge";
 import { formatDistanceToNow } from "date-fns";
 import emailjs from "@emailjs/browser";
 import React, { useState, useEffect, useRef, useCallback} from "react";
+import Autocomplete from "react-google-autocomplete";
 import {
   Calendar,
   MapPin,
@@ -375,17 +376,33 @@ function PlaceDialog({ onClose, onAdd, type, initialData }: PlaceDialogProps) {
             />
           </div>
           <div>
-            <label className="block text-sm font-medium mb-1">Address</label>
-            <input
-              type="text"
-              value={formData.address}
-              onChange={(e) =>
-                setFormData({ ...formData, address: e.target.value })
-              }
-              className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg focus:border-gray-900 outline-none"
-              placeholder="Full address"
-            />
-          </div>
+              <label className="block text-sm font-medium mb-1">Address</label>
+              
+              {/* 2. Replace the standard <input> with <Autocomplete> */}
+              <Autocomplete
+                apiKey="AIzaSyDMME0iZDobxV4xXZ4LduasN7XCwGG63Yg"
+                defaultValue={formData.address}
+                
+                // When a user selects a place from the dropdown:
+                onPlaceSelected={(place) => {
+                  setFormData({ 
+                    ...formData, 
+                    // Grab the formatted address from the Google API result
+                    address: place.formatted_address || place.name || "" 
+                  });
+                }}
+                
+                // Fallback so manual typing still works:
+                onChange={(e) => setFormData({ ...formData, address: e.target.value })}
+                
+                // You can reuse your exact same Tailwind styling!
+                className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg focus:border-gray-900 outline-none"
+                placeholder="Start typing an address..."
+                options={{
+                  types: ["establishment", "geocode"], // Helps filter for actual places/addresses
+                }}
+              />
+            </div>
           <div>
             <label className="block text-sm font-medium mb-1">
               Website Link (optional)
