@@ -4569,6 +4569,53 @@ function AdminTab({ tripId }: { tripId: number }) {
     status: "Member" | "Invited";
     isMe?: boolean;
   };
+  const syncItineraryItem = async (
+    sourceId: string, 
+    newDate: string, 
+    updatedData: Partial<ItineraryItem>
+  ) => {
+    // 1. Get all itinerary dates for this trip
+    const prefix = `itinerary:${tripId}:date:`;
+    const result = await storage.list(prefix);
+    if (!result?.keys) return;
+
+    let existingItem: ItineraryItem | null = null;
+
+    // 2. Scan through all dates to find the old linked item
+    for (const key of result.keys) {
+      const snap = await storage.get(key);
+      if (snap?.value) {
+        const dayData = JSON.parse(snap.value);
+        const itemIndex = dayData.items.findIndex((i: any) => i.sourceId === sourceId);
+
+        if (itemIndex > -1) {
+          // Found it! Save a copy and remove it from the old date
+          existingItem = dayData.items[itemIndex];
+          dayData.items.splice(itemIndex, 1);
+          await storage.set(key, dayData); 
+          break; // Stop searching once found
+        }
+      }
+    }
+
+    // If we didn't find it, it was never confirmed to the itinerary anyway.
+    if (!existingItem) return;
+
+    // 3. Update the item and place it in the correct (possibly new) date
+    const targetKey = `itinerary:${tripId}:date:${newDate}`;
+    const targetSnap = await storage.get(targetKey);
+    const targetDay = targetSnap?.value ? JSON.parse(targetSnap.value) : { date: newDate, items: [] };
+
+    const syncedItem = {
+      ...existingItem,
+      ...updatedData // Overwrite with new name, location, time, etc.
+    };
+
+    targetDay.items.push(syncedItem);
+    targetDay.items.sort((a: any, b: any) => (a.time || "99:99").localeCompare(b.time || "99:99"));
+    
+    await storage.set(targetKey, targetDay);
+  };
   const addToItinerary = async (date: string, item: Omit<ItineraryItem, 'id'>) => {
     if (!date) return;
     const key = `itinerary:${tripId}:date:${date}`;
@@ -4689,13 +4736,23 @@ function AdminTab({ tripId }: { tripId: number }) {
   // FLIGHTS
   const addFlight = async (data: FlightData) => {
     const user = auth.currentUser;
+    const isEditing = !!editingFlight;
     const newFlight: StoredFlight = {
+      ...(editingFlight || {}), // 👈 ADD THIS: Preserves status, cost, paidBy, etc.
       ...data,
       id: editingFlight ? editingFlight.id : Date.now(),
-      createdByUid: user?.uid,
-      createdAt: editingFlight ? editingFlight.createdAt : new Date().toISOString(),
+      createdByUid: editingFlight?.createdByUid || user?.uid || null,
+      createdAt: editingFlight?.createdAt || new Date().toISOString()
     };
     await storage.set(`flight:${tripId}:${newFlight.id}`, newFlight);
+    if (isEditing && newFlight.status === "confirmed") {
+      await syncItineraryItem(`flight:${newFlight.id}`, newFlight.date, {
+        time: newFlight.time || "",
+        activity: `Flight: ${newFlight.airline} ${newFlight.flightNumber}`,
+        location: newFlight.departure,
+        notes: `Arriving at ${newFlight.arrival}`
+      });
+    }
     setEditingFlight(null);
   };
 
@@ -4706,13 +4763,23 @@ function AdminTab({ tripId }: { tripId: number }) {
   // HOTELS
   const addHotel = async (data: HotelData) => {
     const user = auth.currentUser;
+    const isEditing = !!editingHotel;
     const newHotel: StoredHotel = {
+      ...(editingHotel || {}), // 👈 ADD THIS
       ...data,
       id: editingHotel ? editingHotel.id : Date.now(),
-      createdByUid: user?.uid,
-      createdAt: editingHotel ? editingHotel.createdAt : new Date().toISOString(),
+      createdByUid: editingHotel?.createdByUid || user?.uid || null,
+      createdAt: editingHotel?.createdAt || new Date().toISOString(),
     };
     await storage.set(`hotel:${tripId}:${newHotel.id}`, newHotel);
+    if (isEditing && newHotel.status === "confirmed") {
+      await syncItineraryItem(`hotel:${newHotel.id}`, newHotel.checkIn, {
+        time: "15:00", 
+        activity: `Check-in: ${newHotel.name}`,
+        location: newHotel.address,
+        notes: `Conf: ${newHotel.confirmationNumber || "N/A"}`
+      });
+    }
     setEditingHotel(null);
   };
 
@@ -4723,13 +4790,23 @@ function AdminTab({ tripId }: { tripId: number }) {
   // TRANSPORT
   const addTransport = async (data: TransportData) => {
     const user = auth.currentUser;
+    const isEditing = !!editingTransport;
     const newTransport: StoredTransport = {
+      ...(editingTransport || {}), // 👈 ADD THIS
       ...data,
       id: editingTransport ? editingTransport.id : Date.now(),
-      createdByUid: user?.uid,
-      createdAt: editingTransport ? editingTransport.createdAt : new Date().toISOString(),
+      createdByUid: editingTransport?.createdByUid || user?.uid || null,
+      createdAt: editingTransport?.createdAt || new Date().toISOString(),
     };
     await storage.set(`transport:${tripId}:${newTransport.id}`, newTransport);
+    if (isEditing && newTransport.status === "confirmed") {
+      await syncItineraryItem(`transport:${newTransport.id}`, newTransport.date || "", {
+        time: newTransport.time || "",
+        activity: `${newTransport.type} to ${newTransport.arrival}`,
+        location: newTransport.departure,
+        notes: newTransport.details || ""
+      });
+    }
     setEditingTransport(null);
   };
 
