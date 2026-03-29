@@ -122,7 +122,15 @@ export type StoredTransport = TransportData & {
 };
 
 
-export type PlaceType = "eat" | "visit";
+export type PlaceType = 
+  | "eat" 
+  | "visit" 
+  | "day-trip" 
+  | "landmark" 
+  | "shopping" 
+  | "experience" 
+  | "nature" 
+  | "nightlife";
 
 export type PlaceData = {
   id: number;              // REQUIRED for storage, delete, confirm, sorting
@@ -304,18 +312,19 @@ type PlaceFormData = {
   link: string;
   visited: boolean;
   googleMapsUrl?: string;
+  category: PlaceType;
 };
 
 type PlaceDialogProps = {
   onClose: () => void;
   onAdd: (data: PlaceFormData) => void;
-  type: PlaceType;
   initialData?: PlaceFormData;
+  initialCategory?: PlaceType;
 };
 
-function PlaceDialog({ onClose, onAdd, type, initialData }: PlaceDialogProps) {
+function PlaceDialog({ onClose, onAdd, initialData, initialCategory = "visit" }: PlaceDialogProps) {
   const [formData, setFormData] = useState<PlaceFormData>(
-    initialData || { // ⭐ Use initialData if provided
+    initialData || { 
       name: "",
       description: "",
       address: "",
@@ -323,6 +332,7 @@ function PlaceDialog({ onClose, onAdd, type, initialData }: PlaceDialogProps) {
       imageUrl: "",
       link: "",
       visited: false,
+      category: initialCategory, // Default to the active tab's category
     }
   );
 
@@ -345,11 +355,32 @@ function PlaceDialog({ onClose, onAdd, type, initialData }: PlaceDialogProps) {
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-lg max-w-md w-full p-6">
+      <div className="bg-white rounded-lg max-w-md w-full p-6 max-h-[90vh] overflow-y-auto">
         <h3 className="text-2xl font-serif mb-4">
-          Add {type === "eat" ? "Restaurant" : "Place"}
+          {initialData ? "Edit Place" : `Add ${formData.category === "eat" ? "Restaurant" : "Place"}`}
         </h3>
         <div className="space-y-4">
+          
+          <div>
+            <label className="block text-sm font-medium mb-1">Category</label>
+            <select
+              value={formData.category}
+              onChange={(e) => setFormData({ ...formData, category: e.target.value as PlaceType })}
+              className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg focus:border-gray-900 outline-none bg-white cursor-pointer"
+            >
+              <option value="eat">Food & Drink</option>
+              <option value="landmark">Landmark</option>
+              <option value="day-trip">Area / Day Trip</option>
+              <option value="shopping">Shopping</option>
+              <option value="experience">Experience</option>
+              <option value="nature">Nature</option>
+              <option value="entertainment">Entertainment</option>
+              <option value="culture">Culture</option>
+              <option value="nightlife">Nightlife</option>
+              <option value="visit">Other Visit</option>
+            </select>
+          </div>
+
           <div>
             <label className="block text-sm font-medium mb-1">Name</label>
             <input
@@ -360,7 +391,7 @@ function PlaceDialog({ onClose, onAdd, type, initialData }: PlaceDialogProps) {
               }
               className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg focus:border-gray-900 outline-none"
               placeholder={
-                type === "eat" ? "e.g., Sushi Saito" : "e.g., Tokyo Tower"
+                formData.category === "eat" ? "e.g., Sushi Saito" : "e.g., Tokyo Tower"
               }
             />
           </div>
@@ -381,7 +412,6 @@ function PlaceDialog({ onClose, onAdd, type, initialData }: PlaceDialogProps) {
           <div>
               <label className="block text-sm font-medium mb-1">Address</label>
               
-              {/* 2. Replace the standard <input> with <Autocomplete> */}
               <Autocomplete
                 apiKey={process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY}
                 defaultValue={formData.address}
@@ -397,10 +427,8 @@ function PlaceDialog({ onClose, onAdd, type, initialData }: PlaceDialogProps) {
                 }}
                 className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg focus:border-gray-900 outline-none"
                 placeholder="Start typing a place or address..."
-                // 👇 Add this block back! 
                 options={{
                   types: [], 
-                  // 👇 Tell Google exactly which pieces of data to return
                   fields: ["name", "formatted_address", "url", "geometry"] 
                 }}
               />
@@ -445,7 +473,7 @@ function PlaceDialog({ onClose, onAdd, type, initialData }: PlaceDialogProps) {
               onClick={() => onAdd(formData)}
               className="flex-1 px-4 py-3 bg-gray-900 text-white rounded-lg hover:bg-gray-800"
             >
-              {initialData ? "Save Changes" : `Add ${type === "eat" ? "Restaurant" : "Place"}`}
+              {initialData ? "Save Changes" : `Add ${formData.category === "eat" ? "Restaurant" : "Place"}`}
             </button>
             <button
               onClick={onClose}
@@ -2417,8 +2445,7 @@ type TripViewProps = {
 
 type TabId =
   | "itinerary"
-  | "places-visit"
-  | "places-eat"
+  | "places"
   | "shopping"
   | "photos"
   | "scrapbook"
@@ -2495,9 +2522,7 @@ function TripView({ trip: initialTrip, onBack }: TripViewProps) {
 
   const tabs: { id: TabId; label: string; icon: any }[] = [
     { id: "itinerary", label: "Itinerary", icon: Calendar },
-    { id: "places-visit", label: "To Visit", icon: MapPin },
-    { id: "places-eat", label: "To Eat", icon: Utensils },
-    { id: "shopping", label: "Shopping", icon: ShoppingBag },
+    { id: "places", label: "Places", icon: MapPin }, // ⭐ NEW COMBINED TAB
     { id: "photos", label: "Gallery", icon: Camera },
     { id: "scrapbook", label: "Journal", icon: Sparkles },
     { id: "admin", label: "Admin", icon: PackageCheck },
@@ -2608,9 +2633,7 @@ function TripView({ trip: initialTrip, onBack }: TripViewProps) {
       {/* 4. CONTENT AREA */}
       <div className="max-w-7xl w-full mx-auto px-6 py-12">
         {activeTab === "itinerary" && <ItineraryTab trip={trip} />}
-        {activeTab === "places-visit" && <PlacesTab tripId={trip.id} type="visit" />}
-        {activeTab === "places-eat" && <PlacesTab tripId={trip.id} type="eat" />}
-        {activeTab === "shopping" && <ShoppingTab tripId={trip.id} />}
+        {activeTab === "places" && <PlacesTab tripId={trip.id} />} {/* ⭐ REMOVED type prop */}
         {activeTab === "photos" && <PhotosTab tripId={trip.id} />}
         {activeTab === "scrapbook" && <ScrapbookTab tripId={trip.id} />}
         {activeTab === "admin" && <AdminTab tripId={trip.id} />}
@@ -3140,6 +3163,7 @@ function ItineraryTab({ trip }: { trip: TripData }) {
 
 export type StoredPlace = PlaceData & {
   id: number;
+  category: PlaceType;
   createdByUid?: string | null;
   createdAt?: string;
   cost?: number;
@@ -3152,73 +3176,75 @@ export type StoredPlace = PlaceData & {
 
 type PlacesTabProps = {
   tripId: number;
-  type: "eat" | "visit";
 };
 
-function PlacesTab({ tripId, type }: PlacesTabProps) {
-  const [places, setPlaces] = useState<StoredPlace[]>([]);
+// Map categories for the UI sub-nav
+const PLACE_CATEGORIES: { id: PlaceType | "all"; label: string }[] = [
+  { id: "all", label: "All Places" },
+  { id: "eat", label: "Food & Drink" },
+  { id: "landmark", label: "Landmarks" },
+  { id: "day-trip", label: "Areas / Day Trips" },
+  { id: "shopping", label: "Shopping" },
+  { id: "experience", label: "Experiences" },
+  { id: "nature", label: "Nature" },
+  { id: "nightlife", label: "Nightlife" },
+];
 
-  const [editingPlace, setEditingPlace] = useState<StoredPlace | null>(null); // ⭐ NEW
+function PlacesTab({ tripId }: PlacesTabProps) {
+  const [places, setPlaces] = useState<StoredPlace[]>([]);
+  const [activeCategory, setActiveCategory] = useState<PlaceType | "all">("all");
+  
+  const [editingPlace, setEditingPlace] = useState<StoredPlace | null>(null);
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [confirmingPlace, setConfirmingPlace] = useState<StoredPlace | null>(null);
   const [costDialogPlace, setCostDialogPlace] = useState<StoredPlace | null>(null);
 
-
-
-
-
   useEffect(() => {
-    // Listen to either "eat" or "visit" list
     const unsubscribe = storage.subscribeToList(
-      `place:${tripId}:${type}:`, 
-      (newPlaces) => {
-        setPlaces(newPlaces.sort((a: any, b: any) => b.id - a.id));
+      `place:${tripId}:`, 
+      (newPlaces: StoredPlace[]) => {
+        // ⭐ LEGACY FIX: Deduplicate & patch old data that is missing categories
+        const uniquePlacesMap = new Map();
+        
+        newPlaces.forEach((p) => {
+          // If it's an old item missing a category, default it to 'visit' so it doesn't break the UI
+          if (!p.category) {
+            p.category = "visit";
+          }
+          uniquePlacesMap.set(p.id, p);
+        });
+
+        const deduplicated = Array.from(uniquePlacesMap.values());
+        setPlaces(deduplicated.sort((a: any, b: any) => b.id - a.id));
       }
     );
-
     return () => unsubscribe();
-  }, [tripId, type]);
+  }, [tripId]);
 
-  // You can now remove 'await loadPlaces()' from addPlace, deletePlace, and confirmPlace.
-  // Just perform the storage operation, and the UI will update itself.
 
-  
-
-  const addPlace = async (placeData: Omit<PlaceData, "id">) => {
-    const place: PlaceData = {
+  const addPlace = async (placeData: PlaceFormData) => {
+    const place: StoredPlace = {
       ...placeData,
       id: Date.now(),
       createdByUid: auth.currentUser?.uid || null,
       createdAt: new Date().toISOString(),
     };
-
-
-    await storage.set(`place:${tripId}:${type}:${place.id}`, place);
-    
+    await storage.set(`place:${tripId}:${place.category}:${place.id}`, place);
   };
 
-
   const handleVisitedToggle = async (place: StoredPlace) => {
-    // ===== UNVISIT =====
     if (place.visited) {
-      const updated = { ...place, visited:false };
+      const updated = { ...place, visited: false };
       delete updated.cost;
       delete updated.paidBy;
-      delete updated.rating; // 👈 ADD THIS LINE
-
-      await storage.set(`place:${tripId}:${type}:${place.id}`, updated);
+      delete updated.rating; 
+      await storage.set(`place:${tripId}:${place.category}:${place.id}`, updated);
       return;
     }
-
-    // ===== VISIT =====
-    // open cost dialog FIRST
     setCostDialogPlace(place);
   };
 
-
-
   const confirmPlace = async (place: StoredPlace, date: string, time: string) => {
-    // Save to Itinerary with Source ID
     const key = `itinerary:${tripId}:date:${date}`;
     const existing = await storage.get(key);
     const targetDay = existing?.value ? JSON.parse(existing.value) : { date, items: [] };
@@ -3229,8 +3255,8 @@ function PlacesTab({ tripId, type }: PlacesTabProps) {
       activity: place.name,
       location: place.address,
       notes: place.description || "",
-      iconType: type === "eat" ? "eat" : "visit",
-      sourceId: `place:${place.id}`, // ⭐ LINK HERE
+      iconType: place.category === "eat" ? "eat" : "visit",
+      sourceId: `place:${place.id}`, 
       createdAt: new Date().toISOString()
     };
 
@@ -3238,31 +3264,20 @@ function PlacesTab({ tripId, type }: PlacesTabProps) {
     targetDay.items.sort((a: any, b: any) => a.time.localeCompare(b.time));
     await storage.set(key, targetDay);
 
-    // Update Place status
     place.confirmed = true;
-    await storage.set(`place:${tripId}:${type}:${place.id}`, place);
+    await storage.set(`place:${tripId}:${place.category}:${place.id}`, place);
     setConfirmingPlace(null);
   };
-  // Inside PlacesTab component...
 
   const unconfirmPlace = async (place: StoredPlace) => {
-    // 1. Remove from Itinerary
     await removeFromItineraryBySource(tripId, `place:${place.id}`);
-
-    // 2. Update Place status
-    const updated = { 
-      ...place, 
-      confirmed: false, 
-      visited: false 
-    };
-    
-    // Clean up financial & rating data since it's no longer "visited"
+    const updated = { ...place, confirmed: false, visited: false };
     delete updated.cost;
     delete updated.paidBy;
-    delete updated.rating; // 👈 ADD THIS LINE
-
-    await storage.set(`place:${tripId}:${type}:${place.id}`, updated);
+    delete updated.rating; 
+    await storage.set(`place:${tripId}:${place.category}:${place.id}`, updated);
   };
+
   const handleEditPlace = async (formData: PlaceFormData) => {
     if (!editingPlace) return;
 
@@ -3271,60 +3286,86 @@ function PlacesTab({ tripId, type }: PlacesTabProps) {
       ...formData
     };
 
-    await storage.set(`place:${tripId}:${type}:${editingPlace.id}`, updated);
+    // ⭐ LEGACY CLEANUP: Delete the old key no matter what
+    const oldCat = editingPlace.category || "visit";
+    if (oldCat !== updated.category) {
+       await deleteKey(`place:${tripId}:${oldCat}:${editingPlace.id}`);
+    }
+    // Also blindly delete from the old hardcoded paths just to be perfectly safe
+    await deleteKey(`place:${tripId}:visit:${editingPlace.id}`);
+    await deleteKey(`place:${tripId}:eat:${editingPlace.id}`);
 
-    // If it was confirmed, sync the new name/address to the itinerary
+    // Save the new one
+    await storage.set(`place:${tripId}:${updated.category}:${editingPlace.id}`, updated);
+
     if (updated.confirmed) {
        await updateItineraryBySource(tripId, `place:${updated.id}`, updated.name, updated.address);
     }
-
     setEditingPlace(null);
   };
 
-  const deletePlace = async (placeId: number) => {
+  const deletePlace = async (placeId: number, category?: PlaceType) => {
     if (!confirm("Delete this place?")) return;
-    
-    // Remove from Itinerary first
     await removeFromItineraryBySource(tripId, `place:${placeId}`);
     
-    // Delete actual place
-    await deleteKey(`place:${tripId}:${type}:${placeId}`);
+    // ⭐ LEGACY CLEANUP: Try deleting from all possible old paths so it never gets stuck
+    if (category) await deleteKey(`place:${tripId}:${category}:${placeId}`);
+    await deleteKey(`place:${tripId}:visit:${placeId}`);
+    await deleteKey(`place:${tripId}:eat:${placeId}`);
   };
-  const visitedCount = places.filter((p) => p.visited).length;
-  // Refined Accents
-  const accentColor = type === "eat" ? "text-amber-600 bg-amber-50 border-amber-200" : "text-emerald-600 bg-emerald-50 border-emerald-200";
-  const iconColor = type === "eat" ? "text-amber-500" : "text-emerald-500";
+  
+  // Strict filtering for the UI
+  const filteredPlaces = places.filter(
+    (p) => activeCategory === "all" || p.category === activeCategory
+  );
+  const visitedCount = filteredPlaces.filter((p) => p.visited).length;
 
   return (
     <div className="space-y-8">
-      <div className="flex items-end justify-between border-b border-stone-100 pb-4">
+      {/* Header */}
+      <div className="flex flex-col md:flex-row md:items-end justify-between border-b border-stone-100 pb-4 gap-4">
         <div>
-          <h2 className="text-3xl font-serif text-stone-900">
-            {type === "eat" ? "Culinary Spots" : "Sights to See"}
-          </h2>
+          <h2 className="text-3xl font-serif text-stone-900">Explore</h2>
           <p className="text-stone-500 mt-1">
-            {visitedCount} / {places.length} {type === "eat" ? "tasted" : "explored"}
+            {visitedCount} / {filteredPlaces.length} places explored
           </p>
         </div>
         <button
           onClick={() => setShowAddDialog(true)}
-          className="px-5 py-2.5 bg-stone-900 text-white rounded-full hover:bg-stone-800 flex items-center gap-2 text-sm font-medium shadow-lg hover:shadow-xl transition-all"
+          className="px-5 py-2.5 bg-stone-900 text-white rounded-full hover:bg-stone-800 flex items-center justify-center gap-2 text-sm font-medium shadow-lg hover:shadow-xl transition-all whitespace-nowrap"
         >
-          <Plus size={18} />
-          Add {type === "eat" ? "Restaurant" : "Place"}
+          <Plus size={18} /> Add Place
         </button>
       </div>
 
-      {places.length === 0 ? (
+      {/* Sub-Navigation Menu */}
+      <div className="flex gap-2 overflow-x-auto pb-2 no-scrollbar">
+        {PLACE_CATEGORIES.map((cat) => (
+          <button
+            key={cat.id}
+            onClick={() => setActiveCategory(cat.id)}
+            className={`px-4 py-2 rounded-full text-xs font-bold uppercase tracking-wider whitespace-nowrap transition-all border ${
+              activeCategory === cat.id
+                ? "bg-stone-900 text-white border-stone-900 shadow-md"
+                : "bg-white text-stone-500 border-stone-200 hover:border-stone-400 hover:text-stone-900"
+            }`}
+          >
+            {cat.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Grid rendering using strict ternary to avoid overlap issues */}
+      {filteredPlaces.length === 0 ? (
         <div className="text-center py-24 bg-white rounded-2xl border border-dashed border-stone-200">
-           <p className="text-stone-400 mb-2">No places added yet</p>
+           <p className="text-stone-400 mb-2">No places found in this category</p>
            <button onClick={() => setShowAddDialog(true)} className="text-stone-900 font-bold underline hover:text-rose-600">
-             Start your list
+             Start adding places
            </button>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-          {places.map((place) => (
+          {filteredPlaces.map((place) => (
             <div
               key={place.id}
               className={`group bg-white rounded-2xl overflow-hidden border transition-all duration-300 flex flex-col ${
@@ -3333,7 +3374,6 @@ function PlacesTab({ tripId, type }: PlacesTabProps) {
                   : "border-stone-200 shadow-sm hover:shadow-xl hover:-translate-y-1"
               }`}
             >
-              {/* Image Header */}
               <div className="relative h-56 overflow-hidden bg-stone-100">
                 {place.imageUrl ? (
                   <img src={place.imageUrl} alt={place.name} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" />
@@ -3343,14 +3383,12 @@ function PlacesTab({ tripId, type }: PlacesTabProps) {
                    </div>
                 )}
                 
-                {/* Visited Badge */}
                 {place.visited && (
                     <div className="absolute top-4 right-4 bg-white/90 backdrop-blur text-stone-900 p-2 rounded-full shadow-md">
                       <Check size={16} strokeWidth={3} />
                     </div>
                 )}
 
-                {/* Rating Badge */}
                 {place.rating && (
                    <div className="absolute bottom-4 left-4 bg-white/90 backdrop-blur px-2 py-1 rounded-md text-xs font-bold flex items-center gap-1 shadow-sm">
                       <Star size={12} className="fill-amber-400 text-amber-400" />
@@ -3359,7 +3397,6 @@ function PlacesTab({ tripId, type }: PlacesTabProps) {
                 )}
               </div>
 
-              {/* Content */}
               <div className="p-5 flex-1 flex flex-col">
                 <div className="flex justify-between items-start mb-2">
                     <h3 className="text-xl font-serif text-stone-900 leading-tight group-hover:text-rose-800 transition-colors">
@@ -3373,7 +3410,7 @@ function PlacesTab({ tripId, type }: PlacesTabProps) {
                 </div>
 
                 <a 
-                  href={place.googleMapsUrl || `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(place.address)}`}
+                  href={place.googleMapsUrl || `http://googleusercontent.com/maps.google.com/?q=${encodeURIComponent(place.address)}`}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-stone-400 mb-3 hover:text-rose-500 transition-colors cursor-pointer w-fit group/link"
@@ -3387,8 +3424,6 @@ function PlacesTab({ tripId, type }: PlacesTabProps) {
                 </p>
 
                 <div className="mt-auto pt-4 border-t border-stone-100 flex items-center justify-between">
-                    
-                    {/* Checkbox */}
                     <label className="flex items-center gap-2 cursor-pointer group/check">
                         <div className={`w-5 h-5 rounded border transition-colors flex items-center justify-center ${
                             place.visited ? "bg-stone-900 border-stone-900 text-white" : "border-stone-300 group-hover/check:border-stone-900"
@@ -3399,7 +3434,6 @@ function PlacesTab({ tripId, type }: PlacesTabProps) {
                         <span className="text-xs font-bold uppercase text-stone-400 group-hover/check:text-stone-900">Visited</span>
                     </label>
 
-                    {/* Actions Menu */}
                     <div className="flex gap-3 text-xs font-bold uppercase tracking-wide">
                         <button onClick={() => setEditingPlace(place)} className="text-stone-400 hover:text-stone-900">Edit</button>
                         
@@ -3409,7 +3443,7 @@ function PlacesTab({ tripId, type }: PlacesTabProps) {
                             <button onClick={() => unconfirmPlace(place)} className="text-amber-500 hover:text-amber-700">Unconfirm</button>
                         )}
                         
-                        <button onClick={() => deletePlace(place.id)} className="text-stone-300 hover:text-red-500">Delete</button>
+                        <button onClick={() => deletePlace(place.id, place.category)} className="text-stone-300 hover:text-red-500">Delete</button>
                     </div>
                 </div>
               </div>
@@ -3425,9 +3459,10 @@ function PlacesTab({ tripId, type }: PlacesTabProps) {
             addPlace(data);
             setShowAddDialog(false);
           }}
-          type={type}
+          initialCategory={activeCategory !== "all" ? activeCategory : "visit"}
         />
       )}
+
       {confirmingPlace && (
         <ConfirmToItineraryDialog
           title={confirmingPlace.name}
@@ -3437,40 +3472,35 @@ function PlacesTab({ tripId, type }: PlacesTabProps) {
           }
         />
       )}
+
       {costDialogPlace && (
         <CostDialog
           item={{ 
             item: costDialogPlace.name,
-            currentRating: costDialogPlace.rating // Pass existing rating if any
+            currentRating: costDialogPlace.rating
           }}
           tripId={tripId}
-          showRating={true} // 👈 Turn on the rating field!
+          showRating={true}
           onClose={() => setCostDialogPlace(null)}
-          onSave={async (cost, paidBy, rating) => { // 👈 Accept the rating
+          onSave={async (cost, paidBy, rating) => {
             const updated: StoredPlace = {
               ...costDialogPlace!,
               visited: true,
               cost: Number(cost),
               paidBy,
-              rating // 👈 Save the rating to the place
+              rating 
             };
-
-            await storage.set(
-              `place:${tripId}:${type}:${costDialogPlace!.id}`,
-              updated
-            );
-
-            if (!updated.confirmed) {
-              setConfirmingPlace(updated);
-            }
-
+            // Fallback for legacy categories during visit toggle
+            const cat = costDialogPlace!.category || "visit";
+            await storage.set(`place:${tripId}:${cat}:${costDialogPlace!.id}`, updated);
+            if (!updated.confirmed) setConfirmingPlace(updated);
             setCostDialogPlace(null);
           }}
         />
       )}
+
       {editingPlace && (
         <PlaceDialog
-          type={type}
           initialData={{
             name: editingPlace.name,
             description: editingPlace.description,
@@ -3478,18 +3508,15 @@ function PlacesTab({ tripId, type }: PlacesTabProps) {
             rating: editingPlace.rating || "",
             imageUrl: editingPlace.imageUrl || "",
             link: editingPlace.link || "",
-            visited: editingPlace.visited
+            visited: editingPlace.visited,
+            category: editingPlace.category || "visit" // ⭐ Safely pass fallback category
           }}
           onClose={() => setEditingPlace(null)}
           onAdd={(data) => handleEditPlace(data)}
         />
       )}
-
-
-
     </div>
   );
-  
 }
 
 type ShoppingTabProps = {
