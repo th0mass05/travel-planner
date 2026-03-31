@@ -5356,7 +5356,7 @@ function AdminTab({ tripId }: { tripId: number }) {
               </button>
             </div>
           </div>
-          {/* 👇 REPLACE WITH THIS NEW GROUPED GRID 👇 */}
+          {/* 👇 MASONRY LAYOUT FOR PACKING LIST 👇 */}
           {packing.length === 0 ? (
              <div className="text-center py-12 bg-white rounded-xl border border-dashed border-stone-200">
                <div className="w-12 h-12 bg-stone-50 rounded-full flex items-center justify-center mx-auto mb-3 text-stone-300">
@@ -5365,14 +5365,16 @@ function AdminTab({ tripId }: { tripId: number }) {
                <p className="text-stone-500 text-sm">List is empty.</p>
              </div>
           ) : (
-             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 items-start">
+             // ⭐ CHANGED: Using 'columns' instead of 'grid' for Masonry layout
+             <div className="columns-1 md:columns-2 lg:columns-3 gap-6 space-y-6 md:space-y-0">
                {/* 1. Loop through Categories first */}
                {categories.map((category) => {
                  const items = groupedPacking[category];
                  const catPacked = items.filter(i => i.packed).length;
                  
                  return (
-                   <div key={category} className="bg-white border border-stone-200 rounded-xl p-5 shadow-sm hover:shadow-md transition-all">
+                   // ⭐ CHANGED: Added break-inside-avoid, inline-block, w-full, and mb-6
+                   <div key={category} className="break-inside-avoid mb-6 w-full inline-block bg-white border border-stone-200 rounded-xl p-5 shadow-sm hover:shadow-md transition-all">
                       {/* Category Header */}
                       <div className="flex justify-between items-baseline mb-4 border-b border-stone-100 pb-2">
                         <h4 className="font-serif text-lg text-stone-900">{category}</h4>
