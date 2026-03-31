@@ -4960,7 +4960,7 @@ function AdminTab({ tripId }: { tripId: number }) {
   const deleteDocument = async (id: number) => {
     if (confirm("Delete document?")) await deleteKey(`document:${tripId}:${id}`);
   };
-
+  
   const downloadDocument = (doc: DocumentData) => {
     const link = document.createElement("a");
     link.href = doc.fileUrl;
@@ -4969,7 +4969,7 @@ function AdminTab({ tripId }: { tripId: number }) {
     link.click();
     document.body.removeChild(link);
   };
-
+  
   // Helper for Packing stats
   const packedCount = packing.filter((p) => p.packed).length;
   // 👇 ADD THIS: Groups the list items into categories
@@ -4979,8 +4979,81 @@ function AdminTab({ tripId }: { tripId: number }) {
     acc[cat].push(item);
     return acc;
   }, {} as Record<string, StoredPacking[]>);
-
   const categories = Object.keys(groupedPacking).sort();
+  // Helper to render a packing card (keeps JSX clean)
+  const renderPackingCard = (category: string) => {
+    const items = groupedPacking[category];
+    const catPacked = items.filter(i => i.packed).length;
+    
+    return (
+      <div key={category} className="bg-white border border-stone-200 rounded-xl p-5 shadow-sm hover:shadow-md transition-all">
+         <div className="flex justify-between items-baseline mb-4 border-b border-stone-100 pb-2">
+           <h4 className="font-serif text-lg text-stone-900">{category}</h4>
+           <span className="text-[10px] font-bold text-stone-400 uppercase tracking-widest bg-stone-50 px-2 py-1 rounded-full">
+              {catPacked}/{items.length}
+           </span>
+         </div>
+         
+         <div className="space-y-3">
+           {items.map((item) => (
+              <div key={item.id} className="flex items-start gap-3 group">
+                 <input
+                   type="checkbox"
+                   checked={item.packed}
+                   onChange={() => togglePacked(item)}
+                   className="mt-1 w-4 h-4 rounded border-stone-300 text-stone-900 focus:ring-stone-900 cursor-pointer"
+                 />
+                 <div className="flex-1 min-w-0 pt-0.5">
+                   <p className={`text-sm font-medium transition-colors leading-snug ${
+                      item.packed ? "line-through text-stone-300" : "text-stone-700"
+                   }`}>
+                     {item.item}
+                   </p>
+                 </div>
+                 <button 
+                   onClick={() => deletePackingItem(item.id)} 
+                   className="text-stone-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"
+                   title="Delete item"
+                 >
+                   <Trash2 size={14} />
+                 </button>
+              </div>
+           ))}
+         </div>
+      </div>
+    );
+  };
+  
+  // Estimates the height of a category and puts it in the shortest available column
+  const distributeCategories = (numCols: number) => {
+    const cols: string[][] = Array.from({ length: numCols }, () => []);
+    const heights = Array.from({ length: numCols }, () => 0);
+
+    categories.forEach(category => {
+      const items = groupedPacking[category] || [];
+      // Estimate height: base card padding/header (weight of ~5) + 1 per item
+      const estimatedHeight = 5 + items.length; 
+      
+      // Find the currently shortest column
+      let minIdx = 0;
+      for (let i = 1; i < numCols; i++) {
+        if (heights[i] < heights[minIdx]) {
+          minIdx = i;
+        }
+      }
+
+      // Add the category to the shortest column and update its new height
+      cols[minIdx].push(category);
+      heights[minIdx] += estimatedHeight;
+    });
+
+    return cols;
+  };
+
+  // Pre-calculate the layouts for Mobile (1), Tablet (2), and Desktop (3)
+  const cols1 = distributeCategories(1);
+  const cols2 = distributeCategories(2);
+  const cols3 = distributeCategories(3);
   // --- CLEANUP TOOL ---
   const cleanUpGhosts = async () => {
     if (!confirm("This will scan for and delete any broken/empty items that cannot be deleted normally. Continue?")) return;
@@ -5356,7 +5429,7 @@ function AdminTab({ tripId }: { tripId: number }) {
               </button>
             </div>
           </div>
-          {/* 👇 MASONRY LAYOUT FOR PACKING LIST 👇 */}
+          {/* 👇 TRUE MASONRY GRID (Shortest Column Algorithm) 👇 */}
           {packing.length === 0 ? (
              <div className="text-center py-12 bg-white rounded-xl border border-dashed border-stone-200">
                <div className="w-12 h-12 bg-stone-50 rounded-full flex items-center justify-center mx-auto mb-3 text-stone-300">
@@ -5365,55 +5438,34 @@ function AdminTab({ tripId }: { tripId: number }) {
                <p className="text-stone-500 text-sm">List is empty.</p>
              </div>
           ) : (
-             // ⭐ CHANGED: Using 'columns' instead of 'grid' for Masonry layout
-             <div className="columns-1 md:columns-2 lg:columns-3 gap-6 space-y-6 md:space-y-0">
-               {/* 1. Loop through Categories first */}
-               {categories.map((category) => {
-                 const items = groupedPacking[category];
-                 const catPacked = items.filter(i => i.packed).length;
-                 
-                 return (
-                   // ⭐ CHANGED: Added break-inside-avoid, inline-block, w-full, and mb-6
-                   <div key={category} className="break-inside-avoid mb-6 w-full inline-block bg-white border border-stone-200 rounded-xl p-5 shadow-sm hover:shadow-md transition-all">
-                      {/* Category Header */}
-                      <div className="flex justify-between items-baseline mb-4 border-b border-stone-100 pb-2">
-                        <h4 className="font-serif text-lg text-stone-900">{category}</h4>
-                        <span className="text-[10px] font-bold text-stone-400 uppercase tracking-widest bg-stone-50 px-2 py-1 rounded-full">
-                           {catPacked}/{items.length}
-                        </span>
-                      </div>
-                      
-                      {/* 2. Loop through Items in this Category */}
-                      <div className="space-y-3">
-                        {items.map((item) => (
-                           <div key={item.id} className="flex items-start gap-3 group">
-                              <input
-                                type="checkbox"
-                                checked={item.packed}
-                                onChange={() => togglePacked(item)}
-                                className="mt-1 w-4 h-4 rounded border-stone-300 text-stone-900 focus:ring-stone-900 cursor-pointer"
-                              />
-                              <div className="flex-1 min-w-0 pt-0.5">
-                                <p className={`text-sm font-medium transition-colors leading-snug ${
-                                   item.packed ? "line-through text-stone-300" : "text-stone-700"
-                                }`}>
-                                  {item.item}
-                                </p>
-                              </div>
-                              <button 
-                                onClick={() => deletePackingItem(item.id)} 
-                                className="text-stone-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"
-                                title="Delete item"
-                              >
-                                <Trash2 size={14} />
-                              </button>
-                           </div>
-                        ))}
-                      </div>
+             <>
+               {/* MOBILE: 1 Column */}
+               <div className="grid md:hidden grid-cols-1 gap-6">
+                 {cols1.map((col, colIdx) => (
+                   <div key={colIdx} className="flex flex-col gap-6">
+                     {col.map(renderPackingCard)}
                    </div>
-                 );
-               })}
-             </div>
+                 ))}
+               </div>
+
+               {/* TABLET: 2 Columns */}
+               <div className="hidden md:grid lg:hidden grid-cols-2 gap-6 items-start">
+                 {cols2.map((col, colIdx) => (
+                   <div key={colIdx} className="flex flex-col gap-6">
+                     {col.map(renderPackingCard)}
+                   </div>
+                 ))}
+               </div>
+
+               {/* DESKTOP: 3 Columns */}
+               <div className="hidden lg:grid grid-cols-3 gap-6 items-start">
+                 {cols3.map((col, colIdx) => (
+                   <div key={colIdx} className="flex flex-col gap-6">
+                     {col.map(renderPackingCard)}
+                   </div>
+                 ))}
+               </div>
+             </>
           )}
           
         </div>
