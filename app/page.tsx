@@ -43,6 +43,25 @@ import {
 import { storage } from "../firebaseStore";
 import { exp } from "firebase/firestore/pipelines";
 import { actionAsyncStorage } from "next/dist/server/app-render/action-async-storage.external";
+import { 
+  Landmark, Car, TreePine, 
+  Ticket, Palette, Wine
+} from 'lucide-react';
+
+// 2. Add this mapping right above your PlacesTab function
+const categoryIcons: Record<string, any> = {
+  eat: Utensils,
+  landmark: Landmark,
+  "day-trip": Car,
+  shopping: ShoppingBag,
+  experience: Star,
+  nature: TreePine,
+  entertainment: Ticket,
+  culture: Palette,
+  nightlife: Wine,
+  visit: MapPin,
+};
+
 
 // Helper to generate a "Add to Google Calendar" URL
 const createGoogleCalendarLink = (
@@ -271,7 +290,7 @@ type TripData = TripFormData & {
 };
 
 
-const iconMap = {
+const iconMap: Record<string, any> = {
   flight: Plane,
   hotel: Hotel,
   eat: Utensils,
@@ -279,7 +298,14 @@ const iconMap = {
   activity: Clock,
   custom: Star,
   transport: Train,
-   // fallback for manual picks
+  landmark: Landmark,
+  "day-trip": Car,
+  shopping: ShoppingBag,
+  experience: Star,
+  nature: TreePine,
+  entertainment: Ticket,
+  culture: Palette,
+  nightlife: Wine,
 };
 
 
@@ -1232,8 +1258,10 @@ function ActivityDialog({ onClose, onAdd, initialData }: ActivityDialogProps) {
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-lg max-w-md w-full p-6">
-        <h3 className="text-2xl font-serif mb-4">Add Activity</h3>
+      <div className="bg-white rounded-lg max-w-md w-full p-6 max-h-[90vh] overflow-y-auto">
+        <h3 className="text-2xl font-serif mb-4">
+          {initialData ? "Edit Activity" : "Add Activity"}
+        </h3>
         <div className="space-y-4">
           <div>
             <label className="block text-sm font-medium mb-1">Time</label>
@@ -1258,18 +1286,31 @@ function ActivityDialog({ onClose, onAdd, initialData }: ActivityDialogProps) {
               placeholder="What are you doing?"
             />
           </div>
+          
+          {/* ⭐ UPDATED: Google Maps Autocomplete for Location */}
           <div>
             <label className="block text-sm font-medium mb-1">Location</label>
-            <input
-              type="text"
-              value={formData.location}
-              onChange={(e) =>
-                setFormData({ ...formData, location: e.target.value })
-              }
+            <Autocomplete
+              apiKey={process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY}
+              defaultValue={formData.location}
+              onPlaceSelected={(place) => {
+                if (place) {
+                  setFormData({ 
+                    ...formData, 
+                    // Use formatted_address, fallback to name, or empty string
+                    location: place.formatted_address || place.name || "",
+                  });
+                }
+              }}
               className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg focus:border-gray-900 outline-none"
-              placeholder="Where?"
+              placeholder="Start typing an address or place..."
+              options={{
+                types: [], 
+                fields: ["name", "formatted_address", "url", "geometry"] 
+              }}
             />
           </div>
+
           <div>
             <label className="block text-sm font-medium mb-1">Icon</label>
             <select
@@ -1277,13 +1318,22 @@ function ActivityDialog({ onClose, onAdd, initialData }: ActivityDialogProps) {
               onChange={(e)=>
                 setFormData({...formData, iconType:e.target.value})
               }
-              className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg cursor-pointer"
+              className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg cursor-pointer bg-white"
             >
               <option value="activity">General Activity</option>
               <option value="visit">Place to Visit</option>
-              <option value="eat">Restaurant / Food</option>
+              <option value="eat">Food & Drink</option>
               <option value="flight">Flight</option>
               <option value="hotel">Hotel</option>
+              <option value="transport">Transport</option>
+              <option value="landmark">Landmark</option>
+              <option value="day-trip">Day Trip</option>
+              <option value="shopping">Shopping</option>
+              <option value="experience">Experience</option>
+              <option value="nature">Nature</option>
+              <option value="entertainment">Entertainment</option>
+              <option value="culture">Culture</option>
+              <option value="nightlife">Nightlife</option>
             </select>
           </div>
 
@@ -1563,7 +1613,7 @@ function ConfirmToItineraryDialog({
 }
 
 
-type IconType = "activity" | "visit" | "eat" | "flight" | "hotel" | "transport";
+type IconType = "activity" | "visit" | "eat" | "flight" | "hotel" | "transport" | "landmark" | "day-trip" | "shopping" | "experience" | "nature" | "entertainment" | "culture" | "nightlife";
 
 type ItineraryItem = {
   id: number;
@@ -2997,7 +3047,8 @@ function ItineraryTab({ trip }: { trip: TripData }) {
           ) : (
             <div className="relative border-l border-stone-200 ml-4 pl-8 space-y-8 py-2">
               {currentDayData.items.map((item) => {
-                const Icon = iconMap[item.iconType] || Clock;
+                // ⭐ Grabs the correct icon from your expanded iconMap
+                const Icon = iconMap[item.iconType] || Clock; 
                 return (
                   <div key={item.id} className="relative group">
                     {/* Timeline Dot */}
@@ -3027,10 +3078,15 @@ function ItineraryTab({ trip }: { trip: TripData }) {
                                     </div>
                                 </div>
 
-                                <div className="flex items-center gap-1.5 text-stone-500 text-sm font-medium mb-3">
-                                    <MapPin size={14} className="text-rose-400" />
-                                    {item.location}
-                                </div>
+                                <a 
+                                    href={`https://maps.google.com/?q=${encodeURIComponent(item.location)}`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="flex items-center gap-1.5 text-stone-500 text-sm font-medium mb-3 hover:text-rose-500 transition-colors cursor-pointer w-fit group/link"
+                                >
+                                    <MapPin size={14} className="text-rose-400 group-hover/link:scale-110 transition-transform" />
+                                    <span className="group-hover/link:underline">{item.location}</span>
+                                </a>
 
                                 {item.notes && (
                                     <div className="bg-stone-50 px-4 py-3 rounded-lg text-stone-600 text-sm italic border border-stone-100">
@@ -3052,7 +3108,7 @@ function ItineraryTab({ trip }: { trip: TripData }) {
         </>
       )}
 
-      {/* ================= CALENDAR VIEW (Simplified) ================= */}
+      {/* ================= CALENDAR VIEW ================= */}
       {viewMode === "calendar" && (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {days.map((day) => {
@@ -3064,24 +3120,22 @@ function ItineraryTab({ trip }: { trip: TripData }) {
                   onClick={() => { setCurrentDayIndex(day.day - 1); setViewMode("timeline"); }}
                   className="group bg-white border border-stone-200 rounded-xl hover:border-stone-400 hover:shadow-lg cursor-pointer transition-all min-h-[180px] flex flex-col relative overflow-hidden"
                >
-                  {/* ⭐ NEW: Segmented Color Bar at the Top */}
+                  {/* Segmented Color Bar at the Top */}
                   {dayLocs.length > 0 ? (
                     <div className="absolute top-0 left-0 right-0 h-3 flex w-full">
                       {dayLocs.map((loc) => (
                         <div 
                           key={loc.id} 
-                          // Extract the 'bg-xxx' class from your stored color string
                           className={`flex-1 h-full ${loc.color.split(" ")[0]}`} 
                           title={loc.location} 
                         />
                       ))}
                     </div>
                   ) : (
-                    // Optional: A faint grey bar for days with no location, to keep alignment consistent
                     <div className="absolute top-0 left-0 right-0 h-3 bg-stone-50" />
                   )}
 
-                  {/* Card Content - Added pt-5 to account for the bar */}
+                  {/* Card Content */}
                   <div className="p-4 pt-6 flex-1 flex flex-col">
                     
                     {/* Date Header */}
@@ -3096,16 +3150,16 @@ function ItineraryTab({ trip }: { trip: TripData }) {
                     
                     {/* Items List */}
                     <div className="flex-1 space-y-2 overflow-hidden">
-                        {day.items.slice(0, 4).map(i => (
-                            <div key={i.id} className="text-xs text-stone-600 truncate flex items-center gap-2 px-1.5 py-1 rounded hover:bg-stone-50 transition-colors">
-                                <div className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${
-                                  i.iconType === 'eat' ? 'bg-amber-400' :
-                                  i.iconType === 'visit' ? 'bg-emerald-400' :
-                                  'bg-stone-300'
-                                }`} />
-                                <span className="truncate">{i.activity}</span>
-                            </div>
-                        ))}
+                        {day.items.slice(0, 4).map(i => {
+                            // ⭐ Grabs the exact icon (replaces the old colored dot logic)
+                            const CalIcon = iconMap[i.iconType] || Clock;
+                            return (
+                              <div key={i.id} className="text-xs text-stone-600 truncate flex items-center gap-1.5 px-1.5 py-1 rounded hover:bg-stone-50 transition-colors">
+                                  <CalIcon size={12} className="text-stone-400 flex-shrink-0" />
+                                  <span className="truncate">{i.activity}</span>
+                              </div>
+                            );
+                        })}
                         
                         {day.items.length > 4 && (
                           <div className="text-[10px] font-bold text-stone-400 uppercase tracking-wider pl-2 pt-1">
@@ -3126,7 +3180,7 @@ function ItineraryTab({ trip }: { trip: TripData }) {
         </div>
       )}
 
-      {/* ... (Dialogs remain same) ... */}
+      {/* Dialogs */}
       {showAddDialog && (
         <ActivityDialog
           onClose={() => setShowAddDialog(false)}
@@ -3138,7 +3192,7 @@ function ItineraryTab({ trip }: { trip: TripData }) {
       )}
       {editingActivity && (
         <ActivityDialog
-          initialData={{ // You'll need to update ActivityDialog to accept initialData (see step 4)
+          initialData={{ 
             time: editingActivity.time,
             activity: editingActivity.activity,
             location: editingActivity.location,
@@ -3146,7 +3200,7 @@ function ItineraryTab({ trip }: { trip: TripData }) {
             iconType: editingActivity.iconType,
           }}
           onClose={() => setEditingActivity(null)}
-          onAdd={handleEditActivity} // Reuse the onAdd prop but treating it as update
+          onAdd={handleEditActivity} 
         />
       )}
 
@@ -3255,7 +3309,8 @@ function PlacesTab({ tripId }: PlacesTabProps) {
       activity: place.name,
       location: place.address,
       notes: place.description || "",
-      iconType: place.category === "eat" ? "eat" : "visit",
+      // ⭐ FIXED: Pass the exact category straight to the itinerary!
+      iconType: (place.category || "visit") as IconType, 
       sourceId: `place:${place.id}`, 
       createdAt: new Date().toISOString()
     };
@@ -3365,90 +3420,113 @@ function PlacesTab({ tripId }: PlacesTabProps) {
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-          {filteredPlaces.map((place) => (
-            <div
-              key={place.id}
-              className={`group bg-white rounded-2xl overflow-hidden border transition-all duration-300 flex flex-col ${
-                place.visited
-                  ? `border-stone-200 opacity-80 hover:opacity-100`
-                  : "border-stone-200 shadow-sm hover:shadow-xl hover:-translate-y-1"
-              }`}
-            >
-              <div className="relative h-56 overflow-hidden bg-stone-100">
-                {place.imageUrl ? (
-                  <img src={place.imageUrl} alt={place.name} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" />
-                ) : (
-                   <div className="w-full h-full flex items-center justify-center text-stone-300">
-                      <MapPin size={48} />
-                   </div>
-                )}
-                
-                {place.visited && (
-                    <div className="absolute top-4 right-4 bg-white/90 backdrop-blur text-stone-900 p-2 rounded-full shadow-md">
-                      <Check size={16} strokeWidth={3} />
+          {filteredPlaces.map((place) => {
+            // ⭐ Lookup the correct icon for this specific place
+            const CategoryIcon = categoryIcons[place.category] || MapPin;
+            const categoryLabel = PLACE_CATEGORIES.find(c => c.id === place.category)?.label || "Place";
+
+            return (
+              <div
+                key={place.id}
+                className={`group bg-white rounded-2xl overflow-hidden border transition-all duration-300 flex flex-col ${
+                  place.visited
+                    ? `border-stone-200 opacity-80 hover:opacity-100`
+                    : "border-stone-200 shadow-sm hover:shadow-xl hover:-translate-y-1"
+                }`}
+              >
+                {/* Image Header */}
+                <div className="relative h-56 overflow-hidden bg-stone-100">
+                  {place.imageUrl ? (
+                    <img src={place.imageUrl} alt={place.name} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center text-stone-300">
+                        <MapPin size={48} />
                     </div>
-                )}
+                  )}
+                  
+                  {/* Category Icon Badge (Top Left) */}
+                  {activeCategory === "all" && (
+                    <div className="absolute top-4 left-4 bg-white/90 backdrop-blur text-stone-900 px-2.5 py-1.5 rounded-md shadow-sm flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider">
+                      <CategoryIcon size={14} className="text-rose-500" />
+                      {categoryLabel}
+                    </div>
+                  )}
 
-                {place.rating && (
-                   <div className="absolute bottom-4 left-4 bg-white/90 backdrop-blur px-2 py-1 rounded-md text-xs font-bold flex items-center gap-1 shadow-sm">
-                      <Star size={12} className="fill-amber-400 text-amber-400" />
-                      {place.rating}
-                   </div>
-                )}
-              </div>
+                  {/* Visited Badge (Top Right) */}
+                  {place.visited && (
+                      <div className="absolute top-4 right-4 bg-white/90 backdrop-blur text-stone-900 p-2 rounded-full shadow-md">
+                        <Check size={16} strokeWidth={3} />
+                      </div>
+                  )}
 
-              <div className="p-5 flex-1 flex flex-col">
-                <div className="flex justify-between items-start mb-2">
-                    <h3 className="text-xl font-serif text-stone-900 leading-tight group-hover:text-rose-800 transition-colors">
-                        {place.name}
-                    </h3>
-                    {place.link && (
-                        <a href={place.link} target="_blank" rel="noreferrer" className="text-stone-300 hover:text-stone-900">
-                            <ExternalLink size={16} />
-                        </a>
-                    )}
+                  {/* Rating Badge (Bottom Left) */}
+                  {place.rating && (
+                    <div className="absolute bottom-4 left-4 bg-white/90 backdrop-blur px-2 py-1 rounded-md text-xs font-bold flex items-center gap-1 shadow-sm">
+                        <Star size={12} className="fill-amber-400 text-amber-400" />
+                        {place.rating}
+                    </div>
+                  )}
                 </div>
 
-                <a 
-                  href={place.googleMapsUrl || `http://googleusercontent.com/maps.google.com/?q=${encodeURIComponent(place.address)}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-stone-400 mb-3 hover:text-rose-500 transition-colors cursor-pointer w-fit group/link"
-                  >
-                  <MapPin size={12} /> 
-                  <span className="group-hover/link:underline">{place.address}</span>
-              </a>
+                {/* Content */}
+                <div className="p-5 flex-1 flex flex-col">
+                  <div className="flex justify-between items-start mb-2">
+                      <h3 className="text-xl font-serif text-stone-900 leading-tight group-hover:text-rose-800 transition-colors">
+                          {place.name}
+                      </h3>
+                      {place.link && (
+                          <a href={place.link} target="_blank" rel="noreferrer" className="text-stone-300 hover:text-stone-900">
+                              <ExternalLink size={16} />
+                          </a>
+                      )}
+                  </div>
 
-                <p className="text-stone-600 text-sm leading-relaxed mb-6 line-clamp-3">
-                    {place.description}
-                </p>
+                  <a 
+                    href={place.googleMapsUrl || `http://googleusercontent.com/maps.google.com/?q=${encodeURIComponent(place.address)}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-stone-400 mb-3 hover:text-rose-500 transition-colors cursor-pointer w-fit group/link"
+                    >
+                    <MapPin size={12} /> 
+                    <span className="group-hover/link:underline">{place.address}</span>
+                  </a>
 
-                <div className="mt-auto pt-4 border-t border-stone-100 flex items-center justify-between">
-                    <label className="flex items-center gap-2 cursor-pointer group/check">
-                        <div className={`w-5 h-5 rounded border transition-colors flex items-center justify-center ${
-                            place.visited ? "bg-stone-900 border-stone-900 text-white" : "border-stone-300 group-hover/check:border-stone-900"
-                        }`}>
-                            {place.visited && <Check size={12} />}
-                        </div>
-                        <input type="checkbox" checked={place.visited} onChange={()=>handleVisitedToggle(place)} className="hidden" />
-                        <span className="text-xs font-bold uppercase text-stone-400 group-hover/check:text-stone-900">Visited</span>
-                    </label>
+                  <p className="text-stone-600 text-sm leading-relaxed mb-4 line-clamp-3">
+                      {place.description}
+                  </p>
 
-                    <div className="flex gap-3 text-xs font-bold uppercase tracking-wide">
-                        <button onClick={() => setEditingPlace(place)} className="text-stone-400 hover:text-stone-900">Edit</button>
-                        
-                        {!place.confirmed ? (
-                            <button onClick={() => setConfirmingPlace(place)} className="text-rose-400 hover:text-rose-600">Confirm</button>
-                        ) : (
-                            <button onClick={() => unconfirmPlace(place)} className="text-amber-500 hover:text-amber-700">Unconfirm</button>
-                        )}
-                        
-                        <button onClick={() => deletePlace(place.id, place.category)} className="text-stone-300 hover:text-red-500">Delete</button>
-                    </div>
+                  {/* ⭐ NEW: Shows who added the place and when */}
+                  <div className="mt-auto mb-4">
+                      <TripAuthorInfo uid={place.createdByUid} createdAt={place.createdAt} />
+                  </div>
+
+                  <div className="pt-4 border-t border-stone-100 flex items-center justify-between">
+                      <label className="flex items-center gap-2 cursor-pointer group/check">
+                          <div className={`w-5 h-5 rounded border transition-colors flex items-center justify-center ${
+                              place.visited ? "bg-stone-900 border-stone-900 text-white" : "border-stone-300 group-hover/check:border-stone-900"
+                          }`}>
+                              {place.visited && <Check size={12} />}
+                          </div>
+                          <input type="checkbox" checked={place.visited} onChange={()=>handleVisitedToggle(place)} className="hidden" />
+                          <span className="text-xs font-bold uppercase text-stone-400 group-hover/check:text-stone-900">Visited</span>
+                      </label>
+
+                      <div className="flex gap-3 text-xs font-bold uppercase tracking-wide">
+                          <button onClick={() => setEditingPlace(place)} className="text-stone-400 hover:text-stone-900">Edit</button>
+                          
+                          {!place.confirmed ? (
+                              <button onClick={() => setConfirmingPlace(place)} className="text-rose-400 hover:text-rose-600">Confirm</button>
+                          ) : (
+                              <button onClick={() => unconfirmPlace(place)} className="text-amber-500 hover:text-amber-700">Unconfirm</button>
+                          )}
+                          
+                          <button onClick={() => deletePlace(place.id, place.category)} className="text-stone-300 hover:text-red-500">Delete</button>
+                      </div>
+                  </div>
                 </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
 
