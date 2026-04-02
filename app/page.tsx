@@ -3525,29 +3525,23 @@ function PlacesTab({ tripId }: PlacesTabProps) {
       },
       {
           "featureType": "road",
-          "elementType": "labels.icon",
+          "elementType": "labels", // Kills ALL street names, numbers, and shields
           "stylers": [{ "visibility": "off" }]
-      },
-      
-      {
-          "featureType": "road",
-          "elementType": "all",
-          "stylers": [{ "saturation": "-100" }]
       },
       {
           "featureType": "road.highway",
-          "elementType": "all",
-          "stylers": [{ "visibility": "simplified" }]
+          "elementType": "all", // Kills the dark expressways
+          "stylers": [{ "visibility": "off" }]
       },
       {
           "featureType": "road.arterial",
-          "elementType": "all",
-          "stylers": [{ "lightness": "30" }]
+          "elementType": "all", // Kills the thick connector roads
+          "stylers": [{ "visibility": "off" }]
       },
       {
           "featureType": "road.local",
-          "elementType": "all",
-          "stylers": [{ "lightness": "40" }]
+          "elementType": "all", // Kills the faint neighborhood streets
+          "stylers": [{ "visibility": "off" }] 
       },
       {
           "featureType": "transit",
@@ -3571,6 +3565,20 @@ function PlacesTab({ tripId }: PlacesTabProps) {
     googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || "", 
     libraries: mapLibraries, // ⭐ ADD THIS LINE
   });
+  const initialCenter = useMemo(() => {
+    // Look for the first place in this specific trip that has coordinates
+    const firstPlaceWithCoords = places.find(p => p.lat && p.lng);
+    
+    if (firstPlaceWithCoords) {
+      return { 
+        lat: Number(firstPlaceWithCoords.lat), 
+        lng: Number(firstPlaceWithCoords.lng) 
+      };
+    }
+
+    // FALLBACK: If no places exist yet, show a wide world view or a neutral coordinate
+    return { lat: 20, lng: 0 }; 
+  }, [tripId]);
   return (
     <div className="space-y-8">
       {/* Header */}
@@ -3708,11 +3716,7 @@ function PlacesTab({ tripId }: PlacesTabProps) {
               <GoogleMap
                 mapContainerStyle={{ width: '100%', height: '100%' }}
                 zoom={13}
-                center={
-                  filteredPlaces.find(p => p.lat && p.lng) 
-                    ? { lat: filteredPlaces.find(p => p.lat && p.lng)!.lat!, lng: filteredPlaces.find(p => p.lat && p.lng)!.lng! }
-                    : { lat: 35.6762, lng: 139.6503 } 
-                }
+                center={initialCenter}
                 options={mapOptions}
                 onClick={() => setSelectedPlace(null)} 
               >
@@ -3734,7 +3738,7 @@ function PlacesTab({ tripId }: PlacesTabProps) {
                         path: "M 0, 0 m -10, 0 a 10,10 0 1,0 20,0 a 10,10 0 1,0 -20,0",
                         fillColor: pinColor,
                         fillOpacity: 1,
-                        strokeColor: "#ffffff", // White border looks best on dots
+                        strokeColor: "#747474", // White border looks best on dots
                         strokeWeight: 3,
                         scale: 0.8, // Slightly smaller
                         // ⭐ CRITICAL: Tells the popup window to spawn dead center above the dot
