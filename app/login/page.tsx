@@ -6,6 +6,7 @@ import { setDoc, doc, getDoc } from "firebase/firestore";
 import {
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
+  sendPasswordResetEmail
 } from "firebase/auth";
 
 export default function Login() {
@@ -15,7 +16,20 @@ export default function Login() {
   const [isSignup, setIsSignup] = useState(false);
   const [error, setError] = useState("");
   const router = useRouter();
-
+  const [resetMsg, setResetMsg] = useState("");
+  const handleForgotPassword = async () => {
+      if (!email) {
+        setError("Please enter your email address first.");
+        return;
+      }
+      try {
+        setError("");
+        await sendPasswordResetEmail(auth, email);
+        setResetMsg("Password reset email sent! Check your inbox.");
+      } catch (e: any) {
+        setError(e.message);
+      }
+    };
   const handleSubmit = async () => {
     try {
       setError("");
@@ -124,7 +138,22 @@ export default function Login() {
         >
           {isSignup ? "Sign up" : "Login"}
         </button>
+        {/* ⭐ NEW: Forgot Password Button */}
+        {!isSignup && (
+          <button
+            onClick={handleForgotPassword}
+            className="w-full text-xs font-bold text-stone-400 hover:text-stone-900 transition-colors mt-2"
+          >
+            Forgot your password?
+          </button>
+        )}
 
+        {/* ⭐ NEW: Reset Success Message */}
+        {resetMsg && (
+          <p className="text-emerald-600 text-sm font-medium text-center bg-emerald-50 p-3 rounded-lg border border-emerald-100">
+            {resetMsg}
+          </p>
+        )}
         <button
           onClick={() => { setIsSignup(!isSignup); setError(""); }}
           className="w-full text-sm font-bold text-stone-500 hover:text-stone-900 transition-colors"
