@@ -98,7 +98,7 @@ function PlaceShoppingListDialog({
   items: ShoppingData[];
   onClose: () => void;
 }) {
-  const storeItems = items.filter(i => i.placeId === place.id);
+  const storeItems = items.filter(i => i.linkedPlaces?.some(p => p.id === place.id));
 
   return (
     <div className="fixed inset-0 bg-stone-900/40 backdrop-blur-sm flex items-center justify-center p-4 z-[60]">
@@ -290,8 +290,7 @@ export type ShoppingData = {
   category: string;
   link?: string;
   notes?: string;
-  placeId?: number;
-  placeName?: string;
+  linkedPlaces?: { id: number; name: string }[];
   createdByUid?: string | null;
   createdAt?: string;
 };
@@ -1300,7 +1299,8 @@ type ShoppingDialogProps = {
 
 function ShoppingDialog({ onClose, onAdd, shoppingPlaces, existingCategories }: ShoppingDialogProps) {
   const [formData, setFormData] = useState<ShoppingData>({
-    item: "", category: "", link: "", notes: "", placeId: undefined, placeName: "",
+    item: "", category: "", link: "", notes: "", 
+    linkedPlaces: [], // ⭐ UPDATED INITIAL STATE
     createdAt: new Date().toISOString(),
   });
 
@@ -1367,23 +1367,62 @@ function ShoppingDialog({ onClose, onAdd, shoppingPlaces, existingCategories }: 
                placeholder="https://..."
              />
           </div>
+          {/* ⭐ SCALABLE MULTI-SELECT: Selected Chips + Add Dropdown */}
           {shoppingPlaces.length > 0 && (
             <div>
-               <label className="block text-xs font-bold uppercase tracking-wider text-stone-500 mb-1.5">Link to Store (Optional)</label>
-               <select
-                 value={formData.placeId || ""}
-                 onChange={(e) => {
-                   const pId = e.target.value ? Number(e.target.value) : undefined;
-                   const pName = shoppingPlaces.find(p => p.id === pId)?.name || "";
-                   setFormData({ ...formData, placeId: pId, placeName: pName });
-                 }}
-                 className="w-full px-4 py-2.5 border border-stone-300 rounded-lg focus:border-stone-900 outline-none transition-all bg-white cursor-pointer"
-               >
-                 <option value="">-- No specific store --</option>
-                 {shoppingPlaces.map((place) => (
-                   <option key={place.id} value={place.id}>{place.name}</option>
-                 ))}
-               </select>
+               <label className="block text-xs font-bold uppercase tracking-wider text-stone-500 mb-2">Link to Stores (Optional)</label>
+
+               {/* 1. Show Selected Stores as Removable Chips */}
+               {formData.linkedPlaces && formData.linkedPlaces.length > 0 && (
+                 <div className="flex flex-wrap gap-2 mb-3">
+                   {formData.linkedPlaces.map(place => (
+                     <div key={place.id} className="bg-rose-50 border border-rose-200 text-rose-700 px-2.5 py-1.5 rounded-md text-xs font-bold flex items-center gap-1.5 shadow-sm animate-in fade-in zoom-in-95">
+                       <MapPin size={12} className="text-rose-500" />
+                       {place.name}
+                       <button
+                         type="button"
+                         onClick={() => setFormData({
+                           ...formData,
+                           linkedPlaces: formData.linkedPlaces!.filter(p => p.id !== place.id)
+                         })}
+                         className="ml-1 text-rose-400 hover:text-rose-700 hover:scale-110 transition-all outline-none"
+                         title="Remove store"
+                       >
+                         &times;
+                       </button>
+                     </div>
+                   ))}
+                 </div>
+               )}
+
+               {/* 2. Dropdown to Add More Stores (Filters out already selected ones) */}
+               {shoppingPlaces.filter(p => !formData.linkedPlaces?.some(lp => lp.id === p.id)).length > 0 ? (
+                 <select
+                   value="" // Always resets to empty after selection
+                   onChange={(e) => {
+                     const pId = Number(e.target.value);
+                     const place = shoppingPlaces.find(p => p.id === pId);
+                     if (place) {
+                       const current = formData.linkedPlaces || [];
+                       setFormData({ ...formData, linkedPlaces: [...current, { id: place.id, name: place.name }] });
+                     }
+                   }}
+                   className="w-full px-4 py-2.5 border border-stone-300 rounded-lg focus:border-stone-900 outline-none transition-all bg-white cursor-pointer text-sm"
+                 >
+                   <option value="" disabled>+ Add a store...</option>
+                   {shoppingPlaces
+                     .filter(p => !formData.linkedPlaces?.some(lp => lp.id === p.id)) // Only show unselected stores
+                     .map(place => (
+                       <option key={place.id} value={place.id}>{place.name}</option>
+                     ))
+                   }
+                 </select>
+               ) : (
+                  // Friendly message if they've literally selected every store on the list
+                  <div className="text-xs text-stone-400 italic bg-stone-50 p-3 rounded-lg border border-stone-100 text-center">
+                    All available shopping places have been linked.
+                  </div>
+               )}
             </div>
           )}
           <div>
@@ -4160,13 +4199,13 @@ function PlacesTab({ tripId, country }: PlacesTabProps) {
                       </label>
 
                       <div className="flex gap-3 text-xs font-bold uppercase tracking-wide">
-                        {place.category === 'shopping' && shoppingItems.filter(i => i.placeId === place.id).length > 0 && (
+                        {place.category === 'shopping' && shoppingItems.filter(i => i.linkedPlaces?.some(p => p.id === place.id)).length > 0 && (
                             <button 
                               onClick={() => setShoppingListPlace(place)} 
                               className="text-indigo-500 hover:text-indigo-700 flex items-center gap-1 mr-2"
                             >
                               <ShoppingBag size={14} />
-                              List ({shoppingItems.filter(i => i.placeId === place.id).length})
+                              List ({shoppingItems.filter(i => i.linkedPlaces?.some(p => p.id === place.id)).length})
                             </button>
                           )}
                           <button onClick={() => setEditingPlace(place)} className="text-stone-400 hover:text-stone-900">Edit</button>
@@ -4495,14 +4534,21 @@ function ShoppingTab({ tripId }: { tripId: number }) {
                    </p>
                    
                    {/* Meta: Store location & Notes */}
-                   {(item.placeName || item.notes) && (
-                      <div className="mt-1 flex flex-col gap-0.5">
-                         {item.placeName && (
-                           <span className="text-[10px] font-bold uppercase tracking-wider text-rose-500 flex items-center gap-1 w-fit">
-                              <MapPin size={10} /> {item.placeName}
-                           </span>
+                   {( (item.linkedPlaces && item.linkedPlaces.length > 0) || item.notes) && (
+                      <div className="mt-1.5 flex flex-col gap-1.5">
+                         
+                         {/* ⭐ Loop through all linked places and render a badge for each */}
+                         {item.linkedPlaces && item.linkedPlaces.length > 0 && (
+                           <div className="flex flex-wrap gap-1.5">
+                             {item.linkedPlaces.map(place => (
+                               <span key={place.id} className="text-[10px] font-bold uppercase tracking-wider text-rose-600 bg-rose-50 border border-rose-100 px-1.5 py-0.5 rounded flex items-center gap-1 w-fit">
+                                  <MapPin size={10} /> {place.name}
+                               </span>
+                             ))}
+                           </div>
                          )}
-                         {item.notes && <span className="text-xs text-stone-500 line-clamp-2">{item.notes}</span>}
+
+                         {item.notes && <span className="text-xs text-stone-500 line-clamp-2 leading-relaxed">{item.notes}</span>}
                       </div>
                    )}
                  </div>
