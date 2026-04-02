@@ -226,25 +226,28 @@ export default function AdminTab({ tripId }: { tripId: number }) {
   const [myFriends, setMyFriends] = useState<any[]>([]);
   const [sentRequests, setSentRequests] = useState<string[]>([]);
   // 3. Load Members Effect
+ // ⭐ UPDATED: Real-time Friends Listener
   useEffect(() => {
-    if (activeSubTab === "members") {
-      loadMembers();
-      loadMyFriends(); // ⭐ NEW
-    }
-  }, [activeSubTab, tripId]);
-  // ⭐ NEW: Fetch user's friend list
-  const loadMyFriends = async () => {
+    if (activeSubTab !== "members") return;
+
+    loadMembers();
+
     const user = auth.currentUser;
     if (!user) return;
-    try {
-      const snap = await getDocs(collection(db, "users", user.uid, "friends"));
-      const friends: any[] = [];
-      snap.forEach(d => friends.push(d.data()));
-      setMyFriends(friends);
-    } catch (e) {
-      console.error("Failed to load friends", e);
-    }
-  };
+
+    // Use onSnapshot instead of getDocs for real-time updates
+    const unsubFriends = onSnapshot(
+      collection(db, "users", user.uid, "friends"),
+      (snap) => {
+        const friends: any[] = [];
+        snap.forEach((d) => friends.push(d.data()));
+        setMyFriends(friends);
+      },
+      (err) => console.error("Friends listener error:", err)
+    );
+
+    return () => unsubFriends(); // Cleanup listener when tab changes
+  }, [activeSubTab, tripId]);
 
   // ⭐ NEW: Send Friend Request directly from the Member list
   const handleSendFriendRequest = async (targetUid: string) => {
@@ -834,9 +837,9 @@ export default function AdminTab({ tripId }: { tripId: number }) {
             <h3 className="text-xl font-serif text-stone-900 mb-4">Who's going?</h3>
             <div className="bg-white border border-stone-200 rounded-xl overflow-hidden divide-y divide-stone-100 shadow-sm">
               {memberList.map((member) => {
-                // ⭐ Check if this member is already in our friends list
-                const isFriend = myFriends.some(f => f.uid === member.id && f.status === "accepted");
-                const isPending = sentRequests.includes(member.id) || myFriends.some(f => f.uid === member.id && f.status === "pending_sent");
+                const friendRecord = myFriends.find(f => f.uid === member.id);
+                const isFriend = friendRecord?.status === "accepted";
+                const isPending = sentRequests.includes(member.id) || friendRecord?.status === "pending_sent";
 
                 return (
                   <div key={member.id} className="p-4 flex items-center justify-between hover:bg-stone-50 transition-colors">
@@ -865,19 +868,20 @@ export default function AdminTab({ tripId }: { tripId: number }) {
                     
                     <div className="flex items-center gap-3">
                       {/* ⭐ NEW: Add Friend Button */}
-                      {!member.isMe && member.status === "Member" && !isFriend && (
-                        isPending ? (
-                          <span className="text-[10px] uppercase tracking-widest font-bold text-stone-400">Request Sent</span>
+                      {!member.isMe && member.status === "Member" && (
+                        isFriend ? (
+                            <span className="text-[10px] uppercase tracking-widest font-bold text-emerald-500 bg-emerald-50 px-2 py-1 rounded">Friends</span>
+                        ) : isPending ? (
+                            <span className="text-[10px] uppercase tracking-widest font-bold text-stone-400">Request Sent</span>
                         ) : (
-                          <button 
+                            <button 
                             onClick={() => handleSendFriendRequest(member.id)} 
                             className="p-1.5 text-indigo-500 hover:bg-indigo-50 hover:text-indigo-700 rounded-md transition-colors" 
-                            title="Add Friend"
-                          >
+                            >
                             <UserPlus size={18} />
-                          </button>
+                            </button>
                         )
-                      )}
+                        )}
 
                       <span className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wide ${
                         member.status === "Member" 
