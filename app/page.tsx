@@ -89,7 +89,55 @@ const createGoogleCalendarLink = (
 
   return `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${text}&dates=${startDateTime}/${endDateTime}&details=${details}&location=${loc}`;
 };
+function PlaceShoppingListDialog({
+  place,
+  items,
+  onClose,
+}: {
+  place: StoredPlace;
+  items: ShoppingData[];
+  onClose: () => void;
+}) {
+  const storeItems = items.filter(i => i.placeId === place.id);
 
+  return (
+    <div className="fixed inset-0 bg-stone-900/40 backdrop-blur-sm flex items-center justify-center p-4 z-[60]">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 animate-in zoom-in-95 duration-200">
+        <div className="flex items-center gap-3 mb-4 border-b border-stone-100 pb-4">
+          <div className="w-10 h-10 rounded-full bg-rose-50 text-rose-500 flex items-center justify-center">
+            <ShoppingBag size={20} />
+          </div>
+          <div>
+            <h3 className="text-xl font-serif text-stone-900 leading-tight">{place.name}</h3>
+            <p className="text-xs font-bold uppercase tracking-widest text-stone-400">Shopping List</p>
+          </div>
+        </div>
+
+        <div className="space-y-3 max-h-[60vh] overflow-y-auto mb-6 pr-2">
+          {storeItems.length === 0 ? (
+            <p className="text-stone-500 text-sm text-center py-4 italic">No items linked to this store yet.</p>
+          ) : (
+            storeItems.map(item => (
+              <div key={item.id} className={`p-3 rounded-lg border ${item.bought ? "bg-stone-50 border-stone-100" : "bg-white border-stone-200 shadow-sm"}`}>
+                <div className="flex items-start justify-between">
+                  <span className={`font-medium ${item.bought ? "line-through text-stone-400" : "text-stone-900"}`}>
+                    {item.item}
+                  </span>
+                  {item.bought && <Check size={16} className="text-emerald-500" />}
+                </div>
+                {item.notes && <p className="text-xs text-stone-500 mt-1">{item.notes}</p>}
+              </div>
+            ))
+          )}
+        </div>
+
+        <button onClick={onClose} className="w-full px-4 py-3 bg-stone-900 text-white font-bold rounded-lg hover:bg-stone-800">
+          Close
+        </button>
+      </div>
+    </div>
+  );
+}
 const deleteKey = async (key: string) => {
   try {
     // attempt delete if supported (runtime check)
@@ -242,6 +290,8 @@ export type ShoppingData = {
   category: string;
   link?: string;
   notes?: string;
+  placeId?: number;
+  placeName?: string;
   createdByUid?: string | null;
   createdAt?: string;
 };
@@ -1243,12 +1293,14 @@ function PackingDialog({ onClose, onAdd }: PackingDialogProps) {
 type ShoppingDialogProps = {
   onClose: () => void;
   onAdd: (data: ShoppingData) => void;
+  shoppingPlaces: StoredPlace[];
+  existingCategories: string[];
 };
 
 
-function ShoppingDialog({ onClose, onAdd }: ShoppingDialogProps) {
+function ShoppingDialog({ onClose, onAdd, shoppingPlaces, existingCategories }: ShoppingDialogProps) {
   const [formData, setFormData] = useState<ShoppingData>({
-    item: "", category: "", link: "", notes: "",
+    item: "", category: "", link: "", notes: "", placeId: undefined, placeName: "",
     createdAt: new Date().toISOString(),
   });
 
@@ -1284,6 +1336,25 @@ function ShoppingDialog({ onClose, onAdd }: ShoppingDialogProps) {
               className="w-full px-4 py-2.5 border border-stone-300 rounded-lg focus:border-stone-900 outline-none transition-all"
               placeholder="e.g., Souvenirs"
             />
+
+            {existingCategories && existingCategories.length > 0 && (
+              <div className="flex flex-wrap items-center gap-2 mt-2">
+                {existingCategories.map((cat) => (
+                  <button
+                    key={cat}
+                    type="button" // Prevents form submission
+                    onClick={() => setFormData({ ...formData, category: cat })}
+                    className={`px-2.5 py-1 text-xs font-medium rounded border transition-colors ${
+                      formData.category === cat
+                        ? "bg-stone-900 text-white border-stone-900 shadow-sm"
+                        : "bg-stone-50 hover:bg-stone-100 text-stone-600 border-stone-200"
+                    }`}
+                  >
+                    {cat}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
 
           <div>
@@ -1296,7 +1367,25 @@ function ShoppingDialog({ onClose, onAdd }: ShoppingDialogProps) {
                placeholder="https://..."
              />
           </div>
-
+          {shoppingPlaces.length > 0 && (
+            <div>
+               <label className="block text-xs font-bold uppercase tracking-wider text-stone-500 mb-1.5">Link to Store (Optional)</label>
+               <select
+                 value={formData.placeId || ""}
+                 onChange={(e) => {
+                   const pId = e.target.value ? Number(e.target.value) : undefined;
+                   const pName = shoppingPlaces.find(p => p.id === pId)?.name || "";
+                   setFormData({ ...formData, placeId: pId, placeName: pName });
+                 }}
+                 className="w-full px-4 py-2.5 border border-stone-300 rounded-lg focus:border-stone-900 outline-none transition-all bg-white cursor-pointer"
+               >
+                 <option value="">-- No specific store --</option>
+                 {shoppingPlaces.map((place) => (
+                   <option key={place.id} value={place.id}>{place.name}</option>
+                 ))}
+               </select>
+            </div>
+          )}
           <div>
             <label className="block text-xs font-bold uppercase tracking-wider text-stone-500 mb-1.5">Notes</label>
             <textarea
@@ -2663,6 +2752,7 @@ function TripView({ trip: initialTrip, onBack }: TripViewProps) {
   const tabs: { id: TabId; label: string; icon: any }[] = [
     { id: "itinerary", label: "Itinerary", icon: Calendar },
     { id: "places", label: "Places", icon: MapPin }, // ⭐ NEW COMBINED TAB
+    { id: "shopping", label: "Wishlist", icon: ShoppingBag },
     { id: "photos", label: "Gallery", icon: Camera },
     { id: "scrapbook", label: "Journal", icon: Sparkles },
     { id: "admin", label: "Admin", icon: PackageCheck },
@@ -2774,6 +2864,7 @@ function TripView({ trip: initialTrip, onBack }: TripViewProps) {
       <div className="max-w-7xl w-full mx-auto px-6 py-12">
         {activeTab === "itinerary" && <ItineraryTab trip={trip} />}
         {activeTab === "places" && <PlacesTab tripId={trip.id} country={trip.country} />}
+        {activeTab === "shopping" && <ShoppingTab tripId={trip.id} />}
         {activeTab === "photos" && <PhotosTab tripId={trip.id} />}
         {activeTab === "scrapbook" && <ScrapbookTab tripId={trip.id} />}
         {activeTab === "admin" && <AdminTab tripId={trip.id} />}
@@ -2781,6 +2872,98 @@ function TripView({ trip: initialTrip, onBack }: TripViewProps) {
       </div>
     </div>
   );
+}
+
+function LinkedItemDetails({ sourceId, tripId }: { sourceId: string; tripId: number }) {
+  const [data, setData] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const loadData = async () => {
+      if (!sourceId) return setLoading(false);
+      
+      try {
+        if (sourceId.startsWith("place:")) {
+          // Places are stored with a category in the key, so we have to find it
+          const allPlaces = await storage.list(`place:${tripId}:`);
+          const targetId = sourceId.split(":")[1];
+          const matchingKey = allPlaces?.keys?.find(k => k.endsWith(`:${targetId}`));
+          if (matchingKey) {
+            const snap = await storage.get(matchingKey);
+            if (snap?.value) setData({ type: "place", ...JSON.parse(snap.value) });
+          }
+        } else if (sourceId.startsWith("hotel:")) {
+           const snap = await storage.get(sourceId.replace("hotel:", `hotel:${tripId}:`));
+           if (snap?.value) setData({ type: "hotel", ...JSON.parse(snap.value) });
+        } else if (sourceId.startsWith("flight:")) {
+           const snap = await storage.get(sourceId.replace("flight:", `flight:${tripId}:`));
+           if (snap?.value) setData({ type: "flight", ...JSON.parse(snap.value) });
+        }
+      } catch (e) {
+        console.error(e);
+      }
+      setLoading(false);
+    };
+    loadData();
+  }, [sourceId, tripId]);
+
+  if (loading) return <div className="animate-pulse h-16 bg-stone-50 rounded-lg mt-3"></div>;
+  if (!data) return null;
+
+  // Render rich data if it's a Place
+  if (data.type === "place") {
+    const place = data as StoredPlace;
+    const categoryLabels: Record<string, string> = {
+      "eat": "Food & Drink",
+      "landmark": "Landmark",
+      "day-trip": "Day Trip",
+      "shopping": "Shopping",
+      "experience": "Experience",
+      "nature": "Nature",
+      "nightlife": "Nightlife",
+      "visit": "Visit"
+    };
+    const displayCategory = categoryLabels[place.category] || place.category;
+    return (
+      <div className="mt-4 pt-4 border-t border-stone-100 flex flex-col gap-3 animate-in fade-in slide-in-from-top-2">
+         {place.imageUrl && (
+           <img src={place.imageUrl} alt={place.name} className="w-full h-48 object-cover rounded-xl shadow-sm" />
+         )}
+         {place.description && <p className="text-stone-600 text-sm leading-relaxed">{place.description}</p>}
+         
+         <div className="flex flex-wrap gap-2 mt-1">
+           {place.rating && (
+              <span className="flex items-center gap-1 bg-amber-50 text-amber-700 px-2 py-1 rounded text-xs font-bold shadow-sm border border-amber-100/50">
+                <Star size={12} className="fill-amber-400 text-amber-400" /> {place.rating}
+              </span>
+           )}
+           {place.category && (
+              <span className="bg-stone-100 text-stone-600 px-2 py-1 rounded text-xs font-bold uppercase tracking-wider shadow-sm border border-stone-200/50">
+                {displayCategory}
+              </span>
+           )}
+           {place.link && (
+             <a onClick={(e) => e.stopPropagation()} href={place.link} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 bg-stone-50 hover:bg-stone-100 text-stone-600 px-2 py-1 rounded text-xs font-bold transition-colors shadow-sm border border-stone-200/50">
+               <ExternalLink size={12} /> Website
+             </a>
+           )}
+         </div>
+      </div>
+    );
+  }
+
+  // Render extra info if it's a Hotel or Flight
+  if (data.type === "hotel" || data.type === "flight") {
+     return (
+       <div className="mt-4 pt-4 border-t border-stone-100">
+         <div className="bg-stone-50 rounded-lg p-3 text-sm text-stone-600 italic">
+            {data.type === "hotel" ? `Conf: ${data.confirmationNumber || "N/A"}` : `Flight Duration: ${data.duration || "N/A"}`}
+         </div>
+       </div>
+     );
+  }
+
+  return null;
 }
 
 type ItineraryTabProps = {
@@ -2795,7 +2978,7 @@ function ItineraryTab({ trip }: { trip: TripData }) {
   
   // Location Manager State
   const [showLocDialog, setShowLocDialog] = useState(false);
-  
+  const [expandedItemId, setExpandedItemId] = useState<number | null>(null);
   // ⭐ UPDATE: Initialize with trip.segments
   const [tripSegments, setTripSegments] = useState<TripSegment[]>(trip.segments || []);
 
@@ -3137,51 +3320,81 @@ function ItineraryTab({ trip }: { trip: TripData }) {
           ) : (
             <div className="relative border-l border-stone-200 ml-4 pl-8 space-y-8 py-2">
               {currentDayData.items.map((item) => {
-                // ⭐ Grabs the correct icon from your expanded iconMap
                 const Icon = iconMap[item.iconType] || Clock; 
+                const isExpanded = expandedItemId === item.id; // ⭐ Check if expanded
+
                 return (
                   <div key={item.id} className="relative group">
                     {/* Timeline Dot */}
                     <div className="absolute -left-[41px] top-6 w-5 h-5 rounded-full border-4 border-[#FDFCF8] bg-stone-300 group-hover:bg-stone-900 transition-colors" />
                     
-                    <div className="bg-white rounded-xl p-6 border border-stone-100 shadow-sm hover:shadow-md transition-all group-hover:border-stone-300">
+                    {/* ⭐ Clickable Card Wrapper */}
+                    <div 
+                      onClick={() => setExpandedItemId(isExpanded ? null : item.id)}
+                      className={`bg-white rounded-xl p-6 border transition-all cursor-pointer ${
+                        isExpanded ? "border-stone-400 shadow-md" : "border-stone-100 shadow-sm hover:shadow-md group-hover:border-stone-300"
+                      }`}
+                    >
                         <div className="flex gap-5">
                             {/* Time Column */}
                             <div className="flex-shrink-0 w-16 pt-1">
                                 <span className="block text-lg font-bold text-stone-900">{item.time || "—"}</span>
-                                <div className="mt-2 text-stone-300">
+                                <div className={`mt-2 transition-colors ${isExpanded ? "text-rose-500" : "text-stone-300"}`}>
                                     <Icon size={20} />
                                 </div>
                             </div>
 
                             {/* Content Column */}
                             <div className="flex-1 min-w-0">
-                                <div className="flex justify-between items-start mb-1">
-                                    <h3 className="text-xl font-serif text-stone-900 group-hover:text-rose-900 transition-colors">
+                                <div className="flex justify-between items-start mb-2">
+                                    <h3 className="text-xl font-serif text-stone-900 group-hover:text-rose-900 transition-colors pr-4">
                                         {item.activity}
                                     </h3>
                                     
-                                    {/* Action Buttons (Hidden until hover) */}
+                                    {/* Action Buttons */}
                                     <div className="flex gap-3 opacity-0 group-hover:opacity-100 transition-opacity">
-                                        <button onClick={() => setEditingActivity(item)} className="text-xs font-bold text-stone-400 hover:text-stone-900 uppercase">Edit</button>
-                                        <button onClick={() => deleteActivity(currentDayData.date, item.id)} className="text-xs font-bold text-red-300 hover:text-red-500 uppercase">Delete</button>
+                                        <button onClick={(e) => { e.stopPropagation(); setEditingActivity(item); }} className="text-xs font-bold text-stone-400 hover:text-stone-900 uppercase tracking-wide">Edit</button>
+                                        <button onClick={(e) => { e.stopPropagation(); deleteActivity(currentDayData.date, item.id); }} className="text-xs font-bold text-red-300 hover:text-red-500 uppercase tracking-wide">Delete</button>
                                     </div>
                                 </div>
 
-                                <a 
-                                    href={`https://maps.google.com/?q=${encodeURIComponent(item.location)}`}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="flex items-center gap-1.5 text-stone-500 text-sm font-medium mb-3 hover:text-rose-500 transition-colors cursor-pointer w-fit group/link"
-                                >
-                                    <MapPin size={14} className="text-rose-400 group-hover/link:scale-110 transition-transform" />
-                                    <span className="group-hover/link:underline">{item.location}</span>
-                                </a>
+                                {/* ⭐ NEW: Improved Location row with Show on Map button */}
+                                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-1">
+                                  <a 
+                                      onClick={(e) => e.stopPropagation()} 
+                                      href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(item.location)}`}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="text-stone-500 hover:text-rose-500 transition-colors text-sm font-medium flex items-center gap-1.5 w-fit group/loclink"
+                                  >
+                                      <MapPin size={14} className="text-rose-400 flex-shrink-0 group-hover/loclink:scale-110 transition-transform" />
+                                      <span className={`group-hover/loclink:underline ${isExpanded ? "" : "line-clamp-1"}`}>
+                                        {item.location}
+                                      </span>
+                                  </a>
+                                  
+                                  <a 
+                                      onClick={(e) => e.stopPropagation()} // Prevents expanding/collapsing when clicking the link
+                                      href={`https://maps.google.com/?q=${encodeURIComponent(item.location)}`}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="flex-shrink-0 text-[10px] font-bold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 px-2 py-1.5 rounded flex items-center gap-1 uppercase tracking-wider transition-colors w-fit"
+                                  >
+                                      <MapPin size={12}/> Show on Map
+                                  </a>
+                                </div>
 
-                                {item.notes && (
-                                    <div className="bg-stone-50 px-4 py-3 rounded-lg text-stone-600 text-sm italic border border-stone-100">
-                                        "{item.notes}"
-                                    </div>
+                                {/* ⭐ DYNAMIC EXPANSION */}
+                                {!isExpanded ? (
+                                  // Collapsed View: Just show a preview of notes
+                                  null
+                                ) : (
+                                  // Expanded View: Show full notes AND fetch linked place data
+                                  <div className="mt-3">
+                                    {/* {item.notes && <div className="bg-stone-50 px-4 py-3 rounded-lg text-stone-600 text-sm italic border border-stone-100">"{item.notes}"</div>} */}
+                                    
+                                    {item.sourceId && <LinkedItemDetails sourceId={item.sourceId} tripId={trip.id} />}
+                                  </div>
                                 )}
                                 
                                 <div className="mt-4 pt-4 border-t border-stone-50 flex items-center gap-2">
@@ -3373,6 +3586,8 @@ function PlacesTab({ tripId, country }: PlacesTabProps) {
   const [costDialogPlace, setCostDialogPlace] = useState<StoredPlace | null>(null);
   const [selectedPlace, setSelectedPlace] = useState<StoredPlace | null>(null);
   const [countryCoords, setCountryCoords] = useState<{lat: number, lng: number} | null>(null);
+  const [shoppingItems, setShoppingItems] = useState<ShoppingData[]>([]);
+  const [shoppingListPlace, setShoppingListPlace] = useState<StoredPlace | null>(null); // For the mini-dialog
   useEffect(() => {
     const unsubscribe = storage.subscribeToList(
       `place:${tripId}:`, 
@@ -3392,7 +3607,15 @@ function PlacesTab({ tripId, country }: PlacesTabProps) {
     );
     return () => unsubscribe();
   }, [tripId]);
-  
+  useEffect(() => {
+    const user = auth.currentUser;
+    if (!user) return;
+    const unsubShopping = storage.subscribeToList(
+      `shopping:${tripId}:user:${user.uid}:`, 
+      (items) => setShoppingItems(items)
+    );
+    return () => unsubShopping();
+  }, [tripId]);
   const addPlace = async (placeData: PlaceFormData) => {
     const place: StoredPlace = {
       ...placeData,
@@ -3937,6 +4160,15 @@ function PlacesTab({ tripId, country }: PlacesTabProps) {
                       </label>
 
                       <div className="flex gap-3 text-xs font-bold uppercase tracking-wide">
+                        {place.category === 'shopping' && shoppingItems.filter(i => i.placeId === place.id).length > 0 && (
+                            <button 
+                              onClick={() => setShoppingListPlace(place)} 
+                              className="text-indigo-500 hover:text-indigo-700 flex items-center gap-1 mr-2"
+                            >
+                              <ShoppingBag size={14} />
+                              List ({shoppingItems.filter(i => i.placeId === place.id).length})
+                            </button>
+                          )}
                           <button onClick={() => setEditingPlace(place)} className="text-stone-400 hover:text-stone-900">Edit</button>
                           
                           {!place.confirmed ? (
@@ -3968,7 +4200,13 @@ function PlacesTab({ tripId, country }: PlacesTabProps) {
           allPlaces={places}
         />
       )}
-
+      {shoppingListPlace && (
+        <PlaceShoppingListDialog
+          place={shoppingListPlace}
+          items={shoppingItems}
+          onClose={() => setShoppingListPlace(null)}
+        />
+      )}
       {confirmingPlace && (
         <ConfirmToItineraryDialog
           title={confirmingPlace.name}
@@ -4120,6 +4358,7 @@ function ShoppingTab({ tripId }: { tripId: number }) {
   };
 
   const [items, setItems] = useState<ShoppingItem[]>([]);
+  const [shoppingPlaces, setShoppingPlaces] = useState<StoredPlace[]>([]);
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [buyingItem, setBuyingItem] = useState<ShoppingItem | null>(null);
 
@@ -4127,13 +4366,17 @@ function ShoppingTab({ tripId }: { tripId: number }) {
     const user = auth.currentUser;
     if (!user) return;
 
-    const unsubscribe = storage.subscribeToList(
+    const unsubShopping = storage.subscribeToList(
       `shopping:${tripId}:user:${user.uid}:`, 
-      (newItems) => {
-        setItems(newItems.sort((a: any, b: any) => b.id - a.id));
-      }
+      (newItems) => setItems(newItems.sort((a: any, b: any) => b.id - a.id))
     );
-    return () => unsubscribe();
+
+    const unsubPlaces = storage.subscribeToList(
+      `place:${tripId}:shopping:`, 
+      (places) => setShoppingPlaces(places)
+    );
+
+    return () => { unsubShopping(); unsubPlaces(); };
   }, [tripId]);
 
   const addItem = async (itemData: ShoppingData) => {
@@ -4180,8 +4423,116 @@ function ShoppingTab({ tripId }: { tripId: number }) {
     setBuyingItem(null);
   };
 
-  const categories = [...new Set(items.map((i) => i.category))].sort();
   const boughtCount = items.filter((i) => i.bought).length;
+
+  // 👇 GROUPING LOGIC FOR MASONRY GRID 👇
+  const groupedShopping = items.reduce((acc, item) => {
+    const cat = item.category || "General";
+    if (!acc[cat]) acc[cat] = [];
+    acc[cat].push(item);
+    return acc;
+  }, {} as Record<string, ShoppingItem[]>);
+
+  const categories = Object.keys(groupedShopping).sort();
+
+  // Masonry layout algorithm
+  const distributeCategories = (numCols: number) => {
+    const cols: string[][] = Array.from({ length: numCols }, () => []);
+    const heights = Array.from({ length: numCols }, () => 0);
+
+    categories.forEach(category => {
+      const catItems = groupedShopping[category] || [];
+      const estimatedHeight = 5 + catItems.length; // Base header weight + items
+      
+      let minIdx = 0;
+      for (let i = 1; i < numCols; i++) {
+        if (heights[i] < heights[minIdx]) {
+          minIdx = i;
+        }
+      }
+      cols[minIdx].push(category);
+      heights[minIdx] += estimatedHeight;
+    });
+
+    return cols;
+  };
+
+  const cols1 = distributeCategories(1);
+  const cols2 = distributeCategories(2);
+  const cols3 = distributeCategories(3);
+
+  // Helper to render individual category cards
+  const renderShoppingCard = (category: string) => {
+    const catItems = groupedShopping[category];
+    const catBought = catItems.filter(i => i.bought).length;
+    
+    return (
+      <div key={category} className="bg-white border border-stone-200 rounded-xl p-5 shadow-sm hover:shadow-md transition-all">
+         <div className="flex justify-between items-baseline mb-4 border-b border-stone-100 pb-2">
+           <h4 className="font-serif text-lg text-stone-900">{category}</h4>
+           <span className="text-[10px] font-bold text-stone-400 uppercase tracking-widest bg-stone-50 px-2 py-1 rounded-full">
+              {catBought}/{catItems.length}
+           </span>
+         </div>
+         
+         <div className="space-y-3">
+           {catItems.map((item) => (
+              <div key={item.id} className="flex items-start gap-3 group">
+                 {/* Checklist Toggle */}
+                 <input
+                   type="checkbox"
+                   checked={item.bought}
+                   onChange={() => handleToggleClick(item)}
+                   className="mt-1 w-4 h-4 rounded border-stone-300 text-stone-900 focus:ring-stone-900 cursor-pointer"
+                 />
+                 
+                 {/* Item Details */}
+                 <div className="flex-1 min-w-0 pt-0.5">
+                   <p className={`text-sm font-medium transition-colors leading-snug ${
+                      item.bought ? "line-through text-stone-300" : "text-stone-700"
+                   }`}>
+                     {item.item}
+                   </p>
+                   
+                   {/* Meta: Store location & Notes */}
+                   {(item.placeName || item.notes) && (
+                      <div className="mt-1 flex flex-col gap-0.5">
+                         {item.placeName && (
+                           <span className="text-[10px] font-bold uppercase tracking-wider text-rose-500 flex items-center gap-1 w-fit">
+                              <MapPin size={10} /> {item.placeName}
+                           </span>
+                         )}
+                         {item.notes && <span className="text-xs text-stone-500 line-clamp-2">{item.notes}</span>}
+                      </div>
+                   )}
+                 </div>
+
+                 {/* Actions (Cost, Link, Delete) */}
+                 <div className="flex items-center gap-2 flex-shrink-0">
+                    {item.bought && item.cost !== undefined && (
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-amber-800 bg-amber-100 px-2 py-0.5 rounded-full">
+                            {item.cost === 0 ? "Free" : `£${item.cost}`}
+                        </span>
+                    )}
+                    {item.link && (
+                      <a href={item.link} target="_blank" rel="noopener noreferrer" className="text-stone-300 hover:text-stone-900 transition-colors">
+                        <ExternalLink size={14} />
+                      </a>
+                    )}
+                    <button 
+                      onClick={() => deleteItem(item.id)} 
+                      className="text-stone-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"
+                      title="Delete item"
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                 </div>
+              </div>
+           ))}
+         </div>
+      </div>
+    );
+  };
 
   return (
     <div className="space-y-8">
@@ -4221,93 +4572,40 @@ function ShoppingTab({ tripId }: { tripId: number }) {
           </button>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-          {categories.map((category) => (
-            <div
-              key={category}
-              className="bg-white border border-stone-200 shadow-sm rounded-2xl overflow-hidden h-fit flex flex-col"
-            >
-              <div className="bg-stone-50 px-6 py-4 border-b border-stone-100">
-                <h3 className="font-serif text-lg text-stone-900">{category}</h3>
-              </div>
+         <>
+           {/* MOBILE: 1 Column */}
+           <div className="grid md:hidden grid-cols-1 gap-6">
+             {cols1.map((col, colIdx) => (
+               <div key={colIdx} className="flex flex-col gap-6">
+                 {col.map(renderShoppingCard)}
+               </div>
+             ))}
+           </div>
 
-              <div className="p-2">
-                {items
-                  .filter((item) => item.category === category)
-                  .map((item) => (
-                    <div
-                      key={item.id}
-                      className={`group flex items-start gap-3 p-3 rounded-xl transition-all border mb-2 last:mb-0 ${
-                        item.bought
-                          ? "bg-stone-50 border-transparent opacity-75 hover:opacity-100"
-                          : "bg-white border-transparent hover:border-stone-200 hover:shadow-sm"
-                      }`}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={item.bought}
-                        onChange={() => handleToggleClick(item)}
-                        className="mt-1.5 w-4 h-4 rounded border-stone-300 text-stone-900 focus:ring-stone-900 cursor-pointer accent-stone-900"
-                      />
+           {/* TABLET: 2 Columns */}
+           <div className="hidden md:grid lg:hidden grid-cols-2 gap-6 items-start">
+             {cols2.map((col, colIdx) => (
+               <div key={colIdx} className="flex flex-col gap-6">
+                 {col.map(renderShoppingCard)}
+               </div>
+             ))}
+           </div>
 
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-start justify-between gap-2">
-                          <span
-                            className={`font-medium leading-snug transition-colors ${
-                              item.bought
-                                ? "line-through text-stone-400"
-                                : "text-stone-900"
-                            }`}
-                          >
-                            {item.item}
-                          </span>
-                          
-                          <div className="flex items-center gap-2 flex-shrink-0">
-                            {/* Cost Badge */}
-                            {item.bought && item.cost !== undefined && (
-                                <span className="text-[10px] font-bold uppercase tracking-wider text-amber-800 bg-amber-100 px-2 py-0.5 rounded-full">
-                                    {item.cost === 0 ? "Free" : `£${item.cost}`}
-                                </span>
-                            )}
-
-                            {/* Link */}
-                            {item.link && (
-                              <a
-                                href={item.link}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="text-stone-300 hover:text-stone-900 transition-colors"
-                              >
-                                <ExternalLink size={14} />
-                              </a>
-                            )}
-                            
-                            {/* Delete */}
-                            <button
-                              onClick={() => deleteItem(item.id)}
-                              className="text-stone-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all"
-                            >
-                              <Trash2 size={14} />
-                            </button>
-                          </div>
-                        </div>
-
-                        {item.notes && (
-                          <p className="text-xs text-stone-500 mt-1 line-clamp-2">
-                            {item.notes}
-                          </p>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-              </div>
-            </div>
-          ))}
-        </div>
+           {/* DESKTOP: 3 Columns */}
+           <div className="hidden lg:grid grid-cols-3 gap-6 items-start">
+             {cols3.map((col, colIdx) => (
+               <div key={colIdx} className="flex flex-col gap-6">
+                 {col.map(renderShoppingCard)}
+               </div>
+             ))}
+           </div>
+         </>
       )}
 
       {showAddDialog && (
         <ShoppingDialog
+          shoppingPlaces={shoppingPlaces}
+          existingCategories={categories}
           onClose={() => setShowAddDialog(false)}
           onAdd={(data) => {
             addItem(data);
