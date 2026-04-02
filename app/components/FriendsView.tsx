@@ -21,6 +21,11 @@ export default function FriendsView({ onBack }: { onBack: () => void }) {
   const [searchError, setSearchError] = useState("");
   const [toastMsg, setToastMsg] = useState("");
     const [hasUsername, setHasUsername] = useState<boolean | null>(null); // null = loading
+    const [viewingFriend, setViewingFriend] = useState<FriendData | null>(null);
+  const [friendTrips, setFriendTrips] = useState<TripData[]>([]);
+  const [friendFavs, setFriendFavs] = useState<StoredPlace[]>([]);
+  const [loadingProfile, setLoadingProfile] = useState(false);
+  
     useEffect(() => {
     const checkUsername = async () => {
       const user = auth.currentUser;
@@ -30,7 +35,14 @@ export default function FriendsView({ onBack }: { onBack: () => void }) {
     };
     checkUsername();
   }, []);
-
+   useEffect(() => {
+    loadFriends();
+  }, []);
+  const showToast = (msg: string) => {
+    setToastMsg(msg);
+    setTimeout(() => setToastMsg(""), 3000);
+  };
+  // Public Profile State
   // 1. Loading state (so it doesn't flicker)
   if (hasUsername === null) return <div className="min-h-screen bg-[#FDFCF8]" />;
 
@@ -64,19 +76,10 @@ export default function FriendsView({ onBack }: { onBack: () => void }) {
       </div>
     );
   }
-  const showToast = (msg: string) => {
-    setToastMsg(msg);
-    setTimeout(() => setToastMsg(""), 3000);
-  };
-  // Public Profile State
-  const [viewingFriend, setViewingFriend] = useState<FriendData | null>(null);
-  const [friendTrips, setFriendTrips] = useState<TripData[]>([]);
-  const [friendFavs, setFriendFavs] = useState<StoredPlace[]>([]);
-  const [loadingProfile, setLoadingProfile] = useState(false);
+  
+  
 
-  useEffect(() => {
-    loadFriends();
-  }, []);
+ 
 
   const loadFriends = async () => {
     const user = auth.currentUser;
