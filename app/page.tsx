@@ -3339,7 +3339,7 @@ const getAvailableLocations = (places: StoredPlace[], depth: number, currentPath
 type PlacesTabProps = {
   tripId: number;
 };
-
+const mapLibraries: ("places")[] = ["places"];
 // Map categories for the UI sub-nav
 const PLACE_CATEGORIES: { id: PlaceType | "all"; label: string }[] = [
   { id: "all", label: "All Places" },
@@ -3516,7 +3516,8 @@ function PlacesTab({ tripId }: PlacesTabProps) {
 };
   const { isLoaded } = useJsApiLoader({
     id: 'google-map-script',
-    googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || "", // Use your exact env variable name here
+    googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || "", 
+    libraries: mapLibraries, // ⭐ ADD THIS LINE
   });
   return (
     <div className="space-y-8">
