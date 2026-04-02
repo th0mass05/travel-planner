@@ -3488,15 +3488,32 @@ function PlacesTab({ tripId }: PlacesTabProps) {
   const visitedCount = filteredPlaces.filter((p) => p.visited).length;
   const [viewMode, setViewMode] = useState<'grid' | 'map'>('grid');
   const mapOptions = {
-    styles: [
-      { "elementType": "geometry", "stylers": [{ "color": "#f5f5f5" }] },
-      { "featureType": "water", "stylers": [{ "color": "#e9e9e9" }] },
-      { "featureType": "poi", "stylers": [{ "visibility": "off" }] }, // Mutes clutter
-      // Add more stone-themed styles here
-    ],
-    disableDefaultUI: true,
-    zoomControl: true,
-  };
+  disableDefaultUI: true,
+  zoomControl: true,
+  styles: [
+    // Base colors
+    { elementType: "geometry", stylers: [{ color: "#f5f5f5" }] },
+    { elementType: "labels.text.fill", stylers: [{ color: "#616161" }] },
+    { elementType: "labels.text.stroke", stylers: [{ color: "#f5f5f5" }] },
+    
+    // Turn off ALL default map icons (restaurants, shops, etc.)
+    { elementType: "labels.icon", stylers: [{ visibility: "off" }] },
+    { featureType: "poi", stylers: [{ visibility: "off" }] }, 
+    
+    // Abstract the roads (hide local roads, hide ALL road labels)
+    { featureType: "road", elementType: "geometry", stylers: [{ color: "#ffffff" }] },
+    { featureType: "road", elementType: "labels", stylers: [{ visibility: "off" }] }, 
+    { featureType: "road.highway", elementType: "geometry", stylers: [{ color: "#e0e0e0" }] },
+    { featureType: "road.local", stylers: [{ visibility: "simplified" }] }, // Makes smaller roads fade away
+    
+    // Hide transit lines (subways/trains) to reduce clutter
+    { featureType: "transit", stylers: [{ visibility: "off" }] }, 
+    
+    // Water styling
+    { featureType: "water", elementType: "geometry", stylers: [{ color: "#e3e3e3" }] },
+    { featureType: "water", elementType: "labels.text.fill", stylers: [{ color: "#9e9e9e" }] }
+  ],
+};
   const { isLoaded } = useJsApiLoader({
     id: 'google-map-script',
     googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || "", // Use your exact env variable name here
