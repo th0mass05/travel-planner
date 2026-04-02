@@ -3505,63 +3505,59 @@ function PlacesTab({ tripId, country }: PlacesTabProps) {
   minZoom: 5,
   maxZoom: 18,
   styles: [
-      {
-          "featureType": "administrative",
-          "elementType": "all",
-          "stylers": [{ "saturation": "-100" }]
-      },
-      {
-          "featureType": "administrative.province",
-          "elementType": "all",
-          "stylers": [{ "visibility": "off" }]
-      },
-      {
-          "featureType": "landscape",
-          "elementType": "all",
-          "stylers": [{ "saturation": -100 }, { "lightness": 65 }, { "visibility": "on" }]
-      },
-      {
-          "featureType": "poi",
-          "elementType": "all",
-          "stylers": [{ "saturation": -100 }, { "lightness": "50" }, { "visibility": "simplified" }]
-      },
-      {
-        "featureType": "road",
-        "elementType": "labels", 
-        "stylers": [{ "visibility": "off" }]
-      },
-      // ⭐ Turn ON geometry but keep it clean and white
-      {
-          "featureType": "road.highway",
-          "elementType": "geometry",
-          "stylers": [{ "visibility": "on" }, { "color": "#ffffff" }]
-      },
-      {
-          "featureType": "road.arterial",
-          "elementType": "geometry",
-          "stylers": [{ "visibility": "on" }, { "color": "#ffffff" }]
-      },
-      {
-          "featureType": "road.local",
-          "elementType": "geometry",
-          "stylers": [{ "visibility": "on" }, { "color": "#ffffff" }] 
-      },
-      {
-          "featureType": "transit",
-          "elementType": "all",
-          "stylers": [{ "visibility": "off" }]
-      },
-      {
-          "featureType": "water",
-          "elementType": "geometry",
-          "stylers": [{ "hue": "#ffff00" }, { "lightness": -25 }, { "saturation": -97 }]
-      },
-      {
-          "featureType": "water",
-          "elementType": "labels",
-          "stylers": [{ "lightness": -25 }, { "saturation": -100 }]
-      }
-    ],
+    // 1. Base Landscape: Very light stone/grey
+    {
+      featureType: "landscape",
+      elementType: "geometry",
+      stylers: [{ color: "#f1f1f1" }] 
+    },
+    // 2. Water: Darker grey to create boundary contrast
+    {
+      featureType: "water",
+      elementType: "geometry",
+      stylers: [{ color: "#d4d4d4" }]
+    },
+    // 3. Labels: Keep City names (Tokyo, Shinjuku) but make them dark and clean
+    {
+      elementType: "labels.text.fill",
+      stylers: [{ color: "#757575" }]
+    },
+    {
+      elementType: "labels.text.stroke",
+      stylers: [{ color: "#f1f1f1" }, { weight: 2 }]
+    },
+    {
+      featureType: "administrative.locality",
+      elementType: "labels.text",
+      stylers: [{ visibility: "on" }]
+    },
+    // 4. Roads: The "Blueprint" effect
+    {
+      featureType: "road",
+      elementType: "labels", 
+      stylers: [{ visibility: "off" }] // Kills names and numbers
+    },
+    {
+      featureType: "road.highway",
+      elementType: "geometry.fill",
+      stylers: [{ color: "#525252" }, { visibility: "on" }] // Dark grey main arteries
+    },
+    {
+      featureType: "road.arterial",
+      elementType: "geometry.fill",
+      stylers: [{ color: "#8a8a8a" }, { visibility: "on" }] // Medium grey connectors
+    },
+    {
+      featureType: "road.local",
+      elementType: "geometry.fill",
+      stylers: [{ color: "#bebebe" }, { visibility: "on" }] // Light grey local streets
+    },
+    // 5. Clutter: Hide everything else
+    { featureType: "poi", stylers: [{ visibility: "off" }] },
+    { featureType: "transit", stylers: [{ visibility: "off" }] },
+    { featureType: "administrative.province", stylers: [{ visibility: "off" }] },
+    { elementType: "labels.icon", stylers: [{ visibility: "off" }] }
+  ],
 };
   const { isLoaded } = useJsApiLoader({
     id: 'google-map-script',
