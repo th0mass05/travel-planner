@@ -1843,6 +1843,7 @@ type ItineraryItem = {
   createdByUid?: string | null;
   createdAt?: string;
   sourceId?: string; // ⭐ NEW: Links to original Place ID (e.g., "place:123")
+  googleMapsUrl?: string;
 };
 
 type ItineraryDay = {
@@ -3091,6 +3092,7 @@ function ItineraryTab({ trip }: { trip: TripData }) {
         createdByUid: auth.currentUser?.uid || null,
         iconType: (activity.iconType ?? "activity") as IconType,
         createdAt: new Date().toISOString(),
+        
       };
       
       const updatedItems = [...(parsed.items || []), newItem];
@@ -3401,7 +3403,9 @@ function ItineraryTab({ trip }: { trip: TripData }) {
                                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-1">
                                   <a 
                                       onClick={(e) => e.stopPropagation()} 
-                                      href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(item.location)}`}
+                                      // 1. Tries the exact Place URL first.
+                                      // 2. Falls back to a smart search combining Name + Address!
+                                      href={item.googleMapsUrl || `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${item.activity}, ${item.location}`)}`}
                                       target="_blank"
                                       rel="noopener noreferrer"
                                       className="text-stone-500 hover:text-rose-500 transition-colors text-sm font-medium flex items-center gap-1.5 w-fit group/loclink"
@@ -3412,15 +3416,7 @@ function ItineraryTab({ trip }: { trip: TripData }) {
                                       </span>
                                   </a>
                                   
-                                  <a 
-                                      onClick={(e) => e.stopPropagation()} // Prevents expanding/collapsing when clicking the link
-                                      href={`https://maps.google.com/?q=${encodeURIComponent(item.location)}`}
-                                      target="_blank"
-                                      rel="noopener noreferrer"
-                                      className="flex-shrink-0 text-[10px] font-bold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 px-2 py-1.5 rounded flex items-center gap-1 uppercase tracking-wider transition-colors w-fit"
-                                  >
-                                      <MapPin size={12}/> Show on Map
-                                  </a>
+                                  
                                 </div>
 
                                 {/* ⭐ DYNAMIC EXPANSION */}
@@ -3691,7 +3687,8 @@ function PlacesTab({ tripId, country }: PlacesTabProps) {
       // ⭐ FIXED: Pass the exact category straight to the itinerary!
       iconType: (place.category || "visit") as IconType, 
       sourceId: `place:${place.id}`, 
-      createdAt: new Date().toISOString()
+      createdAt: new Date().toISOString(),
+      googleMapsUrl: place.googleMapsUrl
     };
 
     targetDay.items.push(newItem);
