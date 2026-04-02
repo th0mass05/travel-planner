@@ -12,7 +12,7 @@ import { formatDistanceToNow } from "date-fns";
 import emailjs from "@emailjs/browser";
 import React, { useState, useEffect, useRef, useCallback, useMemo} from "react";
 import Autocomplete from "react-google-autocomplete";
-import { GoogleMap, Marker, useJsApiLoader } from '@react-google-maps/api';
+import { GoogleMap, Marker, InfoWindow, useJsApiLoader } from '@react-google-maps/api';
 import {
   Calendar,
   MapPin,
@@ -3340,6 +3340,17 @@ type PlacesTabProps = {
   tripId: number;
 };
 const mapLibraries: ("places")[] = ["places"];
+// ⭐ UPDATED: Pastel color mapping for categories
+const CATEGORY_COLORS: Record<string, string> = {
+  eat: "#fcd34d",         // Pastel Yellow/Amber
+  landmark: "#a78bfa",    // Pastel Indigo/Lavender
+  "day-trip": "#c4b5fd",  // Soft Violet
+  shopping: "#f9a8d4",    // Pastel Pink
+  experience: "#5eead4",  // Mint/Pastel Teal
+  nature: "#6ee7b7",      // Soft Seafoam Green
+  nightlife: "#93c5fd",   // Baby Blue
+  visit: "#a8a29e"        // Soft Warm Grey (Stone)
+};
 // Map categories for the UI sub-nav
 const PLACE_CATEGORIES: { id: PlaceType | "all"; label: string }[] = [
   { id: "all", label: "All Places" },
@@ -3360,7 +3371,7 @@ function PlacesTab({ tripId }: PlacesTabProps) {
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [confirmingPlace, setConfirmingPlace] = useState<StoredPlace | null>(null);
   const [costDialogPlace, setCostDialogPlace] = useState<StoredPlace | null>(null);
-
+  const [selectedPlace, setSelectedPlace] = useState<StoredPlace | null>(null);
   useEffect(() => {
     const unsubscribe = storage.subscribeToList(
       `place:${tripId}:`, 
@@ -3652,27 +3663,107 @@ function PlacesTab({ tripId }: PlacesTabProps) {
           {!isLoaded ? (
             <p className="text-stone-400 font-medium">Loading Map...</p>
           ) : (
-            <GoogleMap
-              mapContainerStyle={{ width: '100%', height: '100%' }}
-              zoom={13}
-              center={
-                filteredPlaces.find(p => p.lat && p.lng) 
-                  ? { lat: filteredPlaces.find(p => p.lat && p.lng)!.lat!, lng: filteredPlaces.find(p => p.lat && p.lng)!.lng! }
-                  : { lat: 35.6762, lng: 139.6503 } 
-              }
-              options={mapOptions}
-            >
-              {filteredPlaces.map((place) => {
-                if (!place.lat || !place.lng) return null; 
-                return (
-                  <Marker
-                    key={place.id}
-                    position={{ lat: place.lat, lng: place.lng }}
-                    title={place.name}
-                  />
-                );
-              })}
-            </GoogleMap>
+            <>
+              <GoogleMap
+                mapContainerStyle={{ width: '100%', height: '100%' }}
+                zoom={13}
+                center={
+                  filteredPlaces.find(p => p.lat && p.lng) 
+                    ? { lat: filteredPlaces.find(p => p.lat && p.lng)!.lat!, lng: filteredPlaces.find(p => p.lat && p.lng)!.lng! }
+                    : { lat: 35.6762, lng: 139.6503 } 
+                }
+                options={mapOptions}
+                onClick={() => setSelectedPlace(null)} 
+              >
+                {/* 1. Map Markers */}
+                {filteredPlaces.map((place) => {
+                  if (!place.lat || !place.lng) return null; 
+                  
+                  // Get the assigned pastel color, default to stone if not found
+                  const pinColor = CATEGORY_COLORS[place.category] || "#a8a29e";
+
+                  return (
+                    <Marker
+                      key={place.id}
+                      position={{ lat: place.lat, lng: place.lng }}
+                      title={place.name}
+                      onClick={() => setSelectedPlace(place)}
+                      icon={{
+                        // A clean, modern teardrop pin shape
+                        path: "M 0,0 C -2,-20 -10,-22 -10,-30 A 10,10 0 1,1 10,-30 C 10,-22 2,-20 0,0 z",
+                        fillColor: pinColor,
+                        fillOpacity: 1,
+                        strokeColor: "#44403c", // Tailwind stone-800 for contrast against pastels
+                        strokeWeight: 1.5,
+                        scale: 1.2,
+                      }}
+                    />
+                  );
+                })}
+
+                {/* 2. The Popup Window (Info Card) */}
+                {selectedPlace && selectedPlace.lat && selectedPlace.lng && (
+                  <InfoWindow
+                    position={{ lat: selectedPlace.lat, lng: selectedPlace.lng }}
+                    onCloseClick={() => setSelectedPlace(null)}
+                  >
+                    <div className="p-1 max-w-[200px]">
+                      {selectedPlace.imageUrl && (
+                        <img 
+                          src={selectedPlace.imageUrl} 
+                          alt={selectedPlace.name} 
+                          className="w-full h-24 object-cover rounded-md mb-2" 
+                        />
+                      )}
+                      <h4 className="font-serif font-bold text-stone-900 text-lg leading-tight mb-1">
+                        {selectedPlace.name}
+                      </h4>
+                      <p className="text-xs font-bold uppercase tracking-wider text-stone-400 mb-2">
+                        {PLACE_CATEGORIES.find(c => c.id === selectedPlace.category)?.label || "Place"}
+                      </p>
+                      
+                      <div className="flex gap-2 mt-3 pt-3 border-t border-stone-100">
+                        <button 
+                          onClick={() => setEditingPlace(selectedPlace)} 
+                          className="text-xs font-bold text-stone-500 hover:text-stone-900 transition-colors"
+                        >
+                          EDIT
+                        </button>
+                        <a 
+                          href={selectedPlace.googleMapsUrl || `http://googleusercontent.com/maps.google.com/?q=${encodeURIComponent(selectedPlace.address)}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-xs font-bold text-indigo-500 hover:text-indigo-700 transition-colors ml-auto"
+                        >
+                          DIRECTIONS
+                        </a>
+                      </div>
+                    </div>
+                  </InfoWindow>
+                )}
+              </GoogleMap>
+
+              {/* 3. Floating Map Legend */}
+              <div className="absolute bottom-6 right-6 bg-white/95 backdrop-blur-sm p-4 rounded-xl shadow-lg border border-stone-200 pointer-events-auto">
+                <h4 className="text-[10px] font-bold text-stone-400 uppercase tracking-widest mb-3 border-b border-stone-100 pb-2">
+                  Map Key
+                </h4>
+                <div className="grid grid-cols-2 gap-x-6 gap-y-2.5">
+                  {/* Filter out "All Places" since it doesn't have a specific pin color */}
+                  {PLACE_CATEGORIES.filter(cat => cat.id !== "all").map((cat) => (
+                    <div key={cat.id} className="flex items-center gap-2">
+                      <div 
+                        className="w-3.5 h-3.5 rounded-full shadow-sm border border-stone-200/50" 
+                        style={{ backgroundColor: CATEGORY_COLORS[cat.id] || "#a8a29e" }}
+                      />
+                      <span className="text-xs font-medium text-stone-600 whitespace-nowrap">
+                        {cat.label}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </>
           )}
         </div>
       ) : (
