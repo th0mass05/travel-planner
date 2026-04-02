@@ -2773,7 +2773,7 @@ function TripView({ trip: initialTrip, onBack }: TripViewProps) {
       {/* 4. CONTENT AREA */}
       <div className="max-w-7xl w-full mx-auto px-6 py-12">
         {activeTab === "itinerary" && <ItineraryTab trip={trip} />}
-        {activeTab === "places" && <PlacesTab tripId={trip.id} />} {/* ⭐ REMOVED type prop */}
+        {activeTab === "places" && <PlacesTab tripId={trip.id} country={trip.country} />}
         {activeTab === "photos" && <PhotosTab tripId={trip.id} />}
         {activeTab === "scrapbook" && <ScrapbookTab tripId={trip.id} />}
         {activeTab === "admin" && <AdminTab tripId={trip.id} />}
@@ -3338,6 +3338,7 @@ const getAvailableLocations = (places: StoredPlace[], depth: number, currentPath
 
 type PlacesTabProps = {
   tripId: number;
+  country: string;
 };
 const mapLibraries: ("places")[] = ["places"];
 const CATEGORY_COLORS: Record<string, string> = {
@@ -3362,7 +3363,7 @@ const PLACE_CATEGORIES: { id: PlaceType | "all"; label: string }[] = [
   { id: "nightlife", label: "Nightlife" },
 ];
 
-function PlacesTab({ tripId }: PlacesTabProps) {
+function PlacesTab({ tripId, country }: PlacesTabProps) {
   const [places, setPlaces] = useState<StoredPlace[]>([]);
   const [activeCategory, setActiveCategory] = useState<PlaceType | "all">("all");
   const [activeLocationPath, setActiveLocationPath] = useState<string[]>([]);
@@ -3371,6 +3372,7 @@ function PlacesTab({ tripId }: PlacesTabProps) {
   const [confirmingPlace, setConfirmingPlace] = useState<StoredPlace | null>(null);
   const [costDialogPlace, setCostDialogPlace] = useState<StoredPlace | null>(null);
   const [selectedPlace, setSelectedPlace] = useState<StoredPlace | null>(null);
+  const [countryCoords, setCountryCoords] = useState<{lat: number, lng: number} | null>(null);
   useEffect(() => {
     const unsubscribe = storage.subscribeToList(
       `place:${tripId}:`, 
@@ -3390,7 +3392,7 @@ function PlacesTab({ tripId }: PlacesTabProps) {
     );
     return () => unsubscribe();
   }, [tripId]);
-
+  
   const addPlace = async (placeData: PlaceFormData) => {
     const place: StoredPlace = {
       ...placeData,
@@ -3565,20 +3567,30 @@ function PlacesTab({ tripId }: PlacesTabProps) {
     googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || "", 
     libraries: mapLibraries, // ⭐ ADD THIS LINE
   });
-  const initialCenter = useMemo(() => {
-    // Look for the first place in this specific trip that has coordinates
-    const firstPlaceWithCoords = places.find(p => p.lat && p.lng);
-    
-    if (firstPlaceWithCoords) {
-      return { 
-        lat: Number(firstPlaceWithCoords.lat), 
-        lng: Number(firstPlaceWithCoords.lng) 
-      };
+  useEffect(() => {
+    // Only geocode if the API is loaded, a country exists, and we don't have places yet
+    if (isLoaded && country && places.length === 0) {
+      const geocoder = new window.google.maps.Geocoder();
+      geocoder.geocode({ address: country }, (results, status) => {
+        if (status === 'OK' && results?.[0]) {
+          const loc = results[0].geometry.location;
+          setCountryCoords({ lat: loc.lat(), lng: loc.lng() });
+        }
+      });
     }
+  }, [isLoaded, country, places.length]);
+  const initialCenter = useMemo(() => {
+    // 1. Try to find an existing place
+    const firstPlace = places.find(p => p.lat && p.lng);
+    if (firstPlace) return { lat: firstPlace.lat!, lng: firstPlace.lng! };
 
-    // FALLBACK: If no places exist yet, show a wide world view or a neutral coordinate
-    return { lat: 20, lng: 0 }; 
-  }, [tripId]);
+    // 2. Use the geocoded country center
+    if (countryCoords) return countryCoords;
+
+    // 3. World fallback
+    return { lat: 20, lng: 0 };
+  }, [tripId, countryCoords]);
+  
   return (
     <div className="space-y-8">
       {/* Header */}
