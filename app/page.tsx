@@ -3706,6 +3706,7 @@ function PlacesTab({ tripId }: PlacesTabProps) {
                   <InfoWindow
                     position={{ lat: selectedPlace.lat, lng: selectedPlace.lng }}
                     onCloseClick={() => setSelectedPlace(null)}
+                    options={{ disableAutoPan: true }}
                   >
                     <div className="p-1 max-w-[200px]">
                       {selectedPlace.imageUrl && (
