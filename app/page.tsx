@@ -3525,6 +3525,12 @@ function PlacesTab({ tripId }: PlacesTabProps) {
       },
       {
           "featureType": "road",
+          "elementType": "labels.icon",
+          "stylers": [{ "visibility": "off" }]
+      },
+      
+      {
+          "featureType": "road",
           "elementType": "all",
           "stylers": [{ "saturation": "-100" }]
       },
