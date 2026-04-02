@@ -3546,7 +3546,7 @@ function PlacesTab({ tripId }: PlacesTabProps) {
       {
           "featureType": "transit",
           "elementType": "all",
-          "stylers": [{ "saturation": -100 }, { "visibility": "simplified" }]
+          "stylers": [{ "visibility": "off" }]
       },
       {
           "featureType": "water",
