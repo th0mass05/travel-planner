@@ -87,6 +87,7 @@ export default function AdminTab({ tripId }: { tripId: number }) {
     email?: string; // only for invites
     status: "Member" | "Invited";
     isMe?: boolean;
+    photoUrl?: string;
   };
   // --- TEMPLATE ACTIONS ---
   const handleExportPacking = async (mode: "new" | "update", templateName: string, templateId: number | null) => {
@@ -299,13 +300,14 @@ export default function AdminTab({ tripId }: { tripId: number }) {
           // ⭐ NEW: If we've already added this person, skip them!
           if (seenIds.has(uid)) continue; 
           seenIds.add(uid);
-
+          let photoUrl = "";
           // Fetch user details from Firestore 'users' collection
           let name = "Unknown User";
           try {
              const userDoc = await getDoc(doc(db, "users", uid));
              if (userDoc.exists()) {
                name = userDoc.data().name || userDoc.data().email || "User";
+               photoUrl = userDoc.data().photoUrl || "";
              }
           } catch(e) { console.log("User fetch error", e)}
 
@@ -313,7 +315,8 @@ export default function AdminTab({ tripId }: { tripId: number }) {
             id: uid,
             name: name,
             status: "Member",
-            isMe: uid === currentUid
+            isMe: uid === currentUid,
+            photoUrl: photoUrl
           });
         }
       }
@@ -837,13 +840,18 @@ export default function AdminTab({ tripId }: { tripId: number }) {
 
                 return (
                   <div key={member.id} className="p-4 flex items-center justify-between hover:bg-stone-50 transition-colors">
-                    <div className="flex items-center gap-3">
-                      <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-lg shadow-sm ${
+                    <div className="flex items-center gap-4">
+                      {/* ⭐ UPDATED: Profile Picture Container */}
+                      <div className={`w-11 h-11 rounded-full overflow-hidden flex items-center justify-center font-bold text-lg shadow-sm shrink-0 border border-stone-200 ${
                         member.status === "Member" 
-                          ? "bg-stone-900 text-white" 
-                          : "bg-amber-100 text-amber-700"
+                          ? "bg-stone-100 text-stone-500" 
+                          : "bg-amber-50 text-amber-600 border-amber-200"
                       }`}>
-                        {member.name.charAt(0).toUpperCase()}
+                        {member.photoUrl ? (
+                          <img src={member.photoUrl} alt={member.name} className="w-full h-full object-cover" />
+                        ) : (
+                          member.name.charAt(0).toUpperCase()
+                        )}
                       </div>
                       <div>
                         <p className="font-bold text-stone-900 leading-tight mb-0.5">
