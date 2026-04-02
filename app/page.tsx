@@ -3340,16 +3340,15 @@ type PlacesTabProps = {
   tripId: number;
 };
 const mapLibraries: ("places")[] = ["places"];
-// ⭐ UPDATED: Pastel color mapping for categories
 const CATEGORY_COLORS: Record<string, string> = {
-  eat: "#fcd34d",         // Pastel Yellow/Amber
-  landmark: "#a78bfa",    // Pastel Indigo/Lavender
-  "day-trip": "#c4b5fd",  // Soft Violet
-  shopping: "#f9a8d4",    // Pastel Pink
-  experience: "#5eead4",  // Mint/Pastel Teal
-  nature: "#6ee7b7",      // Soft Seafoam Green
-  nightlife: "#93c5fd",   // Baby Blue
-  visit: "#a8a29e"        // Soft Warm Grey (Stone)
+  eat: "#b87a3d",         // Caramel / Ochre
+  landmark: "#5c7080",    // Steel Blue
+  "day-trip": "#826b7a",  // Dusty Mauve
+  shopping: "#b36666",    // Faded Brick / Rose
+  experience: "#4b7f75",  // Muted Pine / Deep Teal
+  nature: "#6b8259",      // Sage Green
+  nightlife: "#455b7d",   // Denim Blue
+  visit: "#6e6b66"        // Warm Charcoal
 };
 // Map categories for the UI sub-nav
 const PLACE_CATEGORIES: { id: PlaceType | "all"; label: string }[] = [
@@ -3501,29 +3500,65 @@ function PlacesTab({ tripId }: PlacesTabProps) {
   const mapOptions = {
   disableDefaultUI: true,
   zoomControl: true,
+  minZoom: 5,
+  maxZoom: 18,
   styles: [
-    // Base colors
-    { elementType: "geometry", stylers: [{ color: "#f5f5f5" }] },
-    { elementType: "labels.text.fill", stylers: [{ color: "#616161" }] },
-    { elementType: "labels.text.stroke", stylers: [{ color: "#f5f5f5" }] },
-    
-    // Turn off ALL default map icons (restaurants, shops, etc.)
-    { elementType: "labels.icon", stylers: [{ visibility: "off" }] },
-    { featureType: "poi", stylers: [{ visibility: "off" }] }, 
-    
-    // Abstract the roads (hide local roads, hide ALL road labels)
-    { featureType: "road", elementType: "geometry", stylers: [{ color: "#ffffff" }] },
-    { featureType: "road", elementType: "labels", stylers: [{ visibility: "off" }] }, 
-    { featureType: "road.highway", elementType: "geometry", stylers: [{ color: "#e0e0e0" }] },
-    { featureType: "road.local", stylers: [{ visibility: "simplified" }] }, // Makes smaller roads fade away
-    
-    // Hide transit lines (subways/trains) to reduce clutter
-    { featureType: "transit", stylers: [{ visibility: "off" }] }, 
-    
-    // Water styling
-    { featureType: "water", elementType: "geometry", stylers: [{ color: "#e3e3e3" }] },
-    { featureType: "water", elementType: "labels.text.fill", stylers: [{ color: "#9e9e9e" }] }
-  ],
+      {
+          "featureType": "administrative",
+          "elementType": "all",
+          "stylers": [{ "saturation": "-100" }]
+      },
+      {
+          "featureType": "administrative.province",
+          "elementType": "all",
+          "stylers": [{ "visibility": "off" }]
+      },
+      {
+          "featureType": "landscape",
+          "elementType": "all",
+          "stylers": [{ "saturation": -100 }, { "lightness": 65 }, { "visibility": "on" }]
+      },
+      {
+          "featureType": "poi",
+          "elementType": "all",
+          "stylers": [{ "saturation": -100 }, { "lightness": "50" }, { "visibility": "simplified" }]
+      },
+      {
+          "featureType": "road",
+          "elementType": "all",
+          "stylers": [{ "saturation": "-100" }]
+      },
+      {
+          "featureType": "road.highway",
+          "elementType": "all",
+          "stylers": [{ "visibility": "simplified" }]
+      },
+      {
+          "featureType": "road.arterial",
+          "elementType": "all",
+          "stylers": [{ "lightness": "30" }]
+      },
+      {
+          "featureType": "road.local",
+          "elementType": "all",
+          "stylers": [{ "lightness": "40" }]
+      },
+      {
+          "featureType": "transit",
+          "elementType": "all",
+          "stylers": [{ "saturation": -100 }, { "visibility": "simplified" }]
+      },
+      {
+          "featureType": "water",
+          "elementType": "geometry",
+          "stylers": [{ "hue": "#ffff00" }, { "lightness": -25 }, { "saturation": -97 }]
+      },
+      {
+          "featureType": "water",
+          "elementType": "labels",
+          "stylers": [{ "lightness": -25 }, { "saturation": -100 }]
+      }
+    ],
 };
   const { isLoaded } = useJsApiLoader({
     id: 'google-map-script',
@@ -3689,12 +3724,11 @@ function PlacesTab({ tripId }: PlacesTabProps) {
                       title={place.name}
                       onClick={() => setSelectedPlace(place)}
                       icon={{
-                        // A clean, modern teardrop pin shape
                         path: "M 0,0 C -2,-20 -10,-22 -10,-30 A 10,10 0 1,1 10,-30 C 10,-22 2,-20 0,0 z",
                         fillColor: pinColor,
                         fillOpacity: 1,
-                        strokeColor: "#44403c", // Tailwind stone-800 for contrast against pastels
-                        strokeWeight: 1.5,
+                        strokeColor: "#f5f5f4", // Pale stone border makes muted colors pop
+                        strokeWeight: 2, 
                         scale: 1.2,
                       }}
                     />
