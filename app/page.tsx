@@ -3730,12 +3730,15 @@ function PlacesTab({ tripId }: PlacesTabProps) {
                       title={place.name}
                       onClick={() => setSelectedPlace(place)}
                       icon={{
-                        path: "M 0,0 C -2,-20 -10,-22 -10,-30 A 10,10 0 1,1 10,-30 C 10,-22 2,-20 0,0 z",
+                        // A perfect circle
+                        path: "M 0, 0 m -10, 0 a 10,10 0 1,0 20,0 a 10,10 0 1,0 -20,0",
                         fillColor: pinColor,
                         fillOpacity: 1,
-                        strokeColor: "#f5f5f4", // Pale stone border makes muted colors pop
-                        strokeWeight: 2, 
-                        scale: 1.2,
+                        strokeColor: "#ffffff", // White border looks best on dots
+                        strokeWeight: 3,
+                        scale: 0.8, // Slightly smaller
+                        // ⭐ CRITICAL: Tells the popup window to spawn dead center above the dot
+                        anchor: new window.google.maps.Point(0, 0), 
                       }}
                     />
                   );
