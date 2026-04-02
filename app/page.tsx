@@ -3526,24 +3526,25 @@ function PlacesTab({ tripId, country }: PlacesTabProps) {
           "stylers": [{ "saturation": -100 }, { "lightness": "50" }, { "visibility": "simplified" }]
       },
       {
-          "featureType": "road",
-          "elementType": "labels", // Kills ALL street names, numbers, and shields
-          "stylers": [{ "visibility": "off" }]
+        "featureType": "road",
+        "elementType": "labels", 
+        "stylers": [{ "visibility": "off" }]
       },
+      // ⭐ Turn ON geometry but keep it clean and white
       {
           "featureType": "road.highway",
-          "elementType": "all", // Kills the dark expressways
-          "stylers": [{ "visibility": "off" }]
+          "elementType": "geometry",
+          "stylers": [{ "visibility": "on" }, { "color": "#ffffff" }]
       },
       {
           "featureType": "road.arterial",
-          "elementType": "all", // Kills the thick connector roads
-          "stylers": [{ "visibility": "off" }]
+          "elementType": "geometry",
+          "stylers": [{ "visibility": "on" }, { "color": "#ffffff" }]
       },
       {
           "featureType": "road.local",
-          "elementType": "all", // Kills the faint neighborhood streets
-          "stylers": [{ "visibility": "off" }] 
+          "elementType": "geometry",
+          "stylers": [{ "visibility": "on" }, { "color": "#ffffff" }] 
       },
       {
           "featureType": "transit",
