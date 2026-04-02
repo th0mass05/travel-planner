@@ -254,12 +254,18 @@ export default function AdminTab({ tripId }: { tripId: number }) {
     const me = auth.currentUser;
     if (!me) return;
     try {
+      const mySnap = await getDoc(doc(db, "users", me.uid));
+      const myData = mySnap.data();
+      
+      if (!myData?.username) {
+        showToast("Please set a username in your Profile first!");
+        return;
+      }
       const targetSnap = await getDoc(doc(db, "users", targetUid));
       if (!targetSnap.exists()) return;
       const targetData = targetSnap.data();
 
-      const mySnap = await getDoc(doc(db, "users", me.uid));
-      const myData = mySnap.data();
+      
 
       // Write to my profile
       await setDoc(doc(db, "users", me.uid, "friends", targetUid), {

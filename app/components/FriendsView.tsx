@@ -20,7 +20,50 @@ export default function FriendsView({ onBack }: { onBack: () => void }) {
   const [searchResult, setSearchResult] = useState<FriendData | null>(null);
   const [searchError, setSearchError] = useState("");
   const [toastMsg, setToastMsg] = useState("");
+    const [hasUsername, setHasUsername] = useState<boolean | null>(null); // null = loading
+    useEffect(() => {
+    const checkUsername = async () => {
+      const user = auth.currentUser;
+      if (!user) return;
+      const snap = await getDoc(doc(db, "users", user.uid));
+      setHasUsername(!!snap.data()?.username);
+    };
+    checkUsername();
+  }, []);
 
+  // 1. Loading state (so it doesn't flicker)
+  if (hasUsername === null) return <div className="min-h-screen bg-[#FDFCF8]" />;
+
+  // 2. Beautiful Prompt if username is missing
+  if (!hasUsername) {
+    return (
+      <div className="min-h-screen bg-[#FDFCF8] font-sans flex items-center justify-center p-6">
+        <div className="max-w-md w-full bg-white border border-stone-200 rounded-3xl p-10 shadow-sm text-center animate-in fade-in zoom-in-95">
+          <div className="w-20 h-20 bg-amber-50 rounded-full flex items-center justify-center mx-auto mb-6 text-amber-500 border border-amber-100">
+            <Users size={40} />
+          </div>
+          <h2 className="text-3xl font-serif text-stone-900 mb-3">Claim your Username</h2>
+          <p className="text-stone-500 mb-8 leading-relaxed">
+            To join the Traveler Network and add friends, you need to set a unique username in your account settings first.
+          </p>
+          <div className="space-y-3">
+            <button 
+              onClick={onBack}
+              className="w-full py-4 bg-stone-900 text-white font-bold rounded-xl hover:bg-stone-800 transition-all shadow-md"
+            >
+              Go to Account Settings
+            </button>
+            <button 
+              onClick={onBack}
+              className="w-full py-3 text-stone-400 font-bold text-sm hover:text-stone-600 transition-colors"
+            >
+              Maybe later
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
   const showToast = (msg: string) => {
     setToastMsg(msg);
     setTimeout(() => setToastMsg(""), 3000);
@@ -133,22 +176,39 @@ export default function FriendsView({ onBack }: { onBack: () => void }) {
     if (!me) return;
 
     try {
-      await setDoc(doc(db, "users", me.uid, "friends", targetUser.uid), { ...targetUser, status: "accepted" });
-      
-      // We must fetch my data again to update their record properly
+      // 1. Get MY latest data (to give to them)
       const mySnap = await getDoc(doc(db, "users", me.uid));
       const myData = mySnap.data() || {};
+
+      // 2. Get THEIR latest data (to save for myself)
+      const theirSnap = await getDoc(doc(db, "users", targetUser.uid));
+      const theirData = theirSnap.data() || {};
+        if (!myData.username || !theirData.username) {
+        showToast("Both users must have usernames to become friends.");
+        return;
+      }
+      // 3. Update MY friends list with THEIR latest info
+      await setDoc(doc(db, "users", me.uid, "friends", targetUser.uid), {
+        uid: targetUser.uid,
+        username: theirData.username || targetUser.username || "traveler",
+        name: theirData.name || targetUser.name || "Traveler",
+        photoUrl: theirData.photoUrl || "",
+        status: "accepted"
+      });
       
+      // 4. Update THEIR friends list with MY latest info
       await setDoc(doc(db, "users", targetUser.uid, "friends", me.uid), { 
         uid: me.uid,
-        username: myData.username,
-        name: myData.name,
+        username: myData.username || "",
+        name: myData.name || "",
         photoUrl: myData.photoUrl || "",
         status: "accepted" 
       });
-      showToast(`You are now friends with ${targetUser.name}!`);
-      loadFriends();
+
+      showToast(`You are now friends with ${theirData.name || targetUser.name}!`);
+      // No need to call loadFriends() if you added the onSnapshot listener!
     } catch (e) {
+      console.error(e);
       showToast("Failed to accept request.");
     }
   };
