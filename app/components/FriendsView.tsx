@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { ChevronLeft, Search, UserPlus, Users, Check, X, MapPin, Plane, Heart, Package} from "lucide-react";
+import { ChevronLeft, Search, UserPlus, Users, Check, X, MapPin, Plane, Heart, Package, CheckCircle} from "lucide-react";
 import { auth, db } from "../../firebase"; // Adjust path
 import { doc, getDoc, setDoc, deleteDoc, collection, getDocs } from "firebase/firestore";
 import { storage } from "../../firebaseStore"; // Adjust path
@@ -19,7 +19,12 @@ export default function FriendsView({ onBack }: { onBack: () => void }) {
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResult, setSearchResult] = useState<FriendData | null>(null);
   const [searchError, setSearchError] = useState("");
-  
+  const [toastMsg, setToastMsg] = useState("");
+
+  const showToast = (msg: string) => {
+    setToastMsg(msg);
+    setTimeout(() => setToastMsg(""), 3000);
+  };
   // Public Profile State
   const [viewingFriend, setViewingFriend] = useState<FriendData | null>(null);
   const [friendTrips, setFriendTrips] = useState<TripData[]>([]);
@@ -114,12 +119,12 @@ export default function FriendsView({ onBack }: { onBack: () => void }) {
         status: "pending_received"
       });
 
-      alert("Friend request sent!");
+      showToast(`Request sent to @${targetUser.username}`);
       loadFriends();
       setSearchResult(null);
       setSearchQuery("");
     } catch (e) {
-      alert("Failed to send request.");
+      showToast("Failed to send request.");
     }
   };
 
@@ -141,10 +146,10 @@ export default function FriendsView({ onBack }: { onBack: () => void }) {
         photoUrl: myData.photoUrl || "",
         status: "accepted" 
       });
-
+      showToast(`You are now friends with ${targetUser.name}!`);
       loadFriends();
     } catch (e) {
-      alert("Failed to accept request.");
+      showToast("Failed to accept request.");
     }
   };
 
@@ -484,6 +489,13 @@ export default function FriendsView({ onBack }: { onBack: () => void }) {
           </div>
         )}
       </div>
+      {/* === TOAST NOTIFICATION === */}
+      {toastMsg && (
+        <div className="fixed bottom-8 left-1/2 -translate-x-1/2 bg-stone-900 text-white px-6 py-3 rounded-full shadow-2xl z-[100] flex items-center gap-2 animate-in slide-in-from-bottom-5 fade-in font-bold text-sm whitespace-nowrap">
+          <CheckCircle size={18} className="text-emerald-400" />
+          {toastMsg}
+        </div>
+      )}
     </div>
   );
 }
