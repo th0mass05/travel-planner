@@ -10,8 +10,9 @@ import useUserName from "./hooks/useUserName";
 import CreatorBadge from "./hooks/CreatorBadge";
 import { formatDistanceToNow } from "date-fns";
 import emailjs from "@emailjs/browser";
-import React, { useState, useEffect, useRef, useCallback} from "react";
+import React, { useState, useEffect, useRef, useCallback, useMemo} from "react";
 import Autocomplete from "react-google-autocomplete";
+import { GoogleMap, Marker, useJsApiLoader } from '@react-google-maps/api';
 import {
   Calendar,
   MapPin,
@@ -166,6 +167,9 @@ export type PlaceData = {
   createdAt?: string;        // ISO date string
   createdByUid?: string | null;
   googleMapsUrl?: string;
+  locationPath?: string[];
+  lat?: number;
+  lng?: number;
 };
 
 
@@ -339,6 +343,9 @@ type PlaceFormData = {
   visited: boolean;
   googleMapsUrl?: string;
   category: PlaceType;
+  locationPath?: string[]; // ⭐ NEW: Store the full location path for better filtering and display
+  lat?: number;
+  lng?: number;
 };
 
 type PlaceDialogProps = {
@@ -346,9 +353,18 @@ type PlaceDialogProps = {
   onAdd: (data: PlaceFormData) => void;
   initialData?: PlaceFormData;
   initialCategory?: PlaceType;
+  initialLocationPath?: string[];
+  allPlaces?: StoredPlace[];
 };
 
-function PlaceDialog({ onClose, onAdd, initialData, initialCategory = "visit" }: PlaceDialogProps) {
+function PlaceDialog({ 
+  onClose, 
+  onAdd, 
+  initialData, 
+  initialCategory = "visit", 
+  initialLocationPath = [],
+  allPlaces = [],
+}: PlaceDialogProps) {
   const [formData, setFormData] = useState<PlaceFormData>(
     initialData || { 
       name: "",
@@ -358,18 +374,18 @@ function PlaceDialog({ onClose, onAdd, initialData, initialCategory = "visit" }:
       imageUrl: "",
       link: "",
       visited: false,
-      category: initialCategory, // Default to the active tab's category
+      category: initialCategory,
+      locationPath: initialLocationPath,
     }
   );
 
-
-  // Inside PlaceDialog ...
+  // ⭐ NEW: Local state just to hold the text the user is currently typing before hitting Enter
+  const [locInput, setLocInput] = useState("");
 
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
       try {
-        // Compress image before setting state
         const compressedBase64 = await compressImage(file);
         setFormData({ ...formData, imageUrl: compressedBase64 });
       } catch (err) {
@@ -378,7 +394,10 @@ function PlaceDialog({ onClose, onAdd, initialData, initialCategory = "visit" }:
       }
     }
   };
-
+  const currentDepth = (formData.locationPath || []).length;
+  const suggestions = getAvailableLocations(allPlaces, currentDepth, formData.locationPath || [])
+    // Automatically filter the suggestions as the user types
+    .filter(loc => loc.toLowerCase().includes(locInput.toLowerCase()));
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
       <div className="bg-white rounded-lg max-w-md w-full p-6 max-h-[90vh] overflow-y-auto">
@@ -407,77 +426,146 @@ function PlaceDialog({ onClose, onAdd, initialData, initialCategory = "visit" }:
             </select>
           </div>
 
+          {/* ⭐ UPDATED: Interactive Breadcrumb / Tag Input */}
+          <div>
+            <label className="block text-sm font-medium mb-1">
+              Location Path (Optional)
+            </label>
+            
+            {/* Faux Input Container */}
+            <div className="flex flex-wrap items-center gap-2 w-full px-3 py-2 border-2 border-gray-300 rounded-lg focus-within:border-gray-900 bg-white transition-colors">
+              
+              {(formData.locationPath || []).map((loc, index) => (
+                <div key={index} className="flex items-center gap-1 bg-stone-100 text-stone-800 px-2 py-1 rounded-md text-sm border border-stone-200 shadow-sm">
+                  <span className="font-medium">{loc}</span>
+                  <button
+                    type="button" // Prevent form submission
+                    onClick={() => {
+                      const newPath = (formData.locationPath || []).slice(0, index);
+                      setFormData({ ...formData, locationPath: newPath });
+                    }}
+                    className="text-stone-400 hover:text-rose-500 ml-1 text-lg leading-none outline-none"
+                    title="Remove this and sub-locations"
+                  >
+                    &times;
+                  </button>
+                </div>
+              ))}
+
+              <input
+                type="text"
+                value={locInput}
+                onChange={(e) => setLocInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    const val = locInput.trim();
+                    if (val) {
+                      setFormData({
+                        ...formData,
+                        locationPath: [...(formData.locationPath || []), val]
+                      });
+                      setLocInput(""); 
+                    }
+                  }
+                }}
+                className="flex-1 min-w-[140px] outline-none bg-transparent py-1 text-sm"
+                placeholder={
+                  (formData.locationPath || []).length === 0 
+                    ? "e.g., Tokyo (Press Enter)" 
+                    : "Add sub-location..."
+                }
+              />
+            </div>
+
+            {/* ⭐ NEW UI: Clickable Suggestion Chips */}
+            {suggestions.length > 0 && (
+              <div className="flex flex-wrap items-center gap-2 mt-2">
+                <span className="text-xs font-bold text-stone-400 uppercase tracking-widest">
+                  Suggestions:
+                </span>
+                {suggestions.map((suggestion) => (
+                  <button
+                    key={suggestion}
+                    type="button"
+                    onClick={() => {
+                      setFormData({
+                        ...formData,
+                        locationPath: [...(formData.locationPath || []), suggestion]
+                      });
+                      setLocInput(""); // Clear the input
+                    }}
+                    className="px-2.5 py-1 bg-stone-50 hover:bg-stone-100 text-stone-600 text-xs font-medium rounded border border-stone-200 transition-colors"
+                  >
+                    + {suggestion}
+                  </button>
+                ))}
+              </div>
+            )}
+            
+            <p className="text-xs text-gray-500 mt-2">
+              Type a location and press <strong>Enter</strong> or click a suggestion above.
+            </p>
+          </div>
+
           <div>
             <label className="block text-sm font-medium mb-1">Name</label>
             <input
               type="text"
               value={formData.name}
-              onChange={(e) =>
-                setFormData({ ...formData, name: e.target.value })
-              }
+              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
               className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg focus:border-gray-900 outline-none"
-              placeholder={
-                formData.category === "eat" ? "e.g., Sushi Saito" : "e.g., Tokyo Tower"
-              }
+              placeholder={formData.category === "eat" ? "e.g., Sushi Saito" : "e.g., Tokyo Tower"}
             />
           </div>
+
           <div>
-            <label className="block text-sm font-medium mb-1">
-              Description
-            </label>
+            <label className="block text-sm font-medium mb-1">Description</label>
             <textarea
               value={formData.description}
-              onChange={(e) =>
-                setFormData({ ...formData, description: e.target.value })
-              }
+              onChange={(e) => setFormData({ ...formData, description: e.target.value })}
               className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg focus:border-gray-900 outline-none"
               rows={2}
               placeholder="Brief description"
             />
           </div>
+
           <div>
-              <label className="block text-sm font-medium mb-1">Address</label>
-              
-              <Autocomplete
-                apiKey={process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY}
-                defaultValue={formData.address}
-                onPlaceSelected={(place) => {
-                  if (place) {
-                    setFormData({ 
-                      ...formData, 
-                      address: place.formatted_address || place.name || "",
-                      name: formData.name || place.name || "", 
-                      googleMapsUrl: place.url || ""
-                    });
-                  }
-                }}
-                className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg focus:border-gray-900 outline-none"
-                placeholder="Start typing a place or address..."
-                options={{
-                  types: [], 
-                  fields: ["name", "formatted_address", "url", "geometry"] 
-                }}
-              />
-            </div>
+            <label className="block text-sm font-medium mb-1">Address</label>
+            <Autocomplete
+              apiKey={process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY}
+              defaultValue={formData.address}
+              onPlaceSelected={(place) => {
+                if (place) {
+                  setFormData({ 
+                    ...formData, 
+                    address: place.formatted_address || place.name || "",
+                    name: formData.name || place.name || "", 
+                    googleMapsUrl: place.url || "",
+                    lat: place.geometry?.location?.lat(),
+                    lng: place.geometry?.location?.lng()
+                  });
+                }
+              }}
+              className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg focus:border-gray-900 outline-none"
+              placeholder="Start typing a place or address..."
+              options={{ types: [], fields: ["name", "formatted_address", "url", "geometry"] }}
+            />
+          </div>
+
           <div>
-            <label className="block text-sm font-medium mb-1">
-              Website Link (optional)
-            </label>
+            <label className="block text-sm font-medium mb-1">Website Link (optional)</label>
             <input
               type="url"
               value={formData.link}
-              onChange={(e) =>
-                setFormData({ ...formData, link: e.target.value })
-              }
+              onChange={(e) => setFormData({ ...formData, link: e.target.value })}
               className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg focus:border-gray-900 outline-none"
               placeholder="https://..."
             />
           </div>
           
           <div>
-            <label className="block text-sm font-medium mb-1">
-              Image (optional)
-            </label>
+            <label className="block text-sm font-medium mb-1">Image (optional)</label>
             <input
               type="file"
               accept="image/*"
@@ -494,6 +582,7 @@ function PlaceDialog({ onClose, onAdd, initialData, initialCategory = "visit" }:
               </div>
             )}
           </div>
+
           <div className="flex gap-3 pt-4">
             <button
               onClick={() => onAdd(formData)}
@@ -508,6 +597,7 @@ function PlaceDialog({ onClose, onAdd, initialData, initialCategory = "visit" }:
               Cancel
             </button>
           </div>
+
         </div>
       </div>
     </div>
@@ -3226,7 +3316,25 @@ export type StoredPlace = PlaceData & {
     uid: string;
     amount: number;}[]
 };
-
+const getAvailableLocations = (places: StoredPlace[], depth: number, currentPath: string[]) => {
+  const locations = new Set<string>();
+  places.forEach((p) => {
+    const path = p.locationPath || [];
+    // Ensure this place matches our current active path up to the requested depth
+    let matches = true;
+    for (let i = 0; i < depth; i++) {
+      if (path[i] !== currentPath[i]) {
+        matches = false;
+        break;
+      }
+    }
+    // If it matches and has a location at this specific depth, add it
+    if (matches && path.length > depth) {
+      locations.add(path[depth]);
+    }
+  });
+  return Array.from(locations).sort();
+};
 
 type PlacesTabProps = {
   tripId: number;
@@ -3247,7 +3355,7 @@ const PLACE_CATEGORIES: { id: PlaceType | "all"; label: string }[] = [
 function PlacesTab({ tripId }: PlacesTabProps) {
   const [places, setPlaces] = useState<StoredPlace[]>([]);
   const [activeCategory, setActiveCategory] = useState<PlaceType | "all">("all");
-  
+  const [activeLocationPath, setActiveLocationPath] = useState<string[]>([]);
   const [editingPlace, setEditingPlace] = useState<StoredPlace | null>(null);
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [confirmingPlace, setConfirmingPlace] = useState<StoredPlace | null>(null);
@@ -3257,14 +3365,12 @@ function PlacesTab({ tripId }: PlacesTabProps) {
     const unsubscribe = storage.subscribeToList(
       `place:${tripId}:`, 
       (newPlaces: StoredPlace[]) => {
-        // ⭐ LEGACY FIX: Deduplicate & patch old data that is missing categories
         const uniquePlacesMap = new Map();
         
         newPlaces.forEach((p) => {
-          // If it's an old item missing a category, default it to 'visit' so it doesn't break the UI
-          if (!p.category) {
-            p.category = "visit";
-          }
+          if (!p.category) p.category = "visit";
+          // ⭐ LEGACY FIX: Ensure old places at least have an empty array to prevent crashes
+          if (!p.locationPath) p.locationPath = []; 
           uniquePlacesMap.set(p.id, p);
         });
 
@@ -3274,7 +3380,6 @@ function PlacesTab({ tripId }: PlacesTabProps) {
     );
     return () => unsubscribe();
   }, [tripId]);
-
 
   const addPlace = async (placeData: PlaceFormData) => {
     const place: StoredPlace = {
@@ -3370,11 +3475,32 @@ function PlacesTab({ tripId }: PlacesTabProps) {
   };
   
   // Strict filtering for the UI
-  const filteredPlaces = places.filter(
-    (p) => activeCategory === "all" || p.category === activeCategory
-  );
+  const filteredPlaces = useMemo(() => {
+    return places.filter((p) => {
+      const categoryMatch = activeCategory === "all" || p.category === activeCategory;
+      const path = p.locationPath || [];
+      // To match, the place's path must contain the active path at the beginning
+      // Example: If active is ["Tokyo"], places with ["Tokyo"] and ["Tokyo", "Shibuya"] both match
+      const locationMatch = activeLocationPath.every((loc, index) => path[index] === loc);
+      return categoryMatch && locationMatch;
+    });
+  }, [places, activeCategory, activeLocationPath]);
   const visitedCount = filteredPlaces.filter((p) => p.visited).length;
-
+  const [viewMode, setViewMode] = useState<'grid' | 'map'>('grid');
+  const mapOptions = {
+    styles: [
+      { "elementType": "geometry", "stylers": [{ "color": "#f5f5f5" }] },
+      { "featureType": "water", "stylers": [{ "color": "#e9e9e9" }] },
+      { "featureType": "poi", "stylers": [{ "visibility": "off" }] }, // Mutes clutter
+      // Add more stone-themed styles here
+    ],
+    disableDefaultUI: true,
+    zoomControl: true,
+  };
+  const { isLoaded } = useJsApiLoader({
+    id: 'google-map-script',
+    googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || "", // Use your exact env variable name here
+  });
   return (
     <div className="space-y-8">
       {/* Header */}
@@ -3392,7 +3518,78 @@ function PlacesTab({ tripId }: PlacesTabProps) {
           <Plus size={18} /> Add Place
         </button>
       </div>
+      {/* ⭐ NEW: Cascading Location Navigation (Updated with Stone Palette) */}
+      <div className="flex flex-col gap-3">
+        
+        {/* Level 0: Top Level Locations (Always visible if there are any) */}
+        {getAvailableLocations(places, 0, []).length > 0 && (
+          <div className="flex gap-2 overflow-x-auto pb-1 no-scrollbar items-center">
+            <span className="text-xs font-bold text-stone-400 uppercase tracking-widest mr-2">Region:</span>
+            <button
+              onClick={() => setActiveLocationPath([])}
+              className={`px-4 py-2 rounded-full text-xs font-bold uppercase tracking-wider whitespace-nowrap transition-all border ${
+                activeLocationPath.length === 0
+                  ? "bg-stone-800 text-white border-stone-800 shadow-md"
+                  : "bg-stone-50 text-stone-600 border-stone-200 hover:border-stone-300 hover:bg-stone-100"
+              }`}
+            >
+              All Locations
+            </button>
+            {getAvailableLocations(places, 0, []).map((loc) => (
+              <button
+                key={loc}
+                onClick={() => setActiveLocationPath([loc])}
+                className={`px-4 py-2 rounded-full text-xs font-bold uppercase tracking-wider whitespace-nowrap transition-all border ${
+                  activeLocationPath[0] === loc
+                    ? "bg-stone-800 text-white border-stone-800 shadow-md"
+                    : "bg-stone-50 text-stone-600 border-stone-200 hover:border-stone-300 hover:bg-stone-100"
+                }`}
+              >
+                {loc}
+              </button>
+            ))}
+          </div>
+        )}
 
+        {/* Level 1+: Dynamically render sub-location rows based on selection */}
+        {activeLocationPath.map((selectedLoc, depth) => {
+          const subLocations = getAvailableLocations(places, depth + 1, activeLocationPath);
+          if (subLocations.length === 0) return null; // No children, don't render a row
+
+          return (
+            <div key={depth} className="flex gap-2 overflow-x-auto pb-1 no-scrollbar items-center ml-4 border-l-2 border-stone-200 pl-4 mt-1">
+              <span className="text-xs font-bold text-stone-400 uppercase tracking-widest mr-2">Area:</span>
+              <button
+                onClick={() => setActiveLocationPath(activeLocationPath.slice(0, depth + 1))}
+                className={`px-3 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-wider whitespace-nowrap transition-all border ${
+                  activeLocationPath.length === depth + 1
+                    ? "bg-stone-600 text-white border-stone-600 shadow-sm"
+                    : "bg-white text-stone-500 border-stone-200 hover:border-stone-300 hover:bg-stone-50"
+                }`}
+              >
+                All in {selectedLoc}
+              </button>
+              {subLocations.map((subLoc) => (
+                <button
+                  key={subLoc}
+                  onClick={() => {
+                    const newPath = activeLocationPath.slice(0, depth + 1);
+                    newPath.push(subLoc);
+                    setActiveLocationPath(newPath);
+                  }}
+                  className={`px-3 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-wider whitespace-nowrap transition-all border ${
+                    activeLocationPath[depth + 1] === subLoc
+                      ? "bg-stone-600 text-white border-stone-600 shadow-sm"
+                      : "bg-white text-stone-500 border-stone-200 hover:border-stone-300 hover:bg-stone-50"
+                  }`}
+                >
+                  {subLoc}
+                </button>
+              ))}
+            </div>
+          );
+        })}
+      </div>
       {/* Sub-Navigation Menu */}
       <div className="flex gap-2 overflow-x-auto pb-2 no-scrollbar">
         {PLACE_CATEGORIES.map((cat) => (
@@ -3409,14 +3606,56 @@ function PlacesTab({ tripId }: PlacesTabProps) {
           </button>
         ))}
       </div>
-
-      {/* Grid rendering using strict ternary to avoid overlap issues */}
+      <div className="flex bg-stone-100 p-1 rounded-xl w-fit self-end mb-6">
+        <button 
+          onClick={() => setViewMode('grid')}
+          className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${viewMode === 'grid' ? 'bg-white shadow-sm text-stone-900' : 'text-stone-400'}`}
+        >
+          Grid
+        </button>
+        <button 
+          onClick={() => setViewMode('map')}
+          className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${viewMode === 'map' ? 'bg-white shadow-sm text-stone-900' : 'text-stone-400'}`}
+        >
+          Map
+        </button>
+      </div>
+      {/* Grid OR Map rendering */}
       {filteredPlaces.length === 0 ? (
         <div className="text-center py-24 bg-white rounded-2xl border border-dashed border-stone-200">
            <p className="text-stone-400 mb-2">No places found in this category</p>
            <button onClick={() => setShowAddDialog(true)} className="text-stone-900 font-bold underline hover:text-rose-600">
              Start adding places
            </button>
+        </div>
+      ) : viewMode === 'map' ? (
+        /* ⭐ Map View Rendering */
+        <div className="h-[600px] w-full rounded-2xl overflow-hidden border border-stone-200 shadow-sm relative bg-stone-100 flex items-center justify-center">
+          {!isLoaded ? (
+            <p className="text-stone-400 font-medium">Loading Map...</p>
+          ) : (
+            <GoogleMap
+              mapContainerStyle={{ width: '100%', height: '100%' }}
+              zoom={13}
+              center={
+                filteredPlaces.find(p => p.lat && p.lng) 
+                  ? { lat: filteredPlaces.find(p => p.lat && p.lng)!.lat!, lng: filteredPlaces.find(p => p.lat && p.lng)!.lng! }
+                  : { lat: 35.6762, lng: 139.6503 } 
+              }
+              options={mapOptions}
+            >
+              {filteredPlaces.map((place) => {
+                if (!place.lat || !place.lng) return null; 
+                return (
+                  <Marker
+                    key={place.id}
+                    position={{ lat: place.lat, lng: place.lng }}
+                    title={place.name}
+                  />
+                );
+              })}
+            </GoogleMap>
+          )}
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
@@ -3538,6 +3777,9 @@ function PlacesTab({ tripId }: PlacesTabProps) {
             setShowAddDialog(false);
           }}
           initialCategory={activeCategory !== "all" ? activeCategory : "visit"}
+          // ⭐ TIP: Pass the active location to pre-fill the form!
+          initialLocationPath={activeLocationPath} 
+          allPlaces={places}
         />
       )}
 
@@ -3587,10 +3829,12 @@ function PlacesTab({ tripId }: PlacesTabProps) {
             imageUrl: editingPlace.imageUrl || "",
             link: editingPlace.link || "",
             visited: editingPlace.visited,
-            category: editingPlace.category || "visit" // ⭐ Safely pass fallback category
+            category: editingPlace.category || "visit",
+            locationPath: editingPlace.locationPath || [] // ⭐ Safely pass fallback
           }}
           onClose={() => setEditingPlace(null)}
           onAdd={(data) => handleEditPlace(data)}
+          allPlaces={places}
         />
       )}
     </div>
