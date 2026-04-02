@@ -3568,29 +3568,49 @@ function PlacesTab({ tripId, country }: PlacesTabProps) {
     libraries: mapLibraries, // ⭐ ADD THIS LINE
   });
   useEffect(() => {
-    // Only geocode if the API is loaded, a country exists, and we don't have places yet
-    if (isLoaded && country && places.length === 0) {
+    // Check if we actually have ANY place with valid coordinates to center on
+    const hasValidCoords = places.some(p => p.lat && p.lng);
+
+    // If API is ready, we have a country name, and NO places have coords yet...
+    if (isLoaded && country && !hasValidCoords) {
       const geocoder = new window.google.maps.Geocoder();
+      
       geocoder.geocode({ address: country }, (results, status) => {
         if (status === 'OK' && results?.[0]) {
           const loc = results[0].geometry.location;
           setCountryCoords({ lat: loc.lat(), lng: loc.lng() });
+        } else {
+          console.warn("Geocoding failed for:", country, status);
         }
       });
     }
-  }, [isLoaded, country, places.length]);
+  }, [isLoaded, country, places, tripId]);
   const initialCenter = useMemo(() => {
-    // 1. Try to find an existing place
-    const firstPlace = places.find(p => p.lat && p.lng);
-    if (firstPlace) return { lat: firstPlace.lat!, lng: firstPlace.lng! };
+    // 1. Try to find the first place that actually has coordinates
+    const firstPlaceWithCoords = places.find(p => p.lat && p.lng);
+    
+    if (firstPlaceWithCoords) {
+      return { 
+        lat: Number(firstPlaceWithCoords.lat), 
+        lng: Number(firstPlaceWithCoords.lng) 
+      };
+    }
 
-    // 2. Use the geocoded country center
+    // 2. If no places have coords, use the country we just geocoded
     if (countryCoords) return countryCoords;
 
-    // 3. World fallback
+    // 3. Desert Fallback
     return { lat: 20, lng: 0 };
-  }, [tripId, countryCoords]);
-  
+  }, [places, countryCoords, tripId]); // Added 'places' here!
+  const initialZoom = useMemo(() => {
+    const hasPlaces = places.some(p => p.lat && p.lng);
+    
+    if (hasPlaces) {
+      return 9; // Regional view (shows a city and its surroundings)
+    }
+    
+    return 6; // Country view (perfect for seeing all of Japan/Italy/UK)
+  }, [tripId]);
   return (
     <div className="space-y-8">
       {/* Header */}
@@ -3727,7 +3747,7 @@ function PlacesTab({ tripId, country }: PlacesTabProps) {
             <>
               <GoogleMap
                 mapContainerStyle={{ width: '100%', height: '100%' }}
-                zoom={13}
+                zoom={initialZoom}
                 center={initialCenter}
                 options={mapOptions}
                 onClick={() => setSelectedPlace(null)} 
