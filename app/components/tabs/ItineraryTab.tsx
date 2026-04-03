@@ -9,7 +9,7 @@ import LinkedItemDetails from "../shared/LinkedItemDetails";
 import { categoryIcons, iconMap } from "../../styling/styling";
 import { TripAuthorInfo } from "../../helpers";
 import {ActivityDialog, LocationManagerDialog} from "../dialogs";
-
+import DayMinimap from "../shared/DayMinimap";
 
 export default function ItineraryTab({ trip }: { trip: TripData }) {
   // ... existing state ...
@@ -302,150 +302,158 @@ export default function ItineraryTab({ trip }: { trip: TripData }) {
 
       {/* ================= TIMELINE VIEW ================= */}
       {viewMode === "timeline" && (
-        <>
-          {/* Day Navigation Pills */}
-          <div className="flex gap-3 overflow-x-auto pb-4 no-scrollbar">
-            {days.map((day, index) => {
-              const dayLocs = getLocationsForDate(day.date);
-              const isActive = currentDayIndex === index;
-              
-              return (
-                <button
-                  key={day.day}
-                  onClick={() => setCurrentDayIndex(index)}
-                  className={`relative flex-shrink-0 px-5 py-3 rounded-xl transition-all border ${
-                    isActive
-                      ? "bg-stone-900 text-white border-stone-900 shadow-md"
-                      : "bg-white text-stone-500 border-stone-200 hover:border-stone-400 hover:text-stone-900"
-                  }`}
-                >
-                  <div className="flex flex-col items-center">
-                      <span className={`text-[10px] uppercase font-bold tracking-wider ${isActive ? "text-stone-400" : "text-stone-400"}`}>
-                        Day
-                      </span>
-                      <span className="text-xl font-serif leading-none mt-1">{day.day}</span>
-                  </div>
-                  
-                  {/* Indicator Dots */}
-                  {dayLocs.length > 0 && (
-                    <div className="absolute top-2 right-2 flex gap-1">
-                      {dayLocs.map(loc => (
-                         <span key={loc.id} className={`w-2 h-2 rounded-full ${loc.color.split(" ")[0]}`} />
-                      ))}
-                    </div>
-                  )}
-                </button>
-              );
-            })}
-          </div>
-
-          {/* Location Banners */}
-          <div className="space-y-3">
-            {currentLocations.map((loc) => (
-              <div key={loc.id} className={`px-6 py-3 rounded-lg flex justify-between items-center text-sm font-medium ${loc.color}`}>
-                 <span>Currently in <span className="font-bold">{loc.location}</span></span>
-                 <MapPin size={16} className="opacity-50" />
-              </div>
-            ))}
-          </div>
-
-          {/* Activity Cards */}
-          {currentDayData.items.length === 0 ? (
-            <div className="text-center py-24 bg-white rounded-2xl border border-dashed border-stone-200">
-              <div className="w-12 h-12 bg-stone-50 rounded-full flex items-center justify-center mx-auto mb-3">
-                 <Clock size={24} className="text-stone-300" />
-              </div>
-              <p className="text-stone-900 font-serif text-lg">Empty Schedule</p>
-              <button onClick={() => setShowAddDialog(true)} className="mt-4 text-rose-600 font-medium hover:underline text-sm">
-                Plan something for Day {currentDayData.day}
-              </button>
-            </div>
-          ) : (
-            <div className="relative border-l border-stone-200 ml-4 pl-8 space-y-8 py-2">
-              {currentDayData.items.map((item) => {
-                const Icon = iconMap[item.iconType] || Clock; 
-                const isExpanded = expandedItemId === item.id; // ⭐ Check if expanded
-
+        <div className="space-y-8">
+          
+          {/* ⭐ FULL WIDTH HEADER SECTION: Day Navigation & Location Banner */}
+          <div className="space-y-4">
+            {/* Day Navigation Pills */}
+            <div className="flex gap-3 overflow-x-auto pb-2 no-scrollbar w-full">
+              {days.map((day, index) => {
+                const dayLocs = getLocationsForDate(day.date);
+                const isActive = currentDayIndex === index;
+                
                 return (
-                  <div key={item.id} className="relative group">
-                    {/* Timeline Dot */}
-                    <div className="absolute -left-[41px] top-6 w-5 h-5 rounded-full border-4 border-[#FDFCF8] bg-stone-300 group-hover:bg-stone-900 transition-colors" />
-                    
-                    {/* ⭐ Clickable Card Wrapper */}
-                    <div 
-                      onClick={() => setExpandedItemId(isExpanded ? null : item.id)}
-                      className={`bg-white rounded-xl p-6 border transition-all cursor-pointer ${
-                        isExpanded ? "border-stone-400 shadow-md" : "border-stone-100 shadow-sm hover:shadow-md group-hover:border-stone-300"
-                      }`}
-                    >
-                        <div className="flex gap-5">
-                            {/* Time Column */}
-                            <div className="flex-shrink-0 w-16 pt-1">
-                                <span className="block text-lg font-bold text-stone-900">{item.time || "—"}</span>
-                                <div className={`mt-2 transition-colors ${isExpanded ? "text-rose-500" : "text-stone-300"}`}>
-                                    <Icon size={20} />
-                                </div>
-                            </div>
-
-                            {/* Content Column */}
-                            <div className="flex-1 min-w-0">
-                                <div className="flex justify-between items-start mb-2">
-                                    <h3 className="text-xl font-serif text-stone-900 group-hover:text-rose-900 transition-colors pr-4">
-                                        {item.activity}
-                                    </h3>
-                                    
-                                    {/* Action Buttons */}
-                                    <div className="flex gap-3 opacity-0 group-hover:opacity-100 transition-opacity">
-                                        <button onClick={(e) => { e.stopPropagation(); setEditingActivity(item); }} className="text-xs font-bold text-stone-400 hover:text-stone-900 uppercase tracking-wide">Edit</button>
-                                        <button onClick={(e) => { e.stopPropagation(); deleteActivity(currentDayData.date, item.id); }} className="text-xs font-bold text-red-300 hover:text-red-500 uppercase tracking-wide">Delete</button>
-                                    </div>
-                                </div>
-
-                                {/* ⭐ NEW: Improved Location row with Show on Map button */}
-                                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-1">
-                                  <a 
-                                      onClick={(e) => e.stopPropagation()} 
-                                      // 1. Tries the exact Place URL first.
-                                      // 2. Falls back to a smart search combining Name + Address!
-                                      href={item.googleMapsUrl || `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${item.activity}, ${item.location}`)}`}
-                                      target="_blank"
-                                      rel="noopener noreferrer"
-                                      className="text-stone-500 hover:text-rose-500 transition-colors text-sm font-medium flex items-center gap-1.5 w-fit group/loclink"
-                                  >
-                                      <MapPin size={14} className="text-rose-400 flex-shrink-0 group-hover/loclink:scale-110 transition-transform" />
-                                      <span className={`group-hover/loclink:underline ${isExpanded ? "" : "line-clamp-1"}`}>
-                                        {item.location}
-                                      </span>
-                                  </a>
-                                  
-                                  
-                                </div>
-
-                                {/* ⭐ DYNAMIC EXPANSION */}
-                                {!isExpanded ? (
-                                  // Collapsed View: Just show a preview of notes
-                                  null
-                                ) : (
-                                  // Expanded View: Show full notes AND fetch linked place data
-                                  <div className="mt-3">
-                                    {/* {item.notes && <div className="bg-stone-50 px-4 py-3 rounded-lg text-stone-600 text-sm italic border border-stone-100">"{item.notes}"</div>} */}
-                                    
-                                    {item.sourceId && <LinkedItemDetails sourceId={item.sourceId} tripId={trip.id} />}
-                                  </div>
-                                )}
-                                
-                                <div className="mt-4 pt-4 border-t border-stone-50 flex items-center gap-2">
-                                    <TripAuthorInfo uid={item.createdByUid} createdAt={item.createdAt} />
-                                </div>
-                            </div>
-                        </div>
+                  <button
+                    key={day.day}
+                    onClick={() => setCurrentDayIndex(index)}
+                    className={`relative flex-shrink-0 px-5 py-3 rounded-xl transition-all border ${
+                      isActive
+                        ? "bg-stone-900 text-white border-stone-900 shadow-md"
+                        : "bg-white text-stone-500 border-stone-200 hover:border-stone-400 hover:text-stone-900"
+                    }`}
+                  >
+                    <div className="flex flex-col items-center">
+                        <span className="text-[10px] uppercase font-bold tracking-wider opacity-70">
+                          Day
+                        </span>
+                        <span className="text-xl font-serif leading-none mt-1">{day.day}</span>
                     </div>
-                  </div>
+                    
+                    {/* Indicator Dots */}
+                    {dayLocs.length > 0 && (
+                      <div className="absolute top-2 right-2 flex gap-1">
+                        {dayLocs.map(loc => (
+                           <span key={loc.id} className={`w-2 h-2 rounded-full ${loc.color.split(" ")[0]}`} />
+                        ))}
+                      </div>
+                    )}
+                  </button>
                 );
               })}
             </div>
-          )}
-        </>
+
+            {/* Location Banners */}
+            <div className="space-y-3">
+              {currentLocations.map((loc) => (
+                <div key={loc.id} className={`px-6 py-3 rounded-lg flex justify-between items-center text-sm font-medium ${loc.color}`}>
+                   <span>Currently in <span className="font-bold">{loc.location}</span></span>
+                   <MapPin size={16} className="opacity-50" />
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* ⭐ SPLIT SECTION: Itinerary Cards (Left) vs Map (Right) */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 xl:gap-12 items-start relative">
+            
+            {/* LEFT COLUMN: Activity Cards */}
+            <div>
+              {currentDayData.items.length === 0 ? (
+                <div className="text-center py-24 bg-white rounded-2xl border border-dashed border-stone-200">
+                  <div className="w-12 h-12 bg-stone-50 rounded-full flex items-center justify-center mx-auto mb-3">
+                     <Clock size={24} className="text-stone-300" />
+                  </div>
+                  <p className="text-stone-900 font-serif text-lg">Empty Schedule</p>
+                  <button onClick={() => setShowAddDialog(true)} className="mt-4 text-rose-600 font-medium hover:underline text-sm">
+                    Plan something for Day {currentDayData.day}
+                  </button>
+                </div>
+              ) : (
+                <div className="relative border-l border-stone-200 ml-4 pl-8 space-y-8 py-2">
+                  {currentDayData.items.map((item) => {
+                    const Icon = iconMap[item.iconType] || Clock; 
+                    const isExpanded = expandedItemId === item.id;
+
+                    return (
+                      <div key={item.id} className="relative group">
+                        {/* Timeline Dot */}
+                        <div className="absolute -left-[41px] top-6 w-5 h-5 rounded-full border-4 border-[#FDFCF8] bg-stone-300 group-hover:bg-stone-900 transition-colors" />
+                        
+                        {/* Clickable Card Wrapper */}
+                        <div 
+                          onClick={() => setExpandedItemId(isExpanded ? null : item.id)}
+                          className={`bg-white rounded-xl p-6 border transition-all cursor-pointer ${
+                            isExpanded ? "border-stone-400 shadow-md" : "border-stone-100 shadow-sm hover:shadow-md group-hover:border-stone-300"
+                          }`}
+                        >
+                            <div className="flex gap-4 sm:gap-5">
+                                {/* Time Column */}
+                                <div className="flex-shrink-0 w-14 sm:w-16 pt-1">
+                                    <span className="block text-base sm:text-lg font-bold text-stone-900">{item.time || "—"}</span>
+                                    <div className={`mt-2 transition-colors ${isExpanded ? "text-rose-500" : "text-stone-300"}`}>
+                                        <Icon size={20} />
+                                    </div>
+                                </div>
+
+                                {/* Content Column */}
+                                <div className="flex-1 min-w-0">
+                                    <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start mb-2 gap-2 sm:gap-0">
+                                        <h3 className="text-xl font-serif text-stone-900 group-hover:text-rose-900 transition-colors pr-4">
+                                            {item.activity}
+                                        </h3>
+                                        <div className="flex gap-3 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
+                                            <button onClick={(e) => { e.stopPropagation(); setEditingActivity(item); }} className="text-xs font-bold text-stone-400 hover:text-stone-900 uppercase tracking-wide">Edit</button>
+                                            <button onClick={(e) => { e.stopPropagation(); deleteActivity(currentDayData.date, item.id); }} className="text-xs font-bold text-red-300 hover:text-red-500 uppercase tracking-wide">Delete</button>
+                                        </div>
+                                    </div>
+
+                                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-1">
+                                      <a 
+                                          onClick={(e) => e.stopPropagation()} 
+                                          href={item.googleMapsUrl || `http://googleusercontent.com/maps.google.com/?q=${encodeURIComponent(`${item.activity}, ${item.location}`)}`}
+                                          target="_blank"
+                                          rel="noopener noreferrer"
+                                          className="text-stone-500 hover:text-rose-500 transition-colors text-sm font-medium flex items-center gap-1.5 w-fit group/loclink"
+                                      >
+                                          <MapPin size={14} className="text-rose-400 flex-shrink-0 group-hover/loclink:scale-110 transition-transform" />
+                                          <span className={`group-hover/loclink:underline ${isExpanded ? "" : "line-clamp-1"}`}>
+                                            {item.location}
+                                          </span>
+                                      </a>
+                                    </div>
+
+                                    {isExpanded && (
+                                      <div className="mt-3">
+                                        {item.sourceId && <LinkedItemDetails sourceId={item.sourceId} tripId={trip.id} />}
+                                      </div>
+                                    )}
+                                    
+                                    <div className="mt-4 pt-4 border-t border-stone-50 flex items-center gap-2">
+                                        <TripAuthorInfo uid={item.createdByUid} createdAt={item.createdAt} />
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* RIGHT COLUMN: Sticky Minimap */}
+            <div className="hidden lg:block sticky top-32">
+               <div className="w-full aspect-[4/3] max-h-[75vh]">
+                 <DayMinimap 
+                    dayData={currentDayData} 
+                    date={currentDayData.date}
+                    tripId={trip.id} 
+                 />
+               </div>
+            </div>
+            
+          </div>
+        </div>
       )}
 
       {/* ================= CALENDAR VIEW ================= */}
