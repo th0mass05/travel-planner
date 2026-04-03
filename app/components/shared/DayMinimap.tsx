@@ -39,24 +39,33 @@ export default function DayMinimap({ dayData, date, tripId }: { dayData: Itinera
       };
 
       try {
-        // 1. Fetch Hotel for Anchor (Not counted as a 'stop')
+        // 1. Fetch ALL relevant hotels for this date
         const hotelKeys = await storage.list(`hotel:${tripId}:`);
-        let activeHotel: StoredHotel | null = null;
+        
         for (const key of hotelKeys.keys || []) {
           const snap = await storage.get(key);
           if (snap?.value) {
             const h = JSON.parse(snap.value) as StoredHotel;
-            if (h.status === "confirmed" && h.checkIn <= date && h.checkOut > date) { 
-              activeHotel = h; 
-              break; 
+            
+            // ⭐ CHANGED: Use >= on checkOut and removed the 'break'
+            // This ensures if you check out of Hotel A and into Hotel B on the same day, both show up.
+            if (h.status === "confirmed" && h.checkIn <= date && h.checkOut >= date) { 
+              const coords = await getCoords(h.address);
+              if (coords) {
+                routePoints.push({ 
+                  id: `hotel-${h.id}`, 
+                  ...coords, 
+                  name: h.name, 
+                  type: 'hotel', 
+                  isItineraryItem: false 
+                });
+              }
             }
           }
         }
 
-        if (activeHotel && activeHotel.address) {
-          const coords = await getCoords(activeHotel.address);
-          if (coords) routePoints.push({ id: `hotel-${activeHotel.id}`, ...coords, name: activeHotel.name, type: 'hotel', isItineraryItem: false });
-        } else if (date) {
+        // 2. Red-Eye Fallback (only if no hotels were found at all)
+        if (routePoints.length === 0 && date) {
           const currentDateObj = new Date(date);
           if (!isNaN(currentDateObj.getTime())) {
             currentDateObj.setDate(currentDateObj.getDate() - 1);
@@ -76,7 +85,7 @@ export default function DayMinimap({ dayData, date, tripId }: { dayData: Itinera
           }
         }
 
-        // 2. Add Actual Itinerary Items
+        // 3. Add Actual Itinerary Items
         if (dayData && dayData.items) {
           for (const item of dayData.items) {
             const query = item.iconType === "flight" ? `${item.location} Airport` : item.location;
@@ -121,7 +130,6 @@ export default function DayMinimap({ dayData, date, tripId }: { dayData: Itinera
     return { type: 'FeatureCollection', features };
   }, [points]);
 
-  // Fix miscount: Only count points that are actually itinerary items
   const mappedCount = points.filter(p => p.isItineraryItem).length;
 
   if (!isLoaded) return <div className="w-full h-full bg-stone-100 rounded-2xl animate-pulse" />;
@@ -143,12 +151,11 @@ export default function DayMinimap({ dayData, date, tripId }: { dayData: Itinera
         mapboxAccessToken={process.env.NEXT_PUBLIC_MAPBOX_TOKEN}
         initialViewState={{ longitude: 0, latitude: 20, zoom: 1.5 }}
         mapStyle="mapbox://styles/th0masc05/cmnj6whmn007y01sedkhwh1iu"
-        projection={{ name: 'globe' }} // ⭐ Restored Globe View
+        projection={{ name: 'globe' }}
         interactive={true}
       >
         {points.length > 1 && (
           <Source type="geojson" data={lineFeatures as any}>
-            {/* Intermediate lines (walking/general) */}
             <Layer 
               id={`route-general-${dayData.day}`}
               type="line"
