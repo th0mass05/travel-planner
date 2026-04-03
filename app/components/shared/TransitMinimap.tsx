@@ -18,7 +18,7 @@ export default function TransitMinimap({ item, tripId }: { item: ItineraryItem; 
   const [coords, setCoords] = useState<{start: any, end: any} | null>(null);
   const [locations, setLocations] = useState<{start: string, end: string} | null>(null);
 
-  // 1. SMART FETCH locations
+  // 1. Fetch locations
   useEffect(() => {
     const getMissingData = async () => {
       if (item.transitStart && item.transitEnd) {
@@ -39,9 +39,9 @@ export default function TransitMinimap({ item, tripId }: { item: ItineraryItem; 
       }
     };
     getMissingData();
-  }, [item, tripId]);
+  }, [item.sourceId, tripId, item.transitStart, item.transitEnd]);
 
-  // 2. GEOCODING
+  // 2. Geocoding
   useEffect(() => {
     if (!locations || !isLoaded) return;
     const fetchCoords = async () => {
@@ -62,36 +62,37 @@ export default function TransitMinimap({ item, tripId }: { item: ItineraryItem; 
     fetchCoords();
   }, [locations, isLoaded]);
 
-  // 3. PERFECT CENTERING & ZOOM LOGIC
+  // 3. FORCE CAMERA UPDATE
   useEffect(() => {
     if (coords && mapRef.current) {
       const map = mapRef.current;
-      map.resize(); 
+      
+      // Calculate Midpoint
+      const midLng = (coords.start.lng + coords.end.lng) / 2;
+      const midLat = (coords.start.lat + coords.end.lat) / 2;
 
-      // A. Calculate Midpoint for the Globe Center
-      const centerLng = (coords.start.lng + coords.end.lng) / 2;
-      const centerLat = (coords.start.lat + coords.end.lat) / 2;
+      // Calculate Distance (Degrees)
+      const dist = Math.sqrt(
+        Math.pow(coords.start.lng - coords.end.lng, 2) + 
+        Math.pow(coords.start.lat - coords.end.lat, 2)
+      );
 
-      // B. Calculate "Distance" to determine Zoom
-      // Simple rough heuristic: the further apart, the lower the zoom
-      const deltaLng = Math.abs(coords.start.lng - coords.end.lng);
-      const deltaLat = Math.abs(coords.start.lat - coords.end.lat);
-      const maxDelta = Math.max(deltaLng, deltaLat);
+      // Determine Zoom based on distance
+      let zoom = 1.8;
+      if (dist < 10) zoom = 5;
+      else if (dist < 30) zoom = 3.5;
+      else if (dist < 60) zoom = 2.5;
 
-      // Map scale: 0 is whole world, 2 is continent. 
-      // This formula tightens the zoom for shorter paths
-      let zoomLevel = 1.2; 
-      if (maxDelta < 20) zoomLevel = 4;
-      else if (maxDelta < 50) zoomLevel = 2.5;
-      else if (maxDelta < 100) zoomLevel = 1.8;
-
-      // C. Apply the View
-      map.flyTo({
-        center: [centerLng, centerLat],
-        zoom: zoomLevel,
-        duration: 2000,
-        essential: true
-      });
+      // Wrap in a tiny timeout to ensure the map container is fully sized
+      setTimeout(() => {
+        map.resize();
+        map.easeTo({
+          center: [midLng, midLat],
+          zoom: zoom,
+          padding: { top: 20, bottom: 20, left: 20, right: 20 },
+          duration: 1000
+        });
+      }, 100);
     }
   }, [coords]);
 
@@ -107,7 +108,7 @@ export default function TransitMinimap({ item, tripId }: { item: ItineraryItem; 
   } : null;
 
   return (
-    <div className="w-full aspect-[2.5/1] min-h-[140px] rounded-xl border border-stone-200 overflow-hidden shadow-sm flex flex-col relative bg-stone-50 animate-in fade-in duration-700">
+    <div className="w-full aspect-[2.5/1] min-h-[140px] rounded-xl border border-stone-200 overflow-hidden shadow-sm flex flex-col relative bg-[#111] animate-in fade-in duration-700">
       <div className="absolute top-0 left-0 right-0 bg-white/90 backdrop-blur-sm px-3 py-1.5 border-b border-stone-200 z-10 flex justify-between items-center pointer-events-none">
         <div className="flex items-center gap-2">
           <Icon size={12} className={isFlight ? "text-indigo-500" : "text-rose-500"} />
@@ -127,6 +128,10 @@ export default function TransitMinimap({ item, tripId }: { item: ItineraryItem; 
           mapStyle="mapbox://styles/th0masc05/cmnj6whmn007y01sedkhwh1iu" 
           projection={{ name: 'globe' }} 
           interactive={false}
+          onLoad={(e) => {
+            // Backup resize on load
+            e.target.resize();
+          }}
         >
           {lineData && (
             <Source type="geojson" data={lineData as any}>
