@@ -460,19 +460,7 @@ export default function ItineraryTab({ trip }: { trip: TripData }) {
               </div>
 
               {/* ⭐ NEW: Transit Map Stack */}
-              <div className="space-y-4">
-                {currentDayData.items
-                  .filter(item => (item.iconType === "flight" || item.iconType === "transport") && item.sourceId)
-                  .map((transitItem) => (
-                    <div key={transitItem.id} className="animate-in slide-in-from-right-4 duration-500">
-                      <TransitMinimap 
-                        item={transitItem} 
-                        tripId={trip.id} 
-                      />
-                    </div>
-                  ))
-                }
-              </div>
+              
           </div>
             
           </div>
