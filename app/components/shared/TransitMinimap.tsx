@@ -1,6 +1,6 @@
 "use client";
-import React, { useEffect, useState, useRef } from "react";
-import Map, { Marker, Source, Layer, MapRef } from "react-map-gl/mapbox";
+import React, { useEffect, useState, useMemo } from "react";
+import Map, { Marker, Source, Layer } from "react-map-gl/mapbox";
 import { useJsApiLoader } from "@react-google-maps/api";
 import { Plane, Train, Loader2 } from "lucide-react";
 import { ItineraryItem } from "../../types"; 
@@ -14,11 +14,18 @@ export default function TransitMinimap({ item, tripId }: { item: ItineraryItem; 
     libraries: mapLibraries 
   });
   
-  const mapRef = useRef<MapRef>(null);
-  const [coords, setCoords] = useState<{start: any, end: any} | null>(null);
+  // 1. STATE MANAGEMENT
+  const [coords, setCoords] = useState<{start: {lat: number, lng: number}, end: {lat: number, lng: number}} | null>(null);
   const [locations, setLocations] = useState<{start: string, end: string} | null>(null);
+  
+  // This state controls where the camera is looking
+  const [viewState, setViewState] = useState({
+    longitude: 0,
+    latitude: 20,
+    zoom: 1
+  });
 
-  // 1. Fetch locations
+  // 2. DATA FETCHING (Same as before)
   useEffect(() => {
     const getMissingData = async () => {
       if (item.transitStart && item.transitEnd) {
@@ -39,9 +46,9 @@ export default function TransitMinimap({ item, tripId }: { item: ItineraryItem; 
       }
     };
     getMissingData();
-  }, [item.sourceId, tripId, item.transitStart, item.transitEnd]);
+  }, [item.sourceId, tripId]);
 
-  // 2. Geocoding
+  // 3. GEOCODING
   useEffect(() => {
     if (!locations || !isLoaded) return;
     const fetchCoords = async () => {
@@ -52,9 +59,31 @@ export default function TransitMinimap({ item, tripId }: { item: ItineraryItem; 
           geocoder.geocode({ address: locations.end })
         ]);
         if (startRes.results[0] && endRes.results[0]) {
-          setCoords({
+          const newCoords = {
             start: { lat: startRes.results[0].geometry.location.lat(), lng: startRes.results[0].geometry.location.lng() },
             end: { lat: endRes.results[0].geometry.location.lat(), lng: endRes.results[0].geometry.location.lng() }
+          };
+          setCoords(newCoords);
+
+          // 4. IMMEDIATELY CALCULATE AND UPDATE VIEWSTATE
+          const midLng = (newCoords.start.lng + newCoords.end.lng) / 2;
+          const midLat = (newCoords.start.lat + newCoords.end.lat) / 2;
+          
+          // Calculate distance to determine zoom
+          const dist = Math.sqrt(
+            Math.pow(newCoords.start.lng - newCoords.end.lng, 2) + 
+            Math.pow(newCoords.start.lat - newCoords.end.lat, 2)
+          );
+
+          let zoom = 1.5;
+          if (dist < 10) zoom = 4.5;
+          else if (dist < 40) zoom = 3;
+          else if (dist < 80) zoom = 2.2;
+
+          setViewState({
+            longitude: midLng,
+            latitude: midLat,
+            zoom: zoom
           });
         }
       } catch (e) { console.warn("Geocode failed"); }
@@ -62,38 +91,16 @@ export default function TransitMinimap({ item, tripId }: { item: ItineraryItem; 
     fetchCoords();
   }, [locations, isLoaded]);
 
-  // 3. FORCE CAMERA UPDATE
-  useEffect(() => {
-    if (coords && mapRef.current) {
-      const map = mapRef.current;
-      
-      // Calculate Midpoint
-      const midLng = (coords.start.lng + coords.end.lng) / 2;
-      const midLat = (coords.start.lat + coords.end.lat) / 2;
-
-      // Calculate Distance (Degrees)
-      const dist = Math.sqrt(
-        Math.pow(coords.start.lng - coords.end.lng, 2) + 
-        Math.pow(coords.start.lat - coords.end.lat, 2)
-      );
-
-      // Determine Zoom based on distance
-      let zoom = 1.8;
-      if (dist < 10) zoom = 5;
-      else if (dist < 30) zoom = 3.5;
-      else if (dist < 60) zoom = 2.5;
-
-      // Wrap in a tiny timeout to ensure the map container is fully sized
-      setTimeout(() => {
-        map.resize();
-        map.easeTo({
-          center: [midLng, midLat],
-          zoom: zoom,
-          padding: { top: 20, bottom: 20, left: 20, right: 20 },
-          duration: 1000
-        });
-      }, 100);
-    }
+  // 5. MEMOIZED LINE DATA
+  const lineData = useMemo(() => {
+    if (!coords) return null;
+    return {
+      type: 'Feature',
+      geometry: { 
+        type: 'LineString', 
+        coordinates: [[coords.start.lng, coords.start.lat], [coords.end.lng, coords.end.lat]] 
+      }
+    };
   }, [coords]);
 
   if (!locations) return null;
@@ -102,13 +109,9 @@ export default function TransitMinimap({ item, tripId }: { item: ItineraryItem; 
   const Icon = isFlight ? Plane : Train;
   const color = isFlight ? '#6366f1' : '#f43f5e'; 
 
-  const lineData = coords ? {
-    type: 'Feature',
-    geometry: { type: 'LineString', coordinates: [[coords.start.lng, coords.start.lat], [coords.end.lng, coords.end.lat]] }
-  } : null;
-
   return (
-    <div className="w-full aspect-[2.5/1] min-h-[140px] rounded-xl border border-stone-200 overflow-hidden shadow-sm flex flex-col relative bg-[#111] animate-in fade-in duration-700">
+    <div className="w-full aspect-[2.5/1] min-h-[140px] rounded-xl border border-stone-200 overflow-hidden shadow-sm flex flex-col relative bg-[#111]">
+      {/* Header Overlay */}
       <div className="absolute top-0 left-0 right-0 bg-white/90 backdrop-blur-sm px-3 py-1.5 border-b border-stone-200 z-10 flex justify-between items-center pointer-events-none">
         <div className="flex items-center gap-2">
           <Icon size={12} className={isFlight ? "text-indigo-500" : "text-rose-500"} />
@@ -123,15 +126,12 @@ export default function TransitMinimap({ item, tripId }: { item: ItineraryItem; 
         <div className="flex-1 flex items-center justify-center"><Loader2 className="animate-spin text-stone-200" size={20} /></div>
       ) : (
         <Map
-          ref={mapRef}
+          {...viewState} // 👈 CONTROLLED VIEW: This forces the map to move
+          onMove={evt => setViewState(evt.viewState)} // Keeps it interactive if needed
           mapboxAccessToken={process.env.NEXT_PUBLIC_MAPBOX_TOKEN}
           mapStyle="mapbox://styles/th0masc05/cmnj6whmn007y01sedkhwh1iu" 
           projection={{ name: 'globe' }} 
-          interactive={false}
-          onLoad={(e) => {
-            // Backup resize on load
-            e.target.resize();
-          }}
+          style={{ width: '100%', height: '100%' }}
         >
           {lineData && (
             <Source type="geojson" data={lineData as any}>
