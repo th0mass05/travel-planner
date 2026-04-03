@@ -18,7 +18,7 @@ export default function TransitMinimap({ item, tripId }: { item: ItineraryItem; 
   const [coords, setCoords] = useState<{start: any, end: any} | null>(null);
   const [locations, setLocations] = useState<{start: string, end: string} | null>(null);
 
-  // 1. SMART FETCH: Use sourceId to find missing departure/arrival locations
+  // 1. SMART FETCH: Recover missing locations from sourceId
   useEffect(() => {
     const getMissingData = async () => {
       if (item.transitStart && item.transitEnd) {
@@ -35,7 +35,7 @@ export default function TransitMinimap({ item, tripId }: { item: ItineraryItem; 
               setLocations({ start: data.departure, end: data.arrival });
             }
           }
-        } catch (e) { console.error("Transit Data Fetch Error:", e); }
+        } catch (e) { console.error("Data Fetch Error:", e); }
       }
     };
     getMissingData();
@@ -62,22 +62,22 @@ export default function TransitMinimap({ item, tripId }: { item: ItineraryItem; 
     fetchCoords();
   }, [locations, isLoaded]);
 
-  // 3. SMART ZOOM & RESIZE logic
+  // 3. SMART ZOOM & GLOBE CENTERING
   useEffect(() => {
     if (coords && mapRef.current) {
       const map = mapRef.current;
       
-      // Fixes the "half-loaded" glitch by forcing a container check
+      // Essential: resize fixes the "half-loaded" glitch shown in your images
       map.resize(); 
 
-      // Fit the view to show both markers with comfortable padding
+      // On a globe, fitBounds will automatically rotate the world to center your path
       map.fitBounds(
         [
-          [Math.min(coords.start.lng, coords.end.lng), Math.min(coords.start.lat, coords.end.lat)],
-          [Math.max(coords.start.lng, coords.end.lng), Math.max(coords.start.lat, coords.end.lat)]
+          [coords.start.lng, coords.start.lat],
+          [coords.end.lng, coords.end.lat]
         ],
         { 
-          padding: 40, 
+          padding: 60, // Extra padding to keep the path away from the card edges
           duration: 2500,
           essential: true 
         }
@@ -89,8 +89,9 @@ export default function TransitMinimap({ item, tripId }: { item: ItineraryItem; 
 
   const isFlight = item.iconType === "flight";
   const Icon = isFlight ? Plane : Train;
-  const color = isFlight ? '#6366f1' : '#f43f5e'; // Indigo flight line, Rose train line
+  const color = isFlight ? '#6366f1' : '#f43f5e'; 
 
+  // Create the line data
   const lineData = coords ? {
     type: 'Feature',
     geometry: { type: 'LineString', coordinates: [[coords.start.lng, coords.start.lat], [coords.end.lng, coords.end.lat]] }
@@ -99,7 +100,7 @@ export default function TransitMinimap({ item, tripId }: { item: ItineraryItem; 
   return (
     <div className="w-full aspect-[2.5/1] min-h-[140px] rounded-xl border border-stone-200 overflow-hidden shadow-sm flex flex-col relative bg-stone-50 animate-in fade-in duration-700">
       
-      {/* Mini-Header Overlay */}
+      {/* Header Overlay */}
       <div className="absolute top-0 left-0 right-0 bg-white/90 backdrop-blur-sm px-3 py-1.5 border-b border-stone-200 z-10 flex justify-between items-center pointer-events-none">
         <div className="flex items-center gap-2">
           <Icon size={12} className={isFlight ? "text-indigo-500" : "text-rose-500"} />
@@ -116,9 +117,8 @@ export default function TransitMinimap({ item, tripId }: { item: ItineraryItem; 
         <Map
           ref={mapRef}
           mapboxAccessToken={process.env.NEXT_PUBLIC_MAPBOX_TOKEN}
-          /* ⭐ REPLACE THIS STRING WITH YOUR CUSTOM STYLE URL */
           mapStyle="mapbox://styles/th0masc05/cmnj6whmn007y01sedkhwh1iu" 
-          projection={{ name: 'mercator' }} // 👈 Forces flat map for perfect zooming
+          projection={{ name: 'globe' }} // ⭐ Back to Globe for 3D realism
           interactive={false}
         >
           {lineData && (
@@ -128,7 +128,8 @@ export default function TransitMinimap({ item, tripId }: { item: ItineraryItem; 
                 type="line" 
                 paint={{ 
                   'line-color': color, 
-                  'line-width': 2.5, 
+                  'line-width': 2, 
+                  // Flight lines look great as dashed paths on a globe
                   'line-dasharray': isFlight ? [3, 2] : [1] 
                 }} 
               />
@@ -136,10 +137,10 @@ export default function TransitMinimap({ item, tripId }: { item: ItineraryItem; 
           )}
           
           <Marker longitude={coords.start.lng} latitude={coords.start.lat}>
-            <div className="w-2.5 h-2.5 rounded-full bg-white border-2 shadow-sm" style={{ borderColor: color }} />
+            <div className="w-2 h-2 rounded-full bg-white border-2 shadow-sm" style={{ borderColor: color }} />
           </Marker>
           <Marker longitude={coords.end.lng} latitude={coords.end.lat}>
-            <div className="w-2.5 h-2.5 rounded-full bg-white border-2 shadow-sm" style={{ borderColor: color }} />
+            <div className="w-2 h-2 rounded-full bg-white border-2 shadow-sm" style={{ borderColor: color }} />
           </Marker>
         </Map>
       )}
