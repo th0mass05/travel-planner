@@ -14,10 +14,12 @@
     "date-fns": "^4.1.0",
     "firebase": "^12.9.0",
     "lucide-react": "^0.564.0",
+    "mapbox-gl": "^3.21.0",
     "next": "16.1.6",
     "react": "19.2.3",
     "react-dom": "19.2.3",
-    "react-google-autocomplete": "^2.7.5"
+    "react-google-autocomplete": "^2.7.5",
+    "react-map-gl": "^8.1.0"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",

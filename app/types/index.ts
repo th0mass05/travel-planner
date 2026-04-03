@@ -322,6 +322,8 @@ export type ItineraryItem = {
   createdAt?: string;
   sourceId?: string; // ⭐ NEW: Links to original Place ID (e.g., "place:123")
   googleMapsUrl?: string;
+  transitStart?: string; 
+  transitEnd?: string;
 };
 
 export type ItineraryDay = {
