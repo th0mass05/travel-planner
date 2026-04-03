@@ -39,7 +39,6 @@ export default function DayMinimap({ dayData, date, tripId }: { dayData: Itinera
       };
 
       try {
-        // 1. Fetch ALL hotels for the trip
         const hotelKeys = await storage.list(`hotel:${tripId}:`);
         const allHotels: StoredHotel[] = [];
         for (const key of hotelKeys.keys || []) {
@@ -50,13 +49,10 @@ export default function DayMinimap({ dayData, date, tripId }: { dayData: Itinera
           }
         }
 
-        // 2. Identify "Morning" and "Evening" Hotels
-        // Morning: Check-out is today OR stay includes today
         const morningHotel = allHotels.find(h => h.checkOut === date || (h.checkIn < date && h.checkOut > date));
-        // Evening: Check-in is today OR stay includes today
         const eveningHotel = allHotels.find(h => h.checkIn === date || (h.checkIn < date && h.checkOut > date));
 
-        // 3. Add Morning Hotel (Anchor Start)
+        // 1. Start: Morning Hotel
         if (morningHotel) {
           const coords = await getCoords(morningHotel.address);
           if (coords) {
@@ -64,32 +60,21 @@ export default function DayMinimap({ dayData, date, tripId }: { dayData: Itinera
           }
         }
 
-        // 4. Add Itinerary Items (Stations/Activities)
+        // 2. Middle: Itinerary Items (Stations/Places)
         if (dayData && dayData.items) {
           for (const item of dayData.items) {
-            // We no longer need the "if (isTransit) add end" logic here
-            // because the itinerary itself now contains both points!
             const query = item.iconType === "flight" ? `${item.location} Airport` : item.location;
             const coords = await getCoords(query);
-            
             if (coords) {
-              routePoints.push({ 
-                id: `item-${item.id}`, 
-                ...coords, 
-                name: item.activity, 
-                type: item.iconType, 
-                isItineraryItem: true 
-              });
+              routePoints.push({ id: `item-${item.id}`, ...coords, name: item.activity, type: item.iconType, isItineraryItem: true });
             }
           }
         }
 
-        // 5. Add Evening Hotel (Anchor End)
-        // Only add if it's different from the morning hotel, or if we traveled today
-        if (eveningHotel && (eveningHotel.id !== morningHotel?.id || routePoints.length > 1)) {
+        // 3. End: Evening Hotel
+        if (eveningHotel) {
           const coords = await getCoords(eveningHotel.address);
           if (coords) {
-            // Check if we already pushed this exact coordinate to avoid zero-length line bugs
             const isDuplicate = routePoints.some(p => p.lat === coords.lat && p.lng === coords.lng);
             if (!isDuplicate) {
               routePoints.push({ id: `hotel-evening-${eveningHotel.id}`, ...coords, name: eveningHotel.name, type: 'hotel', isItineraryItem: false });
@@ -97,7 +82,7 @@ export default function DayMinimap({ dayData, date, tripId }: { dayData: Itinera
           }
         }
 
-      } catch (err) { console.error("Route build error:", err); }
+      } catch (err) { console.error(err); }
 
       setPoints(routePoints);
       setIsProcessing(false);
@@ -106,7 +91,6 @@ export default function DayMinimap({ dayData, date, tripId }: { dayData: Itinera
     buildRoute();
   }, [dayData, date, tripId, isLoaded]);
 
-  // Viewport adjustment
   useEffect(() => {
     if (points.length > 0 && mapRef.current) {
       mapRef.current.resize();
@@ -114,17 +98,16 @@ export default function DayMinimap({ dayData, date, tripId }: { dayData: Itinera
       const lats = points.map(p => p.lat);
       mapRef.current.fitBounds(
         [[Math.min(...lngs), Math.min(...lats)], [Math.max(...lngs), Math.max(...lats)]],
-        { padding: 50, duration: 1500 }
+        { padding: 60, duration: 1500 }
       );
     }
   }, [points]);
 
   const lineFeatures = useMemo(() => {
     if (points.length < 2) return null;
-    const coords = points.map(p => [p.lng, p.lat]);
     return {
       type: 'Feature',
-      geometry: { type: 'LineString', coordinates: coords }
+      geometry: { type: 'LineString', coordinates: points.map(p => [p.lng, p.lat]) }
     };
   }, [points]);
 
@@ -167,19 +150,26 @@ export default function DayMinimap({ dayData, date, tripId }: { dayData: Itinera
           const isHotel = p.type === 'hotel';
           const pinColor = isHotel ? "#1c1917" : CATEGORY_COLORS[p.type] || "#f43f5e";
           
+          // ⭐ THE FIX: Calculate the number only for itinerary items
+          // It counts how many itinerary items exist in the points array up to this index.
+          const stopNumber = p.isItineraryItem 
+            ? points.slice(0, index + 1).filter(item => item.isItineraryItem).length 
+            : null;
+
           return (
             <Marker key={`${p.id}-${index}`} longitude={p.lng} latitude={p.lat} anchor="center">
               <div 
-                className="rounded-full flex items-center justify-center text-white font-bold shadow-md border-2 border-white transition-all hover:scale-125"
+                className="rounded-full flex items-center justify-center text-white font-bold shadow-md border-2 border-white transition-all hover:scale-125 cursor-help"
                 style={{ 
                   backgroundColor: pinColor, 
-                  width: isHotel ? '20px' : '14px', 
-                  height: isHotel ? '20px' : '14px', 
-                  fontSize: isHotel ? '10px' : '0px' 
+                  width: isHotel ? '22px' : '20px', 
+                  height: isHotel ? '22px' : '20px', 
+                  fontSize: isHotel ? '11px' : '10px' 
                 }}
                 title={p.name}
               >
-                {isHotel ? "H" : ""}
+                {/* Show "H" for hotels, otherwise show the sequential stop number */}
+                {isHotel ? "H" : stopNumber}
               </div>
             </Marker>
           );
