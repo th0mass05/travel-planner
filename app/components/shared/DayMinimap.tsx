@@ -130,7 +130,8 @@ export default function DayMinimap({ dayData, date, tripId }: { dayData: Itinera
         ref={mapRef}
         mapboxAccessToken={process.env.NEXT_PUBLIC_MAPBOX_TOKEN}
         initialViewState={{ longitude: 0, latitude: 20, zoom: 1.5 }}
-        mapStyle="mapbox://styles/mapbox/light-v11"
+        //mapStyle="mapbox://styles/mapbox/light-v11"
+        mapStyle="mapbox://styles/mapbox/streets-v12"
         interactive={true}
       >
         {/* Draw the connecting lines */}
