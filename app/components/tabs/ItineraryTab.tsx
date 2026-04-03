@@ -424,13 +424,15 @@ export default function ItineraryTab({ trip }: { trip: TripData }) {
                                     </div>
 
                                     {isExpanded && (
-                                      <div className="mt-3 space-y-4">
-                                        {/* ⭐ NEW: Show the transit map if it has start/end data */}
-                                        {(item.iconType === "flight" || item.iconType === "transport") && (
+                                      <div className="mt-4 space-y-4 animate-in fade-in zoom-in-95 duration-200">
+                                        {/* ⭐ TRIGGER THE MAP: Only if it has the transit data */}
+                                        {item.transitStart && item.transitEnd && (
                                           <TransitMinimap item={item} />
                                         )}
-                                        
-                                        {item.sourceId && <LinkedItemDetails sourceId={item.sourceId} tripId={trip.id} />}
+
+                                        {item.sourceId && (
+                                          <LinkedItemDetails sourceId={item.sourceId} tripId={trip.id} />
+                                        )}
                                       </div>
                                     )}
                                     

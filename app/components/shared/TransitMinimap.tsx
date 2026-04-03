@@ -18,7 +18,14 @@ export default function TransitMinimap({ item }: { item: ItineraryItem }) {
 
   const startTarget = item.transitStart;
   const endTarget = item.transitEnd;
-
+  if (!startTarget || !endTarget) {
+    console.error("TransitMinimap: Missing start/end data for", item.activity);
+    return (
+      <div className="p-4 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-700">
+        Map data missing: {item.activity} (Needs Start/End locations)
+      </div>
+    );
+  }
   useEffect(() => {
     if (!startTarget || !endTarget || !isLoaded) return;
     const fetchCoords = async () => {
