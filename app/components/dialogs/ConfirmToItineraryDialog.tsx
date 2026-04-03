@@ -8,9 +8,10 @@ export default function ConfirmToItineraryDialog({
   onClose,
   onConfirm,
   title,
+  defaultDate
 }: ConfirmToItineraryDialogProps) {
 
-  const [date, setDate] = useState<string>("");
+  const [date, setDate] = useState<string>(defaultDate || "");
   const [time, setTime] = useState<string>("");
 
 

@@ -274,7 +274,7 @@ export default function ItineraryTab({ trip }: { trip: TripData }) {
           <h2 className="text-3xl font-serif text-stone-900 pb-1">Itinerary</h2>
           {viewMode === "timeline" && (
             <p className="text-stone-500 mt-3 font-light">
-               Day {currentDayData.day} <span className="text-stone-300 mx-2">•</span> {currentDayData.date}
+              Day {currentDayData.day} <span className="text-stone-300 mx-2">•</span> {currentDayData.date.split("-").reverse().join("/")}
             </p>
           )}
         </div>

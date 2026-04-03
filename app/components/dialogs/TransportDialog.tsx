@@ -1,24 +1,21 @@
 // components/dialogs/TransportDialog.tsx
 import { useState } from "react";
-import { TransportData } from "../../types";
 
+import { TransportData, TransportDialogProps } from "../../types";
 export default function TransportDialog({
   initialData,
   onClose,
-  onAdd
-}: {
-  initialData?: TransportData;
-  onClose: () => void;
-  onAdd: (data: TransportData) => void;
-}) {
+  onAdd,
+  defaultDate // ⭐ Catch it here
+}: TransportDialogProps) {
   const [type, setType] = useState(initialData?.type || "");
   const [code, setCode] = useState(initialData?.code || "");
   const [departure, setDeparture] = useState(initialData?.departure || "");
   const [arrival, setArrival] = useState(initialData?.arrival || "");
-  const [date, setDate] = useState(initialData?.date || "");
+  const [date, setDate] = useState(initialData?.date || defaultDate || "");
   const [time, setTime] = useState(initialData?.time || "");
   // ⭐ NEW FIELDS
-  const [arrivalDate, setArrivalDate] = useState(initialData?.arrivalDate || initialData?.date || "");
+  const [arrivalDate, setArrivalDate] = useState(initialData?.arrivalDate || initialData?.date || defaultDate || "");
   const [arrivalTime, setArrivalTime] = useState(initialData?.arrivalTime || "");
   
   const [price, setPrice] = useState(initialData?.price || "");

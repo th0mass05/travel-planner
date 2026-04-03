@@ -273,12 +273,14 @@ export type FlightDialogProps = {
   onClose: () => void;
   onAdd: (data: FlightData) => void;
   initialData?: FlightData; // optional, used for edit mode
+  defaultDate?: string;
 };
 
 export type HotelDialogProps = {
   onClose: () => void;
   onAdd: (data: HotelData) => void;
   initialData?: HotelData;
+  defaultDate?: string;
 };
 
 export type PackingDialogProps = {
@@ -309,6 +311,7 @@ export type ConfirmToItineraryDialogProps = {
   onClose: () => void;
   onConfirm: (date: string, time: string) => void;
   title: string;
+  defaultDate?: string;
 };
 
 export type IconType = 
@@ -372,3 +375,10 @@ export type TabId =
   | "scrapbook"
   | "admin"
   | "budget";
+
+export type TransportDialogProps = {
+  initialData?: TransportData;
+  onClose: () => void;
+  onAdd: (data: TransportData) => void;
+  defaultDate?: string; // ⭐ Right here!
+};

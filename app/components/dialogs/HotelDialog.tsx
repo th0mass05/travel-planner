@@ -2,10 +2,12 @@ import { useState } from "react";
 import { HotelData, HotelDialogProps } from "../../types"; 
 import Autocomplete from "react-google-autocomplete";
 
-export default function HotelDialog({ onClose, onAdd, initialData }: HotelDialogProps) {
+export default function HotelDialog({ onClose, onAdd, initialData, defaultDate }: HotelDialogProps) { // ⭐ Catch it
   const [formData, setFormData] = useState<HotelData>(
     initialData || {
-      name: "", address: "", checkIn: "", checkOut: "",
+      name: "", address: "", 
+      checkIn: defaultDate || "", // ⭐ Inject here
+      checkOut: defaultDate || "", // ⭐ Inject here
       confirmationNumber: "", link: "", status: "potential",
       price: "", details: "", createdAt: new Date().toISOString(),
     }

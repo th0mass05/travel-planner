@@ -35,7 +35,19 @@ export default function PlacesTab({ tripId, country }: PlacesTabProps) {
   const [shoppingItems, setShoppingItems] = useState<ShoppingData[]>([]);
   const [shoppingListPlace, setShoppingListPlace] = useState<StoredPlace | null>(null); 
   const [viewMode, setViewMode] = useState<'grid' | 'map'>('grid');
+  const [tripStartDate, setTripStartDate] = useState<string>("");
 
+  // 2. Add this effect to fetch the date on load:
+  useEffect(() => {
+    const fetchTripDate = async () => {
+      const snap = await storage.get(`trip:${tripId}`);
+      if (snap?.value) {
+        const trip = JSON.parse(snap.value);
+        if (trip.startDate) setTripStartDate(trip.startDate);
+      }
+    };
+    fetchTripDate();
+  }, [tripId]);
   // Mapbox Reference
   const mapRef = useRef<any>(null);
 
@@ -493,6 +505,7 @@ export default function PlacesTab({ tripId, country }: PlacesTabProps) {
       {confirmingPlace && (
         <ConfirmToItineraryDialog
           title={confirmingPlace.name}
+          defaultDate={tripStartDate}
           onClose={() => setConfirmingPlace(null)}
           onConfirm={(date, time) =>
             confirmingPlace && confirmPlace(confirmingPlace, date, time)

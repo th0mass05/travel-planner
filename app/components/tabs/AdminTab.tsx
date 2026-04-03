@@ -72,7 +72,19 @@ export default function AdminTab({ tripId }: { tripId: number }) {
   const [profileTemplates, setProfileTemplates] = useState<any[]>([]);
   const [showExportDialog, setShowExportDialog] = useState(false);
   const [showImportDialog, setShowImportDialog] = useState(false);
+  const [tripStartDate, setTripStartDate] = useState<string>("");
 
+  // 2. Add this effect to fetch the date on load:
+  useEffect(() => {
+    const fetchTripDate = async () => {
+      const snap = await storage.get(`trip:${tripId}`);
+      if (snap?.value) {
+        const trip = JSON.parse(snap.value);
+        if (trip.startDate) setTripStartDate(trip.startDate);
+      }
+    };
+    fetchTripDate();
+  }, [tripId]);
   // Helper to load templates when opening a dialog
   const loadProfileTemplates = async () => {
     const user = auth.currentUser;
@@ -1141,6 +1153,7 @@ export default function AdminTab({ tripId }: { tripId: number }) {
       {showFlightDialog && (
         <FlightDialog
           initialData={editingFlight || undefined}
+          defaultDate={tripStartDate}
           onClose={() => { setShowFlightDialog(false); setEditingFlight(null); }}
           onAdd={(data) => { addFlight(data); setShowFlightDialog(false); }}
         />
@@ -1149,6 +1162,7 @@ export default function AdminTab({ tripId }: { tripId: number }) {
       {showHotelDialog && (
         <HotelDialog
           initialData={editingHotel || undefined}
+          defaultDate={tripStartDate}
           onClose={() => { setShowHotelDialog(false); setEditingHotel(null); }}
           onAdd={(data) => { addHotel(data); setShowHotelDialog(false); }}
         />
@@ -1157,6 +1171,7 @@ export default function AdminTab({ tripId }: { tripId: number }) {
       {showTransportDialog && (
         <TransportDialog
           initialData={editingTransport || undefined}
+          defaultDate={tripStartDate}
           onClose={() => { setShowTransportDialog(false); setEditingTransport(null); }}
           onAdd={(data) => { addTransport(data); setShowTransportDialog(false); }}
         />
@@ -1330,7 +1345,7 @@ export default function AdminTab({ tripId }: { tripId: number }) {
             
             await addToItinerary(landingDate, {
               time: updated.arrivalTime || "", // Arrival Time
-              activity: `🛬 Arrival: ${updated.airline} ${updated.flightNumber}`,
+              activity: `Arrival: ${updated.airline} ${updated.flightNumber}`,
               location: updated.arrival,
               transitStart: updated.departure, 
               transitEnd: updated.arrival,
