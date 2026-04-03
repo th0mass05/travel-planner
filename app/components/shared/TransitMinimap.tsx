@@ -7,7 +7,12 @@ import { ItineraryItem } from "../../types";
 import { mapLibraries } from "../../helpers/helpers";
 
 export default function TransitMinimap({ item }: { item: ItineraryItem }) {
-  const { isLoaded } = useJsApiLoader({ id: 'google-map-script', googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || "", libraries: mapLibraries });
+  const { isLoaded } = useJsApiLoader({ 
+    id: 'google-map-script', 
+    googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || "", 
+    libraries: mapLibraries 
+  });
+  
   const mapRef = useRef<MapRef>(null);
   const [coords, setCoords] = useState<{start: any, end: any} | null>(null);
 
@@ -19,7 +24,10 @@ export default function TransitMinimap({ item }: { item: ItineraryItem }) {
     const fetchCoords = async () => {
       const geocoder = new window.google.maps.Geocoder();
       try {
-        const [startRes, endRes] = await Promise.all([geocoder.geocode({ address: startTarget }), geocoder.geocode({ address: endTarget })]);
+        const [startRes, endRes] = await Promise.all([
+          geocoder.geocode({ address: startTarget }), 
+          geocoder.geocode({ address: endTarget })
+        ]);
         if (startRes.results[0] && endRes.results[0]) {
           setCoords({
             start: { lat: startRes.results[0].geometry.location.lat(), lng: startRes.results[0].geometry.location.lng() },
@@ -33,6 +41,7 @@ export default function TransitMinimap({ item }: { item: ItineraryItem }) {
 
   useEffect(() => {
     if (coords && mapRef.current) {
+      mapRef.current.resize(); // Fixes the half-rendered map issue
       mapRef.current.fitBounds(
         [[Math.min(coords.start.lng, coords.end.lng), Math.min(coords.start.lat, coords.end.lat)],
          [Math.max(coords.start.lng, coords.end.lng), Math.max(coords.start.lat, coords.end.lat)]],
@@ -43,9 +52,10 @@ export default function TransitMinimap({ item }: { item: ItineraryItem }) {
 
   if (!startTarget || !endTarget) return null;
 
-  const isFlight = item.iconType === "flight";
+  // Generalizing: Anything that isn't explicitly a flight is treated as ground transport
+  const isFlight = item.iconType === ("flight" as any); 
   const Icon = isFlight ? Plane : Train;
-  const color = isFlight ? '#6366f1' : '#f43f5e';
+  const color = isFlight ? '#6366f1' : '#f43f5e'; // Indigo for flight, Rose for ground
 
   const lineData = coords ? {
     type: 'Feature',

@@ -10,6 +10,7 @@ import { categoryIcons, iconMap } from "../../styling/styling";
 import { TripAuthorInfo } from "../../helpers";
 import {ActivityDialog, LocationManagerDialog} from "../dialogs";
 import DayMinimap from "../shared/DayMinimap";
+import TransitMinimap from "../shared/TransitMinimap";
 
 export default function ItineraryTab({ trip }: { trip: TripData }) {
   // ... existing state ...
@@ -423,7 +424,12 @@ export default function ItineraryTab({ trip }: { trip: TripData }) {
                                     </div>
 
                                     {isExpanded && (
-                                      <div className="mt-3">
+                                      <div className="mt-3 space-y-4">
+                                        {/* ⭐ NEW: Show the transit map if it has start/end data */}
+                                        {(item.iconType === "flight" || item.iconType === "transport") && (
+                                          <TransitMinimap item={item} />
+                                        )}
+                                        
                                         {item.sourceId && <LinkedItemDetails sourceId={item.sourceId} tripId={trip.id} />}
                                       </div>
                                     )}

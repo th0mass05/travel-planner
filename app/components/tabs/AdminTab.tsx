@@ -1314,7 +1314,9 @@ export default function AdminTab({ tripId }: { tripId: number }) {
               activity: `Flight: ${updated.airline} ${updated.flightNumber}`,
               location: updated.departure,
               notes: `Arriving at ${updated.arrival}`,
-              iconType: "flight",
+              iconType: "flight" as any, // Cast as any if you haven't updated types yet
+              transitStart: updated.departure, // Ensure these fields are passed!
+              transitEnd: updated.arrival,
               sourceId: `flight:${updated.id}`,
               createdAt: new Date().toISOString()
             });
@@ -1358,7 +1360,9 @@ export default function AdminTab({ tripId }: { tripId: number }) {
               activity: `${updated.type} to ${updated.arrival}`,
               location: updated.departure,
               notes: updated.details || "",
-              iconType: "transport",
+              iconType: "transport", 
+              transitStart: updated.departure, // Map these for the minimap
+              transitEnd: updated.arrival,
               sourceId: `transport:${updated.id}`,
               createdAt: new Date().toISOString()
             });

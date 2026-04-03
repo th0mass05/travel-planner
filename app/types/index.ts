@@ -309,7 +309,11 @@ export type ConfirmToItineraryDialogProps = {
   title: string;
 };
 
-export type IconType = "activity" | "visit" | "eat" | "flight" | "hotel" | "transport" | "landmark" | "day-trip" | "shopping" | "experience" | "nature" | "entertainment" | "culture" | "nightlife";
+export type IconType = 
+  | "activity" | "visit" | "eat" | "hotel" | "transport" 
+  | "landmark" | "day-trip" | "shopping" | "experience" 
+  | "nature" | "entertainment" | "culture" | "nightlife"
+  | "flight"; // <-- ADD THIS
 
 export type ItineraryItem = {
   id: number;
