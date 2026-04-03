@@ -9,6 +9,8 @@ export type TransportData = {
   link?: string;
   details?: string;
   status?: "potential" | "confirmed";
+  arrivalDate?: string; // ⭐ NEW
+  arrivalTime?: string; // ⭐ NEW
 
 };
 

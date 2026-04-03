@@ -1374,17 +1374,34 @@ export default function AdminTab({ tripId }: { tripId: number }) {
           onSave={async (cost, paidBy) => {
             const updated = { ...costDialogTransport, status: "confirmed", cost, paidBy };
             await storage.set(`transport:${tripId}:${costDialogTransport.id}`, updated);
+
+            // 1. POST DEPARTURE
             await addToItinerary(updated.date || "", {
               time: updated.time || "",
-              activity: `${updated.type} to ${updated.arrival}`,
+              activity: `Leaving: ${updated.departure} (${updated.type})`,
               location: updated.departure,
-              notes: updated.details || "",
-              iconType: "transport", 
-              transitStart: updated.departure, // Map these for the minimap
+              transitStart: updated.departure, 
               transitEnd: updated.arrival,
+              iconType: "transport",
               sourceId: `transport:${updated.id}`,
+              notes: updated.details || "",
               createdAt: new Date().toISOString()
             });
+
+            // 2. POST ARRIVAL
+            const landDate = updated.arrivalDate || updated.date || "";
+            await addToItinerary(landDate, {
+              time: updated.arrivalTime || "",
+              activity: `Arriving: ${updated.arrival} (${updated.type})`,
+              location: updated.arrival,
+              transitStart: updated.departure, 
+              transitEnd: updated.arrival,
+              iconType: "transport",
+              sourceId: `transport:${updated.id}`,
+              notes: "",
+              createdAt: new Date().toISOString()
+            });
+
             setCostDialogTransport(null);
           }}
         />

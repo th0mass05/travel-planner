@@ -1,32 +1,34 @@
+// components/dialogs/TransportDialog.tsx
 import { useState } from "react";
-import { TransportData} from "../../types";
+import { TransportData } from "../../types";
 
 export default function TransportDialog({
   initialData,
   onClose,
   onAdd
-}:{
-  initialData?:TransportData;
-  onClose:()=>void;
-  onAdd:(data:TransportData)=>void;
-}){
+}: {
+  initialData?: TransportData;
+  onClose: () => void;
+  onAdd: (data: TransportData) => void;
+}) {
+  const [type, setType] = useState(initialData?.type || "");
+  const [code, setCode] = useState(initialData?.code || "");
+  const [departure, setDeparture] = useState(initialData?.departure || "");
+  const [arrival, setArrival] = useState(initialData?.arrival || "");
+  const [date, setDate] = useState(initialData?.date || "");
+  const [time, setTime] = useState(initialData?.time || "");
+  // ⭐ NEW FIELDS
+  const [arrivalDate, setArrivalDate] = useState(initialData?.arrivalDate || initialData?.date || "");
+  const [arrivalTime, setArrivalTime] = useState(initialData?.arrivalTime || "");
+  
+  const [price, setPrice] = useState(initialData?.price || "");
+  const [link, setLink] = useState(initialData?.link || "");
+  const [details, setDetails] = useState(initialData?.details || "");
+  const [status, setStatus] = useState<"potential" | "confirmed">(initialData?.status || "potential");
 
-  const [type,setType]=useState(initialData?.type || "");
-  const [code,setCode]=useState(initialData?.code || "");
-  const [departure,setDeparture]=useState(initialData?.departure || "");
-  const [arrival,setArrival]=useState(initialData?.arrival || "");
-  const [date,setDate]=useState(initialData?.date || "");
-  const [time,setTime]=useState(initialData?.time || "");
-  const [price,setPrice]=useState(initialData?.price || "");
-  const [link,setLink]=useState(initialData?.link || "");
-  const [details,setDetails]=useState(initialData?.details || "");
-  const [status,setStatus]=useState<"potential"|"confirmed">(initialData?.status || "potential");
-
-
-  const handleSave=()=>{
-
-    if(!type || !departure || !arrival){
-      alert("Please fill transport type, departure and arrival");
+  const handleSave = () => {
+    if (!type || !departure || !arrival || !date || !time || !arrivalTime) {
+      alert("Please fill in the transport type, route, and both departure/arrival times.");
       return;
     }
 
@@ -37,6 +39,8 @@ export default function TransportDialog({
       arrival,
       date,
       time,
+      arrivalDate, // ⭐ Added
+      arrivalTime, // ⭐ Added
       price,
       link,
       details,
@@ -44,126 +48,64 @@ export default function TransportDialog({
     });
   };
 
-  return(
-    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-
-      <div className="bg-white rounded-xl shadow-xl w-[520px] max-h-[90vh] overflow-y-auto p-6 space-y-4">
-
-        <h3 className="text-2xl font-serif">
+  return (
+    <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-[520px] max-h-[90vh] overflow-y-auto p-8 space-y-6">
+        <h3 className="text-2xl font-serif text-stone-900">
           {initialData ? "Edit Transport" : "Add Transport"}
         </h3>
 
-        {/* TYPE */}
-        <input
-          placeholder="Transport type (Train, Coach, Ferry...)"
-          value={type}
-          onChange={e=>setType(e.target.value)}
-          className="w-full border-2 rounded-lg px-3 py-2"
-        />
+        <div className="space-y-4">
+          <div className="grid grid-cols-2 gap-3">
+            <input
+              placeholder="Type (e.g. Train)"
+              value={type}
+              onChange={e => setType(e.target.value)}
+              className="border-2 rounded-xl px-4 py-2.5 outline-none focus:border-stone-900 transition-colors"
+            />
+            <input
+              placeholder="Code (optional)"
+              value={code}
+              onChange={e => setCode(e.target.value)}
+              className="border-2 rounded-xl px-4 py-2.5 outline-none focus:border-stone-900 transition-colors"
+            />
+          </div>
 
-        {/* CODE */}
-        <input
-          placeholder="Number / Code (optional)"
-          value={code}
-          onChange={e=>setCode(e.target.value)}
-          className="w-full border-2 rounded-lg px-3 py-2"
-        />
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1">
+              <label className="text-[10px] font-bold uppercase text-stone-400 ml-1">Departure Station</label>
+              <input value={departure} onChange={e => setDeparture(e.target.value)} className="w-full border-2 rounded-xl px-4 py-2.5" />
+            </div>
+            <div className="space-y-1">
+              <label className="text-[10px] font-bold uppercase text-stone-400 ml-1">Arrival Station</label>
+              <input value={arrival} onChange={e => setArrival(e.target.value)} className="w-full border-2 rounded-xl px-4 py-2.5" />
+            </div>
+          </div>
 
-        {/* ROUTE */}
-        <div className="grid grid-cols-2 gap-3">
+          <div className="p-4 bg-stone-50 rounded-2xl space-y-4 border border-stone-100">
+             <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold uppercase text-stone-500">Departure Date/Time</label>
+                  <input type="date" value={date} onChange={e => setDate(e.target.value)} className="w-full border rounded-lg px-3 py-2 text-sm" />
+                  <input type="time" value={time} onChange={e => setTime(e.target.value)} className="w-full border rounded-lg px-3 py-2 text-sm" />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold uppercase text-stone-500">Arrival Date/Time</label>
+                  <input type="date" value={arrivalDate} onChange={e => setArrivalDate(e.target.value)} className="w-full border rounded-lg px-3 py-2 text-sm" />
+                  <input type="time" value={arrivalTime} onChange={e => setArrivalTime(e.target.value)} className="w-full border rounded-lg px-3 py-2 text-sm" />
+                </div>
+             </div>
+          </div>
 
-          <input
-            placeholder="Departure"
-            value={departure}
-            onChange={e=>setDeparture(e.target.value)}
-            className="border-2 rounded-lg px-3 py-2"
-          />
-
-          <input
-            placeholder="Arrival"
-            value={arrival}
-            onChange={e=>setArrival(e.target.value)}
-            className="border-2 rounded-lg px-3 py-2"
-          />
-
+          <input type="number" placeholder="Price" value={price} onChange={e => setPrice(e.target.value)} className="w-full border-2 rounded-xl px-4 py-2.5" />
+          <textarea placeholder="Details / notes" value={details} onChange={e => setDetails(e.target.value)} className="w-full border-2 rounded-xl px-4 py-2.5 h-24" />
         </div>
 
-        {/* DATE + TIME */}
-        <div className="grid grid-cols-2 gap-3">
-
-          <input
-            type="date"
-            value={date}
-            onChange={e=>setDate(e.target.value)}
-            className="border-2 rounded-lg px-3 py-2"
-          />
-
-          <input
-            type="time"
-            value={time}
-            onChange={e=>setTime(e.target.value)}
-            className="border-2 rounded-lg px-3 py-2"
-          />
-
+        <div className="flex justify-end gap-3 pt-2">
+          <button onClick={onClose} className="px-6 py-2.5 font-bold text-stone-500 hover:text-stone-900 transition-colors">Cancel</button>
+          <button onClick={handleSave} className="px-8 py-2.5 bg-stone-900 text-white font-bold rounded-full shadow-lg hover:shadow-xl transition-all">Save Transport</button>
         </div>
-
-        {/* PRICE */}
-        <input
-          type="number"
-          placeholder="Price"
-          value={price}
-          onChange={e=>setPrice(e.target.value)}
-          className="w-full border-2 rounded-lg px-3 py-2"
-        />
-
-        {/* BOOKING LINK */}
-        <input
-          placeholder="Booking link (optional)"
-          value={link}
-          onChange={e=>setLink(e.target.value)}
-          className="w-full border-2 rounded-lg px-3 py-2"
-        />
-
-        {/* DETAILS */}
-        <textarea
-          placeholder="Details / notes"
-          value={details}
-          onChange={e=>setDetails(e.target.value)}
-          className="w-full border-2 rounded-lg px-3 py-2"
-        />
-
-        {/* STATUS */}
-        <select
-          value={status}
-          onChange={e=>setStatus(e.target.value as "potential"|"confirmed")}
-          className="w-full border-2 rounded-lg px-3 py-2"
-        >
-          <option value="potential">Potential option</option>
-          <option value="confirmed">Confirmed</option>
-        </select>
-
-
-        {/* BUTTONS */}
-        <div className="flex justify-end gap-2 pt-3">
-
-          <button
-            onClick={onClose}
-            className="px-4 py-2 border rounded-lg"
-          >
-            Cancel
-          </button>
-
-          <button
-            onClick={handleSave}
-            className="px-4 py-2 bg-gray-900 text-white rounded-lg"
-          >
-            Save
-          </button>
-
-        </div>
-
       </div>
-
     </div>
   );
 }
