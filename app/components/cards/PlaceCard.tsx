@@ -148,7 +148,7 @@ export default function PlaceCard({
                   className="text-emerald-500 hover:text-emerald-700 flex items-center gap-0.5"
                   title="Add Another Date"
                 >
-                  <Plus size={12} strokeWidth={3} /> Date
+                  <Plus size={12} strokeWidth={3} /> Confirm New Date
                 </button>
                 <button onClick={() => onUnconfirm(place)} className="text-amber-500 hover:text-amber-700">
                   Unconfirm
