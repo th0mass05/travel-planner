@@ -1308,18 +1308,37 @@ export default function AdminTab({ tripId }: { tripId: number }) {
           onClose={() => setCostDialogFlight(null)}
           onSave={async (cost, paidBy) => {
             const updated = { ...costDialogFlight, status: "confirmed", cost, paidBy };
+            
+            // Save the master flight record
             await storage.set(`flight:${tripId}:${costDialogFlight.id}`, updated);
+
+            // 1. CREATE DEPARTURE ITEM
             await addToItinerary(updated.date, {
-              time: updated.time || "",
-              activity: `Flight: ${updated.airline} ${updated.flightNumber}`,
+              time: updated.time || "", // Departure Time
+              activity: `🛫 Departure: ${updated.airline} ${updated.flightNumber}`,
               location: updated.departure,
-              notes: `Arriving at ${updated.arrival}`,
-              iconType: "flight" as any, // Cast as any if you haven't updated types yet
-              transitStart: updated.departure, // Ensure these fields are passed!
+              transitStart: updated.departure, 
               transitEnd: updated.arrival,
+              iconType: "flight" as any,
               sourceId: `flight:${updated.id}`,
               createdAt: new Date().toISOString()
             });
+
+            // 2. CREATE ARRIVAL ITEM (Always created now)
+            // We use updated.arrivalDate if it exists, otherwise fallback to updated.date
+            const landingDate = updated.arrivalDate || updated.date;
+            
+            await addToItinerary(landingDate, {
+              time: updated.arrivalTime || "", // Arrival Time
+              activity: `🛬 Arrival: ${updated.airline} ${updated.flightNumber}`,
+              location: updated.arrival,
+              transitStart: updated.departure, 
+              transitEnd: updated.arrival,
+              iconType: "flight" as any,
+              sourceId: `flight:${updated.id}`,
+              createdAt: new Date().toISOString()
+            });
+
             setCostDialogFlight(null);
           }}
         />

@@ -6,8 +6,7 @@ import { Plane, Train, Loader2 } from "lucide-react";
 import { ItineraryItem } from "../../types"; 
 import { mapLibraries } from "../../helpers/helpers";
 
-export default function TransitMinimap({ item }: { item: ItineraryItem }) {
-  const { isLoaded } = useJsApiLoader({ 
+export default function TransitMinimap({ item, tripId }: { item: ItineraryItem; tripId: number }) {  const { isLoaded } = useJsApiLoader({ 
     id: 'google-map-script', 
     googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || "", 
     libraries: mapLibraries 
@@ -70,7 +69,7 @@ export default function TransitMinimap({ item }: { item: ItineraryItem }) {
   } : null;
 
   return (
-    <div className="w-full aspect-[21/9] min-h-[160px] rounded-2xl border border-stone-200 overflow-hidden shadow-sm flex flex-col relative bg-stone-100">
+    <div className="w-full aspect-[2.5/1] min-h-[120px] rounded-xl border border-stone-200 overflow-hidden shadow-sm flex flex-col relative bg-stone-100 animate-in fade-in duration-500">
       <div className="absolute top-0 left-0 right-0 bg-white/90 backdrop-blur-sm px-4 py-2 border-b border-stone-200 z-10 flex justify-between items-center pointer-events-none">
         <div className="flex items-center gap-2">
           <Icon size={14} className={isFlight ? "text-indigo-500" : "text-rose-500"} />

@@ -426,9 +426,7 @@ export default function ItineraryTab({ trip }: { trip: TripData }) {
                                     {isExpanded && (
                                       <div className="mt-4 space-y-4 animate-in fade-in zoom-in-95 duration-200">
                                         {/* ⭐ TRIGGER THE MAP: Only if it has the transit data */}
-                                        {item.transitStart && item.transitEnd && (
-                                          <TransitMinimap item={item} />
-                                        )}
+                                        
 
                                         {item.sourceId && (
                                           <LinkedItemDetails sourceId={item.sourceId} tripId={trip.id} />
@@ -450,15 +448,32 @@ export default function ItineraryTab({ trip }: { trip: TripData }) {
             </div>
 
             {/* RIGHT COLUMN: Sticky Minimap */}
-            <div className="hidden lg:block sticky top-32">
-               <div className="w-full aspect-[4/3] max-h-[75vh]">
-                 <DayMinimap 
-                    dayData={currentDayData} 
-                    date={currentDayData.date}
-                    tripId={trip.id} 
-                 />
-               </div>
-            </div>
+            <div className="hidden lg:block sticky top-32 space-y-6"> {/* Added space-y-6 for stacking */}
+    
+              {/* Primary Day Map */}
+              <div className="w-full aspect-[4/3] shadow-sm rounded-2xl overflow-hidden border border-stone-200">
+                <DayMinimap 
+                  dayData={currentDayData} 
+                  date={currentDayData.date}
+                  tripId={trip.id} 
+                />
+              </div>
+
+              {/* ⭐ NEW: Transit Map Stack */}
+              <div className="space-y-4">
+                {currentDayData.items
+                  .filter(item => (item.iconType === "flight" || item.iconType === "transport") && item.sourceId)
+                  .map((transitItem) => (
+                    <div key={transitItem.id} className="animate-in slide-in-from-right-4 duration-500">
+                      <TransitMinimap 
+                        item={transitItem} 
+                        tripId={trip.id} 
+                      />
+                    </div>
+                  ))
+                }
+              </div>
+          </div>
             
           </div>
         </div>

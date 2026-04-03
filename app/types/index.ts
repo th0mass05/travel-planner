@@ -320,7 +320,7 @@ export type ItineraryItem = {
   time: string;
   activity: string;
   location: string;
-  notes: string;
+  notes?: string;
   iconType: IconType;
   createdByUid?: string | null;
   createdAt?: string;
