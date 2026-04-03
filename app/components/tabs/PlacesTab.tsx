@@ -36,7 +36,8 @@ export default function PlacesTab({ tripId, country }: PlacesTabProps) {
   const [shoppingListPlace, setShoppingListPlace] = useState<StoredPlace | null>(null); 
   const [viewMode, setViewMode] = useState<'grid' | 'map'>('grid');
   const [tripStartDate, setTripStartDate] = useState<string>("");
-
+  const [unconfirmingPlace, setUnconfirmingPlace] = useState<StoredPlace | null>(null);
+  const [placeConfirmations, setPlaceConfirmations] = useState<{date: string, item: ItineraryItem}[]>([]);
   // 2. Add this effect to fetch the date on load:
   useEffect(() => {
     const fetchTripDate = async () => {
@@ -50,7 +51,33 @@ export default function PlacesTab({ tripId, country }: PlacesTabProps) {
   }, [tripId]);
   // Mapbox Reference
   const mapRef = useRef<any>(null);
+  useEffect(() => {
+    if (!unconfirmingPlace) {
+      setPlaceConfirmations([]);
+      return;
+    }
 
+    const fetchConfirmations = async () => {
+      const result = await storage.list(`itinerary:${tripId}:date:`);
+      const confs: {date: string, item: ItineraryItem}[] = [];
+      
+      if (result?.keys) {
+        for (const key of result.keys) {
+          const snap = await storage.get(key);
+          if (snap?.value) {
+            const day = JSON.parse(snap.value);
+            // Find items originating from this specific place
+            const items = day.items.filter((i: any) => i.sourceId === `place:${unconfirmingPlace.id}`);
+            items.forEach((item: any) => confs.push({ date: day.date, item }));
+          }
+        }
+      }
+      // Sort by date chronologically
+      setPlaceConfirmations(confs.sort((a,b) => a.date.localeCompare(b.date)));
+    };
+
+    fetchConfirmations();
+  }, [unconfirmingPlace, tripId]);
   useEffect(() => {
     const unsubscribe = storage.subscribeToList(
       `place:${tripId}:`, 
@@ -140,7 +167,32 @@ export default function PlacesTab({ tripId, country }: PlacesTabProps) {
     delete updated.rating; 
     await storage.set(`place:${tripId}:${place.category}:${place.id}`, updated);
   };
+  const handleRemoveSpecificConfirmation = async (date: string, itemId: number) => {
+    if (!unconfirmingPlace) return;
 
+    // 1. Remove it from the itinerary date
+    const key = `itinerary:${tripId}:date:${date}`;
+    const existing = await storage.get(key);
+    if (existing?.value) {
+      const day = JSON.parse(existing.value);
+      day.items = day.items.filter((i: any) => i.id !== itemId);
+      await storage.set(key, day);
+    }
+
+    // 2. Remove it from local UI state
+    const updatedConfs = placeConfirmations.filter(c => c.item.id !== itemId);
+    setPlaceConfirmations(updatedConfs);
+
+    // 3. If that was the LAST confirmation, completely unconfirm the place
+    if (updatedConfs.length === 0) {
+      const updatedPlace = { ...unconfirmingPlace, confirmed: false, visited: false };
+      delete updatedPlace.cost;
+      delete updatedPlace.paidBy;
+      delete updatedPlace.rating; 
+      await storage.set(`place:${tripId}:${unconfirmingPlace.category}:${unconfirmingPlace.id}`, updatedPlace);
+      setUnconfirmingPlace(null);
+    }
+  };
   const handleEditPlace = async (formData: PlaceFormData) => {
     if (!editingPlace) return;
 
@@ -475,7 +527,7 @@ export default function PlacesTab({ tripId, country }: PlacesTabProps) {
               onOpenShoppingList={setShoppingListPlace}
               onEdit={setEditingPlace}
               onConfirm={setConfirmingPlace}
-              onUnconfirm={unconfirmPlace}
+              onUnconfirm={setUnconfirmingPlace}
               onDelete={deletePlace}
             />
           ))}
@@ -494,6 +546,42 @@ export default function PlacesTab({ tripId, country }: PlacesTabProps) {
           initialLocationPath={activeLocationPath} 
           allPlaces={places}
         />
+      )}
+      {unconfirmingPlace && (
+        <div className="fixed inset-0 bg-stone-900/40 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 animate-in zoom-in-95 duration-200">
+            <h3 className="text-xl font-serif text-stone-900 mb-2">Unconfirm Dates</h3>
+            <p className="text-sm text-stone-500 mb-6">Select which scheduled visit to <strong>{unconfirmingPlace.name}</strong> you want to remove.</p>
+            
+            {placeConfirmations.length === 0 ? (
+              <p className="text-stone-400 text-sm italic mb-6">Searching itinerary...</p>
+            ) : (
+              <div className="space-y-3 mb-6 max-h-[40vh] overflow-y-auto pr-2">
+                {placeConfirmations.map((conf) => (
+                  <div key={conf.item.id} className="flex justify-between items-center p-4 border border-stone-200 rounded-xl bg-stone-50">
+                    <div>
+                      <p className="font-bold text-stone-900">{conf.date.split("-").reverse().join("/")}</p>
+                      <p className="text-xs font-bold uppercase tracking-wider text-stone-500 mt-1">{conf.item.time || "No Time Set"}</p>
+                    </div>
+                    <button
+                      onClick={() => handleRemoveSpecificConfirmation(conf.date, conf.item.id)}
+                      className="px-4 py-2 bg-white border border-stone-200 text-rose-600 font-bold text-xs uppercase tracking-wider rounded-lg hover:border-rose-200 hover:bg-rose-50 transition-all shadow-sm"
+                    >
+                      Remove
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+            
+            <button
+              onClick={() => setUnconfirmingPlace(null)}
+              className="w-full px-4 py-3 border border-stone-200 text-stone-600 font-bold rounded-xl hover:bg-stone-50 transition-colors"
+            >
+              Close
+            </button>
+          </div>
+        </div>
       )}
       {shoppingListPlace && (
         <PlaceShoppingListDialog

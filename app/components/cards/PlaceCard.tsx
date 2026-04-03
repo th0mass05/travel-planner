@@ -1,5 +1,5 @@
 import React from "react";
-import { MapPin, Check, Star, ExternalLink, ShoppingBag } from "lucide-react";
+import { MapPin, Check, Star, ExternalLink, ShoppingBag, Plus } from "lucide-react"; // ⭐ Added Plus icon
 import { StoredPlace, ShoppingData, PlaceType } from "../../types"; 
 import { TripAuthorInfo } from "../../helpers";
 import { categoryIcons, PLACE_CATEGORIES } from "../../styling/styling";
@@ -27,7 +27,6 @@ export default function PlaceCard({
   onUnconfirm,
   onDelete,
 }: PlaceCardProps) {
-  // Lookup the correct icon for this specific place
   const CategoryIcon = categoryIcons[place.category] || MapPin;
   const categoryLabel = PLACE_CATEGORIES.find((c) => c.id === place.category)?.label || "Place";
 
@@ -53,7 +52,7 @@ export default function PlaceCard({
           </div>
         )}
 
-        {/* Category Icon Badge (Top Left) */}
+        {/* Category Icon Badge */}
         {showCategoryBadge && (
           <div className="absolute top-4 left-4 bg-white/90 backdrop-blur text-stone-900 px-2.5 py-1.5 rounded-md shadow-sm flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider">
             <CategoryIcon size={14} className="text-rose-500" />
@@ -61,14 +60,14 @@ export default function PlaceCard({
           </div>
         )}
 
-        {/* Visited Badge (Top Right) */}
+        {/* Visited Badge */}
         {place.visited && (
           <div className="absolute top-4 right-4 bg-white/90 backdrop-blur text-stone-900 p-2 rounded-full shadow-md">
             <Check size={16} strokeWidth={3} />
           </div>
         )}
 
-        {/* Rating Badge (Bottom Left) */}
+        {/* Rating Badge */}
         {place.rating && (
           <div className="absolute bottom-4 left-4 bg-white/90 backdrop-blur px-2 py-1 rounded-md text-xs font-bold flex items-center gap-1 shadow-sm">
             <Star size={12} className="fill-amber-400 text-amber-400" />
@@ -117,38 +116,48 @@ export default function PlaceCard({
             >
               {place.visited && <Check size={12} />}
             </div>
-            {/* Prevent double-firing clicks on the card itself */}
             <input type="checkbox" checked={place.visited} onChange={() => onToggleVisited(place)} className="hidden" />
             <span className="text-xs font-bold uppercase text-stone-400 group-hover/check:text-stone-900">Visited</span>
           </label>
 
-          <div className="flex gap-3 text-xs font-bold uppercase tracking-wide">
+          <div className="flex gap-3 text-[11px] sm:text-xs font-bold uppercase tracking-wide items-center">
             {place.category === "shopping" &&
               shoppingItems.filter((i) => i.linkedPlaces?.some((p) => p.id === place.id)).length > 0 && (
                 <button
                   onClick={() => onOpenShoppingList(place)}
-                  className="text-indigo-500 hover:text-indigo-700 flex items-center gap-1 mr-2"
+                  className="text-indigo-500 hover:text-indigo-700 flex items-center gap-1 mr-1"
                 >
                   <ShoppingBag size={14} />
                   List ({shoppingItems.filter((i) => i.linkedPlaces?.some((p) => p.id === place.id)).length})
                 </button>
               )}
+            
             <button onClick={() => onEdit(place)} className="text-stone-400 hover:text-stone-900">
               Edit
             </button>
 
+            {/* ⭐ CHANGED: Dynamic Confirm/Unconfirm Buttons */}
             {!place.confirmed ? (
               <button onClick={() => onConfirm(place)} className="text-rose-400 hover:text-rose-600">
                 Confirm
               </button>
             ) : (
-              <button onClick={() => onUnconfirm(place)} className="text-amber-500 hover:text-amber-700">
-                Unconfirm
-              </button>
+              <div className="flex items-center gap-3 border-l border-r border-stone-200 px-3">
+                <button 
+                  onClick={() => onConfirm(place)} 
+                  className="text-emerald-500 hover:text-emerald-700 flex items-center gap-0.5"
+                  title="Add Another Date"
+                >
+                  <Plus size={12} strokeWidth={3} /> Date
+                </button>
+                <button onClick={() => onUnconfirm(place)} className="text-amber-500 hover:text-amber-700">
+                  Unconfirm
+                </button>
+              </div>
             )}
 
             <button onClick={() => onDelete(place.id, place.category)} className="text-stone-300 hover:text-red-500">
-              Delete
+              Del
             </button>
           </div>
         </div>
