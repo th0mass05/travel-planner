@@ -8,9 +8,19 @@ import { storage } from "../../../firebaseStore";
 import { mapLibraries } from "../../helpers/helpers"; 
 import { CATEGORY_COLORS } from "../../styling/styling"; 
 
-type MapPoint = { id: string; lat: number; lng: number; name: string; type: string; isItineraryItem: boolean; };
+type MapPoint = { id: string; lat: number; lng: number; name: string; type: string; isItineraryItem: boolean; numericId?: number; };
 
-export default function DayMinimap({ dayData, date, tripId }: { dayData: ItineraryDay; date: string; tripId: number; }) {
+export default function DayMinimap({ 
+  dayData, 
+  date, 
+  tripId, 
+  onPinClick 
+}: { 
+  dayData: ItineraryDay; 
+  date: string; 
+  tripId: number; 
+  onPinClick?: (itemId: number) => void; 
+}) {
   const { isLoaded } = useJsApiLoader({ 
     id: 'google-map-script', 
     googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || "", 
@@ -66,7 +76,7 @@ export default function DayMinimap({ dayData, date, tripId }: { dayData: Itinera
             const query = item.iconType === "flight" ? `${item.location} Airport` : item.location;
             const coords = await getCoords(query);
             if (coords) {
-              routePoints.push({ id: `item-${item.id}`, ...coords, name: item.activity, type: item.iconType, isItineraryItem: true });
+              routePoints.push({ id: `item-${item.id}`, ...coords, name: item.activity, type: item.iconType, isItineraryItem: true, numericId: item.id });
             }
           }
         }
@@ -159,6 +169,12 @@ export default function DayMinimap({ dayData, date, tripId }: { dayData: Itinera
           return (
             <Marker key={`${p.id}-${index}`} longitude={p.lng} latitude={p.lat} anchor="center">
               <div 
+                onClick={(e) => {
+                    if (p.isItineraryItem && p.numericId && onPinClick) {
+                      e.stopPropagation();
+                      onPinClick(p.numericId);
+                    }
+                  }}
                 className="rounded-full flex items-center justify-center text-white font-bold shadow-md border-2 border-white transition-all hover:scale-125 cursor-help"
                 style={{ 
                   backgroundColor: pinColor, 

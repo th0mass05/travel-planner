@@ -24,7 +24,7 @@ export default function ItineraryTab({ trip }: { trip: TripData }) {
   const [expandedItemId, setExpandedItemId] = useState<number | null>(null);
   // ⭐ UPDATE: Initialize with trip.segments
   const [tripSegments, setTripSegments] = useState<TripSegment[]>(trip.segments || []);
-
+  const [highlightedItemId, setHighlightedItemId] = useState<number | null>(null);
   // ⭐ NEW EFFECT: Keep segments in sync when they change in DB
   useEffect(() => {
     if (trip.segments) {
@@ -193,7 +193,21 @@ export default function ItineraryTab({ trip }: { trip: TripData }) {
   };
 
   const currentDayData = days[currentDayIndex] || { day: 1, date: "", items: [] };
-  
+  const handlePinClick = (itemId: number) => {
+    // 1. Scroll nicely to the item
+    const element = document.getElementById(`itinerary-item-${itemId}`);
+    if (element) {
+      element.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+
+    // 2. Set highlight state
+    setHighlightedItemId(itemId);
+
+    // 3. Remove highlight after 2.5 seconds to create the fade-out effect
+    setTimeout(() => {
+      setHighlightedItemId(null);
+    }, 2500); 
+  };
   // ⭐ Get ALL locations for the current day (could be 1, could be 2+)
   const currentLocations = getLocationsForDate(currentDayData.date);
   // --- EXPORT TO CALENDAR ---
@@ -374,17 +388,26 @@ export default function ItineraryTab({ trip }: { trip: TripData }) {
                   {currentDayData.items.map((item) => {
                     const Icon = iconMap[item.iconType] || Clock; 
                     const isExpanded = expandedItemId === item.id;
-
+                    const isHighlighted = highlightedItemId === item.id;
                     return (
-                      <div key={item.id} className="relative group">
+                      <div 
+                        key={item.id} 
+                        id={`itinerary-item-${item.id}`} // ⭐ NEW: Attach ID for scroll targeting
+                        className="relative group"
+                      >
                         {/* Timeline Dot */}
                         <div className="absolute -left-[41px] top-6 w-5 h-5 rounded-full border-4 border-[#FDFCF8] bg-stone-300 group-hover:bg-stone-900 transition-colors" />
                         
                         {/* Clickable Card Wrapper */}
                         <div 
                           onClick={() => setExpandedItemId(isExpanded ? null : item.id)}
-                          className={`bg-white rounded-xl p-6 border transition-all cursor-pointer ${
-                            isExpanded ? "border-stone-400 shadow-md" : "border-stone-100 shadow-sm hover:shadow-md group-hover:border-stone-300"
+                          // ⭐ NEW: Adjusted classes to include a smooth transition and a highlighted border/shadow state
+                          className={`bg-white rounded-xl p-6 border transition-all duration-700 ease-out cursor-pointer ${
+                            isHighlighted 
+                              ? "border-rose-400 shadow-[0_0_20px_rgba(251,113,133,0.3)] scale-[1.01]" // Glow effect
+                              : isExpanded 
+                                ? "border-stone-400 shadow-md" 
+                                : "border-stone-100 shadow-sm hover:shadow-md group-hover:border-stone-300"
                           }`}
                         >
                             <div className="flex gap-4 sm:gap-5">
@@ -456,6 +479,7 @@ export default function ItineraryTab({ trip }: { trip: TripData }) {
                   dayData={currentDayData} 
                   date={currentDayData.date}
                   tripId={trip.id} 
+                  onPinClick={handlePinClick}
                 />
               </div>
 
