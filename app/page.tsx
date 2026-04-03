@@ -584,7 +584,32 @@ function HomePage({
 function TripView({ trip: initialTrip, onBack }: TripViewProps) {
   const [activeTab, setActiveTab] = useState<TabId>("itinerary");
   const [trip, setTrip] = useState<TripData>(initialTrip);
+  const tabsRef = useRef<HTMLDivElement>(null);
 
+  const tabsAnchorRef = useRef<HTMLDivElement>(null);
+
+  // 2. SMARTER SCROLL EFFECT
+  // 2. SMARTER SCROLL EFFECT
+  useEffect(() => {
+    // Add a tiny 50ms buffer to let the DOM settle and prevent the "jolt"
+    const timer = setTimeout(() => {
+      if (tabsAnchorRef.current) {
+        // Find the exact pixel position of the top of the tabs
+        const tabsPosition = tabsAnchorRef.current.getBoundingClientRect().top + window.scrollY;
+        
+        // Only scroll if the user has scrolled past the top of the tabs
+        if (window.scrollY > tabsPosition) {
+          window.scrollTo({ 
+            top: tabsPosition, 
+            behavior: "smooth" 
+          });
+        }
+      }
+    }, 50);
+
+    // Cleanup the timer if the user clicks tabs really fast
+    return () => clearTimeout(timer);
+  }, [activeTab]);
   // ... (Keep existing useEffect for Snapshot and Summary logic) ...
   useEffect(() => {
     const unsub = onSnapshot(doc(db, "travelData", `trip:${initialTrip.id}`), (doc) => {
@@ -713,6 +738,9 @@ function TripView({ trip: initialTrip, onBack }: TripViewProps) {
       </div>
 
       {/* 2. STATS BAR */}
+      <div ref={tabsAnchorRef} className="h-0 w-full" style={{ scrollMarginTop: '20px' }} />
+
+      {/* 2. STATS BAR & TABS CONTAINER (Notice we removed the ref from here!) */}
       <div className="border-b border-stone-200 bg-white sticky top-0 z-30 shadow-sm">
         <div className="max-w-7xl mx-auto px-6 py-4 flex flex-col md:flex-row md:items-center justify-between gap-4">
             
@@ -762,7 +790,7 @@ function TripView({ trip: initialTrip, onBack }: TripViewProps) {
       </div>
 
       {/* 4. CONTENT AREA */}
-      <div className="max-w-7xl w-full mx-auto px-6 py-12">
+      <div className="max-w-7xl w-full mx-auto px-6 py-12 min-h-screen">
         {activeTab === "itinerary" && <ItineraryTab trip={trip} />}
         {activeTab === "places" && <PlacesTab tripId={trip.id} country={trip.country} />}
         {activeTab === "shopping" && <ShoppingTab tripId={trip.id} />}

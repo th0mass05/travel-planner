@@ -48,29 +48,37 @@ export default function DayMinimap({ dayData, date, tripId }: { dayData: Itinera
         if (activeHotel && activeHotel.address) {
           const coords = await getCoords(activeHotel.address);
           if (coords) routePoints.push({ id: `hotel-${activeHotel.id}`, ...coords, name: activeHotel.name, type: 'hotel' });
-        } else {
+        } else if (date) { // ⭐ Added check: Make sure 'date' actually exists
           // Red-Eye Fallback
           const currentDateObj = new Date(date);
-          currentDateObj.setDate(currentDateObj.getDate() - 1);
-          const yesterdayStr = currentDateObj.toISOString().split('T')[0];
-          const yesterdaySnap = await storage.get(`itinerary:${tripId}:date:${yesterdayStr}`);
-          if (yesterdaySnap?.value) {
-            const yesterdayData = JSON.parse(yesterdaySnap.value);
-            if (yesterdayData.items && yesterdayData.items.length > 0) {
-              const lastItem = yesterdayData.items[yesterdayData.items.length - 1];
-              const arrivalLocation = lastItem.transitEnd || lastItem.location; 
-              const query = lastItem.iconType === "flight" ? `${arrivalLocation} Airport` : arrivalLocation;
-              const coords = await getCoords(query);
-              if (coords) routePoints.push({ id: `redeye-arrival`, ...coords, name: `Arrived from ${lastItem.activity}`, type: 'transport' });
+          
+          // ⭐ Added check: Make sure it's a valid date before doing math!
+          if (!isNaN(currentDateObj.getTime())) {
+            currentDateObj.setDate(currentDateObj.getDate() - 1);
+            const yesterdayStr = currentDateObj.toISOString().split('T')[0];
+            const yesterdaySnap = await storage.get(`itinerary:${tripId}:date:${yesterdayStr}`);
+            
+            if (yesterdaySnap?.value) {
+              const yesterdayData = JSON.parse(yesterdaySnap.value);
+              if (yesterdayData.items && yesterdayData.items.length > 0) {
+                const lastItem = yesterdayData.items[yesterdayData.items.length - 1];
+                const arrivalLocation = lastItem.transitEnd || lastItem.location; 
+                const query = lastItem.iconType === "flight" ? `${arrivalLocation} Airport` : arrivalLocation;
+                const coords = await getCoords(query);
+                if (coords) routePoints.push({ id: `redeye-arrival`, ...coords, name: `Arrived from ${lastItem.activity}`, type: 'transport' });
+              }
             }
           }
         }
       } catch (err) { console.error(err); }
 
-      for (const item of dayData.items) {
-        const query = item.iconType === "flight" ? `${item.location} Airport` : item.location;
-        const coords = await getCoords(query);
-        if (coords) routePoints.push({ id: `item-${item.id}`, ...coords, name: item.activity, type: item.iconType });
+      // Also added a quick safety check here just in case dayData hasn't loaded yet
+      if (dayData && dayData.items) {
+        for (const item of dayData.items) {
+          const query = item.iconType === "flight" ? `${item.location} Airport` : item.location;
+          const coords = await getCoords(query);
+          if (coords) routePoints.push({ id: `item-${item.id}`, ...coords, name: item.activity, type: item.iconType });
+        }
       }
 
       setPoints(routePoints);
