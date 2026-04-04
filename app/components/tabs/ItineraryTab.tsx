@@ -485,6 +485,7 @@ export default function ItineraryTab({ trip }: { trip: TripData }) {
 
               {/* ⭐ NEW: AI Pro Tip Widget */}
               <ProTipWidget 
+                key={currentDayData.date}
                 dayLocations={currentDayData.items.map(i => i.location).filter(Boolean)}
                 city={currentLocations.length > 0 ? currentLocations[0].location : trip.destination}
                 tripId={trip.id}

@@ -1,7 +1,6 @@
 import { useState, useEffect } from "react";
 import { Sparkles, RefreshCw } from "lucide-react"; // ⭐ Add RefreshCw import
-import { doc, getDoc, setDoc, collection, query, where, getDocs } from "firebase/firestore";
-import { db } from "../../../firebase"; 
+import { doc, setDoc, collection, query, where, getDocs, onSnapshot } from "firebase/firestore";import { db } from "../../../firebase"; 
 
 export default function ProTipWidget({ dayLocations, city, tripId, dayDate }: any) {
   const [tip, setTip] = useState<string | null>(null);
@@ -31,7 +30,7 @@ export default function ProTipWidget({ dayLocations, city, tripId, dayDate }: an
           previousTips // 👈 NEW: Pass the history to Gemini
         }),
       });
-      
+      if (!res.ok) throw new Error("Backend API failed");
       const data = await res.json();
       
       if (data.tip) {
@@ -55,43 +54,34 @@ export default function ProTipWidget({ dayLocations, city, tripId, dayDate }: an
   };
 
   useEffect(() => {
-    const checkAndFetchTip = async () => {
-      // ⭐ 2. FIX THE LINGERING TIP
-      if (dayLocations.length === 0) {
-        setTip(null); // Clear the tip from state
+    if (dayLocations.length === 0) {
+      setTip(null);
+      setLoading(false);
+      return;
+    }
+
+    setLoading(true);
+    const tipDocId = `${tripId}_${dayDate}`;
+    const tipRef = doc(db, "ai_tips", tipDocId); 
+
+    // ⭐ SWAPPED getDoc FOR onSnapshot
+    // This creates a live connection to this specific day's tip in the database
+    const unsubscribe = onSnapshot(tipRef, (docSnap) => {
+      if (docSnap.exists() && docSnap.data().tip) {
+        // If the document exists, update the screen instantly!
+        setTip(docSnap.data().tip);
         setLoading(false);
-        return;
+      } else {
+        // If the document doesn't exist at all (first time loading the day)
+        // Call our generation function!
+        fetchNewTipFromAI();
       }
+    });
 
-      setLoading(true);
-
-      try {
-        const tipDocId = `${tripId}_${dayDate}`;
-        const tipRef = doc(db, "ai_tips", tipDocId); 
-        
-        const daySnap = await getDoc(tipRef);
-
-        // Check cache first
-        if (daySnap.exists()) {
-          const data = daySnap.data();
-          if (data.tip) {
-            setTip(data.tip);
-            setLoading(false);
-            return; 
-          }
-        }
-
-        // If no cache, fetch new
-        await fetchNewTipFromAI();
-
-      } catch (e) {
-        console.error("Cache Error:", e);
-        setLoading(false);
-      }
-    };
-
-    checkAndFetchTip();
-  }, [dayDate, tripId, city, locationsString]); 
+    // Cleanup the listener when we switch days
+    return () => unsubscribe();
+    
+  }, [dayDate, tripId, city, locationsString]);
 
   // Completely hide the widget if there's no tip and we aren't loading
   if (!loading && !tip) return null;
@@ -127,8 +117,8 @@ export default function ProTipWidget({ dayLocations, city, tripId, dayDate }: an
             <div className="h-4 bg-indigo-200/50 rounded w-5/6"></div>
           </div>
         ) : (
-          <p className="text-sm text-stone-700 leading-relaxed font-medium">
-            {tip}
+          <p className="text-sm text-stone-700 leading-relaxed font-medium whitespace-pre-wrap">
+            {tip?.replace(/\*\*/g, "")}
           </p>
         )}
       </div>
