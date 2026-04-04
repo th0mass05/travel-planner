@@ -30,7 +30,11 @@ export default function CostDialog({
       const t=await storage.get(`trip:${tripId}`);
       if(t?.value){
         const trip=JSON.parse(t.value);
-        setMembers(trip.members||[]);
+        
+        // Tell TypeScript explicitly that this is an array of strings
+        const uniqueMembers = Array.from(new Set( (trip.members as string[]) || [] )); 
+        
+        setMembers(uniqueMembers);
       }
     };
     load();
