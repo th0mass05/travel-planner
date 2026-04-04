@@ -4,6 +4,7 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "");
 
 export async function POST(req: Request) {
+  console.log("Checking API Key:", process.env.GEMINI_API_KEY ? "KEY EXISTS" : "KEY IS MISSING");
   try {
     // In the App Router, we parse the body using await req.json()
     const body = await req.json();
@@ -20,7 +21,10 @@ export async function POST(req: Request) {
       Provide ONE single, highly specific, practical "Pro-Tip" for their day under 3 sentences.
     `;
 
-    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+    const model = genAI.getGenerativeModel(
+      { model: "gemini-2.5-flash" },
+      { apiVersion: "v1" }
+    );
     const result = await model.generateContent(prompt);
     const response = await result.response;
     const tip = response.text();
