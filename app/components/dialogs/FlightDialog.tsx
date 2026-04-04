@@ -16,7 +16,16 @@ export default function FlightDialog({ onClose, onAdd, initialData, defaultDate 
       createdAt: new Date().toISOString(),
     }
   );
-
+  const [error, setError] = useState("");
+  const handleSave = () => {
+    setError("");
+    if (!formData.airline || !formData.flightNumber || !formData.departure || !formData.arrival || !formData.date || !formData.time) {
+      setError("Please fill out the airline, flight number, locations, and departure date/time.");
+      return;
+    }
+    
+    onAdd({ ...formData, arrivalDate: formData.arrivalDate || formData.date });
+  };
   return (
     <div className="fixed inset-0 bg-stone-900/40 backdrop-blur-sm flex items-center justify-center p-4 z-50">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg p-8 animate-in zoom-in-95 duration-200 max-h-[90vh] overflow-y-auto">
@@ -181,11 +190,14 @@ export default function FlightDialog({ onClose, onAdd, initialData, defaultDate 
                 />
              </div>
           </div>
-
+          {error && (
+            <div className="text-rose-600 text-sm font-medium bg-rose-50 p-3 rounded-lg border border-rose-100 animate-in fade-in slide-in-from-bottom-2">
+              {error}
+            </div>
+          )}              
           <div className="flex gap-3 pt-4">
             <button
-              onClick={() => onAdd({ ...formData, arrivalDate: formData.arrivalDate || formData.date })}
-              
+              onClick={handleSave}
               className="flex-1 px-6 py-3 bg-stone-900 text-white font-bold rounded-lg hover:bg-stone-800 transition-colors shadow-lg"
             >
               {initialData ? "Save Changes" : "Add Flight"}

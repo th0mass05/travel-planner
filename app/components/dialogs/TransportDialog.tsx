@@ -17,15 +17,18 @@ export default function TransportDialog({
   // ⭐ NEW FIELDS
   const [arrivalDate, setArrivalDate] = useState(initialData?.arrivalDate || initialData?.date || defaultDate || "");
   const [arrivalTime, setArrivalTime] = useState(initialData?.arrivalTime || "");
-  
+  const [error, setError] = useState("");
   const [price, setPrice] = useState(initialData?.price || "");
   const [link, setLink] = useState(initialData?.link || "");
   const [details, setDetails] = useState(initialData?.details || "");
   const [status, setStatus] = useState<"potential" | "confirmed">(initialData?.status || "potential");
 
   const handleSave = () => {
+    setError(""); // Clear previous errors
+    
     if (!type || !departure || !arrival || !date || !time || !arrivalTime) {
-      alert("Please fill in the transport type, route, and both departure/arrival times.");
+      // 👇 SWAP ALERT FOR SETERROR
+      setError("Please fill in the transport type, route, and both departure/arrival times.");
       return;
     }
 
@@ -97,7 +100,11 @@ export default function TransportDialog({
           <input type="number" placeholder="Price" value={price} onChange={e => setPrice(e.target.value)} className="w-full border-2 rounded-xl px-4 py-2.5" />
           <textarea placeholder="Details / notes" value={details} onChange={e => setDetails(e.target.value)} className="w-full border-2 rounded-xl px-4 py-2.5 h-24" />
         </div>
-
+        {error && (
+          <div className="text-rose-600 text-sm font-medium bg-rose-50 p-3 rounded-lg border border-rose-100 animate-in fade-in slide-in-from-bottom-2">
+            {error}
+          </div>
+        )}
         <div className="flex justify-end gap-3 pt-2">
           <button onClick={onClose} className="px-6 py-2.5 font-bold text-stone-500 hover:text-stone-900 transition-colors">Cancel</button>
           <button onClick={handleSave} className="px-8 py-2.5 bg-stone-900 text-white font-bold rounded-full shadow-lg hover:shadow-xl transition-all">Save Transport</button>

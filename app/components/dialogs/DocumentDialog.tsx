@@ -93,7 +93,11 @@ export default function DocumentDialog({ onClose, onAdd }: DocumentDialogProps) 
                   )}
               </div>
             </div>
-            {error && <p className="text-rose-500 text-xs mt-2 font-medium">{error}</p>}
+            {error && (
+              <div className="text-rose-600 text-sm font-medium bg-rose-50 p-3 rounded-lg border border-rose-100 animate-in fade-in slide-in-from-bottom-2 mt-2">
+                {error}
+              </div>
+            )}
           </div>
 
           <div className="flex gap-3 pt-4">

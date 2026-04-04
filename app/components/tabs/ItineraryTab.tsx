@@ -11,7 +11,7 @@ import { TripAuthorInfo } from "../../helpers";
 import {ActivityDialog, LocationManagerDialog} from "../dialogs";
 import DayMinimap from "../shared/DayMinimap";
 import TransitMinimap from "../shared/TransitMinimap";
-
+import ProTipWidget from "../shared/AITips";
 export default function ItineraryTab({ trip }: { trip: TripData }) {
   // ... existing state ...
   const [days, setDays] = useState<ItineraryDay[]>([]);
@@ -191,7 +191,7 @@ export default function ItineraryTab({ trip }: { trip: TripData }) {
     await storage.set(key, { ...dayData, items: newItemList });
     setEditingActivity(null);
   };
-
+  
   const currentDayData = days[currentDayIndex] || { day: 1, date: "", items: [] };
   const handlePinClick = (itemId: number) => {
     // 1. Scroll nicely to the item
@@ -470,7 +470,7 @@ export default function ItineraryTab({ trip }: { trip: TripData }) {
               )}
             </div>
 
-            {/* RIGHT COLUMN: Sticky Minimap */}
+           {/* RIGHT COLUMN: Sticky Minimap */}
             <div className="hidden lg:block sticky top-32 space-y-6"> {/* Added space-y-6 for stacking */}
     
               {/* Primary Day Map */}
@@ -483,9 +483,17 @@ export default function ItineraryTab({ trip }: { trip: TripData }) {
                 />
               </div>
 
-              {/* ⭐ NEW: Transit Map Stack */}
+              {/* ⭐ NEW: AI Pro Tip Widget */}
+              <ProTipWidget 
+                dayLocations={currentDayData.items.map(i => i.location).filter(Boolean)}
+                city={currentLocations.length > 0 ? currentLocations[0].location : trip.destination}
+                tripId={trip.id}
+                dayDate={currentDayData.date}
+              />
+
+              {/* Transit Map Stack (If you add it later) */}
               
-          </div>
+            </div>
             
           </div>
         </div>

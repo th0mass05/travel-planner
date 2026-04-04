@@ -12,7 +12,18 @@ export default function HotelDialog({ onClose, onAdd, initialData, defaultDate }
       price: "", details: "", createdAt: new Date().toISOString(),
     }
   );
+  const [error, setError] = useState("");
 
+  // 👇 ADD THIS VALIDATION FUNCTION
+  const handleSave = () => {
+    setError("");
+    if (!formData.name || !formData.address || !formData.checkIn || !formData.checkOut) {
+      setError("Please provide a hotel name, address, and check-in/check-out dates.");
+      return;
+    }
+    
+    onAdd({ ...formData, checkOut: formData.checkOut || formData.checkIn });
+  };
   return (
     <div className="fixed inset-0 bg-stone-900/40 backdrop-blur-sm flex items-center justify-center p-4 z-50">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg p-8 animate-in zoom-in-95 duration-200 max-h-[90vh] overflow-y-auto">
@@ -143,10 +154,14 @@ export default function HotelDialog({ onClose, onAdd, initialData, defaultDate }
               <option value="confirmed">Confirmed</option>
             </select>
           </div>
-
+          {error && (
+            <div className="text-rose-600 text-sm font-medium bg-rose-50 p-3 rounded-lg border border-rose-100 animate-in fade-in slide-in-from-bottom-2">
+              {error}
+            </div>
+          )}      
           <div className="flex gap-3 pt-4">
             <button
-              onClick={() => onAdd({ ...formData, checkOut: formData.checkOut || formData.checkIn })}
+              onClick={handleSave}
               className="flex-1 px-6 py-3 bg-stone-900 text-white font-bold rounded-lg hover:bg-stone-800 transition-colors shadow-lg"
             >
               {initialData ? "Save Changes" : "Add Hotel"}

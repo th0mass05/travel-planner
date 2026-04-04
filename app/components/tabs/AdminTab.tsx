@@ -65,7 +65,8 @@ export default function AdminTab({ tripId }: { tripId: number }) {
   const [editingTransport, setEditingTransport] = useState<StoredTransport | null>(null);
   const [editingFlight, setEditingFlight] = useState<StoredFlight | null>(null);
   const [editingHotel, setEditingHotel] = useState<StoredHotel | null>(null);
-
+// --- CUSTOM CONFIRM DIALOG STATE ---
+  const [confirmAction, setConfirmAction] = useState<{ title: string, message: string, action: () => Promise<void> } | null>(null);
   const [inviteEmail, setInviteEmail] = useState("");
   const [packingMode, setPackingMode] = useState<"shared" | "personal">("shared");
   // --- TEMPLATE STATE ---
@@ -301,7 +302,7 @@ export default function AdminTab({ tripId }: { tripId: number }) {
       showToast("Friend request sent!");
     } catch (e) {
       console.error(e);
-      alert("Failed to send request.");
+      showToast("Failed to send request.");
     }
   };
   const loadMembers = async () => {
@@ -438,8 +439,12 @@ export default function AdminTab({ tripId }: { tripId: number }) {
     setEditingFlight(null);
   };
 
-  const deleteFlight = async (id: number) => {
-    if (confirm("Delete this flight?")) await deleteKey(`flight:${tripId}:${id}`);
+  const deleteFlight = (id: number) => {
+    setConfirmAction({
+      title: "Delete Flight",
+      message: "Are you sure you want to delete this flight? This cannot be undone.",
+      action: async () => await deleteKey(`flight:${tripId}:${id}`)
+    });
   };
 
   // HOTELS
@@ -465,8 +470,12 @@ export default function AdminTab({ tripId }: { tripId: number }) {
     setEditingHotel(null);
   };
 
-  const deleteHotel = async (id: number) => {
-    if (confirm("Delete this hotel?")) await deleteKey(`hotel:${tripId}:${id}`);
+  const deleteHotel = (id: number) => {
+    setConfirmAction({
+      title: "Delete Accommodation",
+      message: "Are you sure you want to delete this accommodation?",
+      action: async () => await deleteKey(`hotel:${tripId}:${id}`)
+    });
   };
 
   // TRANSPORT
@@ -492,8 +501,12 @@ export default function AdminTab({ tripId }: { tripId: number }) {
     setEditingTransport(null);
   };
 
-  const deleteTransport = async (id: number) => {
-    if (confirm("Delete this transport?")) await deleteKey(`transport:${tripId}:${id}`);
+  const deleteTransport = (id: number) => {
+    setConfirmAction({
+      title: "Delete Transport",
+      message: "Are you sure you want to delete this transport?",
+      action: async () => await deleteKey(`transport:${tripId}:${id}`)
+    });
   };
 
   // PACKING & DOCUMENTS (Same as before)
@@ -534,8 +547,12 @@ export default function AdminTab({ tripId }: { tripId: number }) {
     await storage.set(`document:${tripId}:${newDoc.id}`, newDoc);
   };
 
-  const deleteDocument = async (id: number) => {
-    if (confirm("Delete document?")) await deleteKey(`document:${tripId}:${id}`);
+  const deleteDocument = (id: number) => {
+    setConfirmAction({
+      title: "Delete Document",
+      message: "Are you sure you want to delete this document?",
+      action: async () => await deleteKey(`document:${tripId}:${id}`)
+    });
   };
   
   const downloadDocument = (doc: DocumentData) => {
@@ -1420,6 +1437,33 @@ export default function AdminTab({ tripId }: { tripId: number }) {
             setCostDialogTransport(null);
           }}
         />
+      )}
+      {/* === CUSTOM CONFIRMATION MODAL === */}
+      {confirmAction && (
+        <div className="fixed inset-0 bg-stone-900/40 backdrop-blur-sm flex items-center justify-center p-4 z-[200]">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6 animate-in zoom-in-95 duration-200">
+            <h3 className="text-xl font-serif text-stone-900 mb-2">{confirmAction.title}</h3>
+            <p className="text-stone-500 text-sm mb-6">{confirmAction.message}</p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setConfirmAction(null)}
+                className="flex-1 px-4 py-2 border border-stone-200 text-stone-600 font-bold rounded-lg hover:bg-stone-50 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={async () => {
+                  await confirmAction.action();
+                  setConfirmAction(null); // Close modal after action
+                  showToast("Deleted successfully"); // Optional: Give feedback
+                }}
+                className="flex-1 px-4 py-2 bg-rose-600 text-white font-bold rounded-lg hover:bg-rose-700 transition-colors shadow-sm"
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
       )}
       {/* === TOAST NOTIFICATION === */}
       {toastMsg && (

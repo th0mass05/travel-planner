@@ -46,7 +46,10 @@ export default function CostDialog({
 
   const save = async () => {
     setError(""); // 👈 Clear any previous errors first
-    if(!noCost && !cost) return;
+    if (!noCost && !cost) {
+      setError("Please enter a total cost or check 'No cost'.");
+      return;
+    }
 
     const numericCost = noCost ? 0 : Number(cost || 0);
 
