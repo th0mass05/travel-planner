@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Sparkles, RefreshCw } from "lucide-react"; // ⭐ Add RefreshCw import
+import { Sparkles, RefreshCw } from "lucide-react";
 import { doc, setDoc, collection, query, where, getDocs, onSnapshot } from "firebase/firestore";import { db } from "../../../firebase"; 
 
 export default function ProTipWidget({ dayLocations, city, tripId, dayDate }: any) {
@@ -8,26 +8,26 @@ export default function ProTipWidget({ dayLocations, city, tripId, dayDate }: an
 
   const locationsString = dayLocations.join(",");
 
-  // ⭐ 1. EXTRACTED GENERATION LOGIC
+  //  1. EXTRACTED GENERATION LOGIC
   // This lets us call it on first load AND when the refresh button is clicked
   const fetchNewTipFromAI = async () => {
     setLoading(true);
     try {
-      // ⭐ 1. Grab all previously generated tips for THIS trip from Firestore
+      //Grab all previously generated tips for THIS trip from Firestore
       const tipsQuery = query(collection(db, "ai_tips"), where("tripId", "==", tripId));
       const querySnapshot = await getDocs(tipsQuery);
       
       // Map them into an array of strings
       const previousTips = querySnapshot.docs.map(doc => doc.data().tip);
 
-      // ⭐ 2. Send the previousTips array to our backend
+      //  2. Send the previousTips array to our backend
       const res = await fetch("/api/generate-tip", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ 
           locations: dayLocations, 
           city, 
-          previousTips // 👈 NEW: Pass the history to Gemini
+          previousTips
         }),
       });
       if (!res.ok) throw new Error("Backend API failed");
@@ -64,16 +64,15 @@ export default function ProTipWidget({ dayLocations, city, tripId, dayDate }: an
     const tipDocId = `${tripId}_${dayDate}`;
     const tipRef = doc(db, "ai_tips", tipDocId); 
 
-    // ⭐ SWAPPED getDoc FOR onSnapshot
     // This creates a live connection to this specific day's tip in the database
     const unsubscribe = onSnapshot(tipRef, (docSnap) => {
       if (docSnap.exists() && docSnap.data().tip) {
-        // If the document exists, update the screen instantly!
+        // If the document exists, update the screen instantly
         setTip(docSnap.data().tip);
         setLoading(false);
       } else {
         // If the document doesn't exist at all (first time loading the day)
-        // Call our generation function!
+        // Call generation function
         fetchNewTipFromAI();
       }
     });
@@ -99,7 +98,7 @@ export default function ProTipWidget({ dayLocations, city, tripId, dayDate }: an
             <Sparkles size={14} /> Daily Insight
           </h4>
           
-          {/* ⭐ 3. REFRESH BUTTON */}
+          {/*  3. REFRESH BUTTON */}
           <button 
             onClick={fetchNewTipFromAI}
             disabled={loading}

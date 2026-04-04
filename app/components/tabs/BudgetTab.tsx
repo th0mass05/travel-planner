@@ -1,19 +1,19 @@
-import { auth } from "../../../firebase";   // adjust path if needed
+import { auth } from "../../../firebase"; 
 import React, { useState, useEffect, useCallback, useRef} from "react";
 import {
   ExpenseDialog
-} from "../../components/dialogs" ; // Adjust this path if your dialogs are in a different folder
+} from "../../components/dialogs" ; 
 import { 
   StoredTransport,
   StoredFlight, StoredHotel, StoredPlace 
-} from "../../types"; // <-- Adjust this path if your types folder is somewhere else!
+} from "../../types"; 
 import { 
   deleteKey,
-} from "../../helpers/helpers"; // Adjust this path to match your folder structure
- // Adjust this path to match your folder structure
+} from "../../helpers/helpers";
+ 
 import {
   Plus,
-  Trash2,   // Add this (optional, for cleaner delete icons)
+  Trash2,   
 } from "lucide-react";
 import { storage } from "../../../firebaseStore";
 export default function BudgetTab({ tripId }: { tripId: number }) {

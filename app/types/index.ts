@@ -9,8 +9,8 @@ export type TransportData = {
   link?: string;
   details?: string;
   status?: "potential" | "confirmed";
-  arrivalDate?: string; // ⭐ NEW
-  arrivalTime?: string; // ⭐ NEW
+  arrivalDate?: string;
+  arrivalTime?: string;
 
 };
 
@@ -46,18 +46,18 @@ export type PlaceType =
   | "nightlife";
 
 export type PlaceData = {
-  id: number;              // REQUIRED for storage, delete, confirm, sorting
+  id: number;              
   name: string;
   description: string;
   address: string;
 
-  rating?: string;         // optional
-  imageUrl?: string;       // optional
-  link?: string;           // optional
+  rating?: string;        
+  imageUrl?: string;       
+  link?: string;         
 
   visited: boolean;
   confirmed?: boolean;
-  createdAt?: string;        // ISO date string
+  createdAt?: string;  
   createdByUid?: string | null;
   googleMapsUrl?: string;
   locationPath?: string[];
@@ -67,9 +67,9 @@ export type PlaceData = {
 
 
 export type PhotoData = {
-  url: string;         // base64 or URL
+  url: string;         
   caption: string;
-  date: string;        // yyyy-mm-dd
+  date: string;        
   location: string;
   createdByUid?: string | null;
 };
@@ -83,7 +83,6 @@ export type FlightData = {
   date: string;
   time: string;
 
-  // ⭐ NEW FIELDS
   arrivalDate?: string;
   arrivalTime?: string;
   duration?: string;
@@ -170,9 +169,9 @@ export type TripFormData = {
 export type TripSegment = {
   id: string;
   location: string;
-  startDate: string; // "YYYY-MM-DD"
-  endDate: string;   // "YYYY-MM-DD"
-  color: string;     // e.g., "bg-blue-100"
+  startDate: string; 
+  endDate: string;   
+  color: string;     
 };
 
 // Update TripData
@@ -183,22 +182,22 @@ export type TripData = TripFormData & {
   members: string[];
   createdByUid?: string | null;
   segments?: TripSegment[];
-  invites?: string[]; // ⭐ NEW: Stores emails of invited people
-  isPendingInvite?: boolean; // ⭐ NEW: Local helper flag for UI
+  invites?: string[]; 
+  isPendingInvite?: boolean; 
 };
 
 export type StoredFlight = FlightData & { 
   id: number;
-  cost?: string | number;               // Add this
-  price?: string | number;              // Add this
-  paidBy?: { uid: string; amount: number }[]; // Add this
+  cost?: string | number;               
+  price?: string | number;              
+  paidBy?: { uid: string; amount: number }[]; 
 };
 
 export type StoredHotel = HotelData & { 
   id: number;
-  cost?: string | number;               // Add this
-  price?: string | number;              // Add this
-  paidBy?: { uid: string; amount: number }[]; // Add this
+  cost?: string | number;  
+  price?: string | number; 
+  paidBy?: { uid: string; amount: number }[]; 
 };
 export type StoredPacking = PackingData & { id: number; packed: boolean };
 
@@ -250,7 +249,7 @@ export type PlaceFormData = {
   visited: boolean;
   googleMapsUrl?: string;
   category: PlaceType;
-  locationPath?: string[]; // ⭐ NEW: Store the full location path for better filtering and display
+  locationPath?: string[]; 
   lat?: number;
   lng?: number;
 };
@@ -298,7 +297,7 @@ export type ShoppingDialogProps = {
 export type ActivityDialogProps = {
   onClose: () => void;
   onAdd: (data: ActivityData) => void;
-  initialData?: ActivityData; // ⭐ NEW PROP
+  initialData?: ActivityData; 
 };
 
 export type TripDialogProps = {
@@ -329,7 +328,7 @@ export type ItineraryItem = {
   iconType: IconType;
   createdByUid?: string | null;
   createdAt?: string;
-  sourceId?: string; // ⭐ NEW: Links to original Place ID (e.g., "place:123")
+  sourceId?: string; 
   googleMapsUrl?: string;
   transitStart?: string; 
   transitEnd?: string;
@@ -348,7 +347,7 @@ export type HomePageProps = {
   onCreateTrip: (trip: TripFormData) => Promise<TripData>;
   onUpdateTrip: (tripId: number, data: TripFormData) => Promise<void>;
   onDeleteTrip: (tripId: number) => void;
-  onRespondInvite: (trip: TripData, accept: boolean) => void; // ⭐ NEW PROP
+  onRespondInvite: (trip: TripData, accept: boolean) => void; 
   onOpenFriends: () => void;
 };
 
@@ -356,7 +355,7 @@ export type TripCardProps = {
   trip: TripData;
   onClick: () => void;
   onDelete: () => void;
-  onEdit: () => void; // ⭐ Add this
+  onEdit: () => void;
   isInvited: boolean;
   onAccept?: () => void;
   onDecline?: () => void;
@@ -380,5 +379,5 @@ export type TransportDialogProps = {
   initialData?: TransportData;
   onClose: () => void;
   onAdd: (data: TransportData) => void;
-  defaultDate?: string; // ⭐ Right here!
+  defaultDate?: string; 
 };

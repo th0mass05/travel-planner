@@ -26,7 +26,7 @@ export default function PlaceDialog({
     }
   );
 
-  // ⭐ NEW: Local state just to hold the text the user is currently typing before hitting Enter
+  // Local state just to hold the text the user is currently typing before hitting Enter
   const [locInput, setLocInput] = useState("");
 
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -73,7 +73,7 @@ export default function PlaceDialog({
             </select>
           </div>
 
-          {/* ⭐ UPDATED: Interactive Breadcrumb / Tag Input */}
+          {/* UPDATED: Interactive Breadcrumb / Tag Input */}
           <div>
             <label className="block text-sm font-medium mb-1">
               Location Path (Optional)
@@ -125,7 +125,7 @@ export default function PlaceDialog({
               />
             </div>
 
-            {/* ⭐ NEW UI: Clickable Suggestion Chips */}
+            {/* NEW UI: Clickable Suggestion Chips */}
             {suggestions.length > 0 && (
               <div className="flex flex-wrap items-center gap-2 mt-2">
                 <span className="text-xs font-bold text-stone-400 uppercase tracking-widest">

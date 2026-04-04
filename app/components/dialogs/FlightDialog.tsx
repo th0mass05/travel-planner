@@ -3,14 +3,14 @@ import { Plane } from "lucide-react";
 import {FlightData, FlightDialogProps } from "../../types"; 
 
 
-export default function FlightDialog({ onClose, onAdd, initialData, defaultDate }: FlightDialogProps) { // ⭐ Catch it
+export default function FlightDialog({ onClose, onAdd, initialData, defaultDate }: FlightDialogProps) { 
   const [formData, setFormData] = useState<FlightData>(
     initialData ?? {
       airline: "", flightNumber: "", 
       departure: "", arrival: "",
-      date: defaultDate || "", // ⭐ Inject here
+      date: defaultDate || "", 
       time: "",
-      arrivalDate: defaultDate || "", // ⭐ Inject here
+      arrivalDate: defaultDate || "", 
       arrivalTime: "", duration: "", 
       link: "", status: "potential", price: "", details: "",
       createdAt: new Date().toISOString(),
@@ -84,7 +84,7 @@ export default function FlightDialog({ onClose, onAdd, initialData, defaultDate 
                         setFormData({ 
                           ...formData, 
                           date: newDate,
-                          // 👇 Auto-fill arrival date in the state if it's empty
+                          //  Auto-fill arrival date in the state if it's empty
                           arrivalDate: formData.arrivalDate || newDate 
                         });
                       }}

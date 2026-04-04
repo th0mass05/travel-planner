@@ -17,7 +17,7 @@ export default function SimpleCostDialog({
     const val = parseFloat(cost);
     
     if (val < 0) {
-      setError("Cost cannot be negative."); // 👈 Inline error
+      setError("Cost cannot be negative."); 
       return;
     }
 

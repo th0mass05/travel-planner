@@ -160,7 +160,7 @@ export default function DayMinimap({
           const isHotel = p.type === 'hotel';
           const pinColor = isHotel ? "#1c1917" : CATEGORY_COLORS[p.type] || "#f43f5e";
           
-          // ⭐ THE FIX: Calculate the number only for itinerary items
+          
           // It counts how many itinerary items exist in the points array up to this index.
           const stopNumber = p.isItineraryItem 
             ? points.slice(0, index + 1).filter(item => item.isItineraryItem).length 

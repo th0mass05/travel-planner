@@ -5,7 +5,7 @@ import { ShoppingData, ShoppingDialogProps } from "../../types";
 export default function ShoppingDialog({ onClose, onAdd, shoppingPlaces, existingCategories }: ShoppingDialogProps) {
   const [formData, setFormData] = useState<ShoppingData>({
     item: "", category: "", link: "", notes: "", 
-    linkedPlaces: [], // ⭐ UPDATED INITIAL STATE
+    linkedPlaces: [], 
     createdAt: new Date().toISOString(),
   });
 
@@ -72,7 +72,7 @@ export default function ShoppingDialog({ onClose, onAdd, shoppingPlaces, existin
                placeholder="https://..."
              />
           </div>
-          {/* ⭐ SCALABLE MULTI-SELECT: Selected Chips + Add Dropdown */}
+          {/* SCALABLE MULTI-SELECT: Selected Chips + Add Dropdown */}
           {shoppingPlaces.length > 0 && (
             <div>
                <label className="block text-xs font-bold uppercase tracking-wider text-stone-500 mb-2">Link to Stores (Optional)</label>

@@ -6,7 +6,7 @@ export default function TransportDialog({
   initialData,
   onClose,
   onAdd,
-  defaultDate // ⭐ Catch it here
+  defaultDate 
 }: TransportDialogProps) {
   const [type, setType] = useState(initialData?.type || "");
   const [code, setCode] = useState(initialData?.code || "");
@@ -14,7 +14,7 @@ export default function TransportDialog({
   const [arrival, setArrival] = useState(initialData?.arrival || "");
   const [date, setDate] = useState(initialData?.date || defaultDate || "");
   const [time, setTime] = useState(initialData?.time || "");
-  // ⭐ NEW FIELDS
+ 
   const [arrivalDate, setArrivalDate] = useState(initialData?.arrivalDate || initialData?.date || defaultDate || "");
   const [arrivalTime, setArrivalTime] = useState(initialData?.arrivalTime || "");
   const [error, setError] = useState("");
@@ -24,10 +24,10 @@ export default function TransportDialog({
   const [status, setStatus] = useState<"potential" | "confirmed">(initialData?.status || "potential");
 
   const handleSave = () => {
-    setError(""); // Clear previous errors
+    setError(""); 
     
     if (!type || !departure || !arrival || !date || !time || !arrivalTime) {
-      // 👇 SWAP ALERT FOR SETERROR
+      
       setError("Please fill in the transport type, route, and both departure/arrival times.");
       return;
     }
@@ -39,8 +39,8 @@ export default function TransportDialog({
       arrival,
       date,
       time,
-      arrivalDate, // ⭐ Added
-      arrivalTime, // ⭐ Added
+      arrivalDate,
+      arrivalTime,
       price,
       link,
       details,

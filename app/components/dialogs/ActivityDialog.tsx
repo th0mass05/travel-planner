@@ -6,7 +6,7 @@ import Autocomplete from "react-google-autocomplete";
 
 export default function ActivityDialog({ onClose, onAdd, initialData }: ActivityDialogProps) {
   const [formData, setFormData] = useState<ActivityData>(
-    initialData || { // ⭐ Use initialData
+    initialData || { //  Use initialData
       time: "",
       activity: "",
       location: "",
@@ -47,7 +47,7 @@ export default function ActivityDialog({ onClose, onAdd, initialData }: Activity
             />
           </div>
           
-          {/* ⭐ UPDATED: Google Maps Autocomplete for Location */}
+          {/* UPDATED: Google Maps Autocomplete for Location */}
           <div>
             <label className="block text-sm font-medium mb-1">Location</label>
             <Autocomplete

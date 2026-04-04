@@ -2,19 +2,19 @@ import { useState } from "react";
 import { HotelData, HotelDialogProps } from "../../types"; 
 import Autocomplete from "react-google-autocomplete";
 
-export default function HotelDialog({ onClose, onAdd, initialData, defaultDate }: HotelDialogProps) { // ⭐ Catch it
+export default function HotelDialog({ onClose, onAdd, initialData, defaultDate }: HotelDialogProps) { 
   const [formData, setFormData] = useState<HotelData>(
     initialData || {
       name: "", address: "", 
-      checkIn: defaultDate || "", // ⭐ Inject here
-      checkOut: defaultDate || "", // ⭐ Inject here
+      checkIn: defaultDate || "", 
+      checkOut: defaultDate || "", 
       confirmationNumber: "", link: "", status: "potential",
       price: "", details: "", createdAt: new Date().toISOString(),
     }
   );
   const [error, setError] = useState("");
 
-  // 👇 ADD THIS VALIDATION FUNCTION
+  
   const handleSave = () => {
     setError("");
     if (!formData.name || !formData.address || !formData.checkIn || !formData.checkOut) {
@@ -60,10 +60,10 @@ export default function HotelDialog({ onClose, onAdd, initialData, defaultDate }
               }}
               className="w-full px-4 py-2.5 border border-stone-300 rounded-lg focus:border-stone-900 outline-none transition-all"
               placeholder="Start typing hotel address..."
-              // 👇 Add this block back!
+              
               options={{
                 types: [], 
-                // 👇 Tell Google exactly which pieces of data to return
+                // Tell Google exactly which pieces of data to return
                 fields: ["name", "formatted_address", "url", "geometry"] 
               }}
             />
@@ -80,7 +80,7 @@ export default function HotelDialog({ onClose, onAdd, initialData, defaultDate }
                   setFormData({ 
                     ...formData, 
                     checkIn: newDate,
-                    // 👇 Auto-fill check-out in the state if it's empty
+                    // Auto-fill check-out in the state if it's empty
                     checkOut: formData.checkOut || newDate 
                   });
                 }}

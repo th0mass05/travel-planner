@@ -1,31 +1,31 @@
 
-import { auth } from "../../../firebase";   // adjust path if needed
-import { db } from "../../../firebase";   // adjust path if needed
-import { doc, getDoc, setDoc, onSnapshot, collection, getDocs } from "firebase/firestore"; // ⭐ ADDED collection, getDocsimport CreatorBadge from "../../hooks/CreatorBadge";
+import { auth } from "../../../firebase";   
+import { db } from "../../../firebase";   
+import { doc, getDoc, setDoc, onSnapshot, collection, getDocs } from "firebase/firestore"; 
 import CreatorBadge from "@/app/hooks/CreatorBadge";
 import React, { useState, useEffect} from "react";
 import { FlightCard, HotelCard, TransportCard, PlaceCard, TripCard } from "../../components/cards";
 import {
   ActivityDialog, ConfirmToItineraryDialog, CostDialog, FlightDialog, HotelDialog, LocationManagerDialog, PackingDialog, PlaceDialog, PhotoDialog, ShoppingDialog, TransportDialog, TripDialog, ExpenseDialog, PlaceShoppingListDialog, SimpleCostDialog, DocumentDialog
-} from "../../components/dialogs" ; // Adjust this path if your dialogs are in a different folder
+} from "../../components/dialogs" ; 
 import { 
   TransportData, DocumentData, StoredTransport, FlightData, HotelData, PackingData,
   StoredFlight, StoredHotel, StoredPacking, ItineraryItem 
-} from "../../types"; // <-- Adjust this path if your types folder is somewhere else!
+} from "../../types"; 
 import { 
   deleteKey,
   removeFromItineraryBySource,
-} from "../../helpers/helpers"; // Adjust this path to match your folder structure
- // Adjust this path to match your folder structure
+} from "../../helpers/helpers"; 
+ 
 import {
   Plane,
   Hotel,
   PackageCheck,
   Plus,
   Train,
-  FileText, // Add this
-  Download, // Add this
-  Trash2,   // Add this (optional, for cleaner delete icons)
+  FileText, 
+  Download, 
+  Trash2,   
   Users,
   CheckCircle,
   XCircle,
@@ -75,7 +75,7 @@ export default function AdminTab({ tripId }: { tripId: number }) {
   const [showImportDialog, setShowImportDialog] = useState(false);
   const [tripStartDate, setTripStartDate] = useState<string>("");
 
-  // 2. Add this effect to fetch the date on load:
+  
   useEffect(() => {
     const fetchTripDate = async () => {
       const snap = await storage.get(`trip:${tripId}`);
@@ -93,7 +93,7 @@ export default function AdminTab({ tripId }: { tripId: number }) {
     const tempList = await storage.getAll(`user:${user.uid}:template:`);
     setProfileTemplates(tempList.sort((a: any, b: any) => b.id - a.id));
   };
-  // 2. Add State for Members Tab
+  // 2. State for Members Tab
   type MemberDisplay = {
     id: string; // uid or email
     name: string;
@@ -119,7 +119,7 @@ export default function AdminTab({ tripId }: { tripId: number }) {
         createdAt: new Date().toISOString()
       };
       await storage.set(`user:${user.uid}:template:${newTemplate.id}`, newTemplate);
-      showToast("Saved as new preset in your profile!"); // ⭐ NEW
+      showToast("Saved as new preset in your profile!");
     } else if (mode === "update" && templateId) {
       const existingSnap = await storage.get(`user:${user.uid}:template:${templateId}`);
       if (existingSnap?.value) {
@@ -139,7 +139,7 @@ export default function AdminTab({ tripId }: { tripId: number }) {
 
         existing.items = merged;
         await storage.set(`user:${user.uid}:template:${templateId}`, existing);
-        showToast("Preset updated successfully!"); // ⭐ NEW
+        showToast("Preset updated successfully!"); 
       }
     }
     setShowExportDialog(false);
@@ -235,11 +235,11 @@ export default function AdminTab({ tripId }: { tripId: number }) {
   const [inviteStatus, setInviteStatus] = useState<"idle" | "success" | "error">("idle");
   const [inviteMsg, setInviteMsg] = useState("");
 
-  // ⭐ NEW: Friends Network State
+  //  Friends Network State
   const [myFriends, setMyFriends] = useState<any[]>([]);
   const [sentRequests, setSentRequests] = useState<string[]>([]);
   // 3. Load Members Effect
- // ⭐ UPDATED: Real-time Friends Listener
+ //  Real-time Friends Listener
   useEffect(() => {
     if (activeSubTab !== "members") return;
 
@@ -262,7 +262,7 @@ export default function AdminTab({ tripId }: { tripId: number }) {
     return () => unsubFriends(); // Cleanup listener when tab changes
   }, [activeSubTab, tripId]);
 
-  // ⭐ NEW: Send Friend Request directly from the Member list
+  //  Send Friend Request directly from the Member list
   const handleSendFriendRequest = async (targetUid: string) => {
     const me = auth.currentUser;
     if (!me) return;
@@ -313,13 +313,13 @@ export default function AdminTab({ tripId }: { tripId: number }) {
       const currentUid = auth.currentUser?.uid;
 
       const list: MemberDisplay[] = [];
-      const seenIds = new Set<string>(); // ⭐ NEW: Track IDs to instantly catch duplicates
+      const seenIds = new Set<string>(); // Track IDs to instantly catch duplicates
 
       // A. Process Actual Members
       if (tripData.members) {
         for (const uid of tripData.members) {
           
-          // ⭐ NEW: If we've already added this person, skip them!
+          // If we've already added this person, skip them!
           if (seenIds.has(uid)) continue; 
           seenIds.add(uid);
           let photoUrl = "";
@@ -347,7 +347,7 @@ export default function AdminTab({ tripId }: { tripId: number }) {
       if (tripData.invites) {
         tripData.invites.forEach((email: string) => {
           
-          // ⭐ NEW: Skip duplicate invites
+          // Skip duplicate invites
           if (seenIds.has(email)) return;
           seenIds.add(email);
 
@@ -421,7 +421,7 @@ export default function AdminTab({ tripId }: { tripId: number }) {
     const user = auth.currentUser;
     const isEditing = !!editingFlight;
     const newFlight: StoredFlight = {
-      ...(editingFlight || {}), // 👈 ADD THIS: Preserves status, cost, paidBy, etc.
+      ...(editingFlight || {}), //  Preserves status, cost, paidBy, etc.
       ...data,
       id: editingFlight ? editingFlight.id : Date.now(),
       createdByUid: editingFlight?.createdByUid || user?.uid || null,
@@ -452,7 +452,7 @@ export default function AdminTab({ tripId }: { tripId: number }) {
     const user = auth.currentUser;
     const isEditing = !!editingHotel;
     const newHotel: StoredHotel = {
-      ...(editingHotel || {}), // 👈 ADD THIS
+      ...(editingHotel || {}), 
       ...data,
       id: editingHotel ? editingHotel.id : Date.now(),
       createdByUid: editingHotel?.createdByUid || user?.uid || null,
@@ -483,7 +483,7 @@ export default function AdminTab({ tripId }: { tripId: number }) {
     const user = auth.currentUser;
     const isEditing = !!editingTransport;
     const newTransport: StoredTransport = {
-      ...(editingTransport || {}), // 👈 ADD THIS
+      ...(editingTransport || {}), 
       ...data,
       id: editingTransport ? editingTransport.id : Date.now(),
       createdByUid: editingTransport?.createdByUid || user?.uid || null,
@@ -778,7 +778,7 @@ export default function AdminTab({ tripId }: { tripId: number }) {
                    try {
                      let targetEmail = inviteEmail.trim().toLowerCase();
                      
-                     // ⭐ If it doesn't look like an email, assume it's a username!
+                     
                      if (!targetEmail.includes("@")) {
                        // Strip the @ if they typed it
                        const cleanUsername = targetEmail.replace("@", "");
@@ -829,7 +829,7 @@ export default function AdminTab({ tripId }: { tripId: number }) {
               </button>
             </div>
 
-            {/* ⭐ NEW: Quick-select Friends */}
+            {/* Quick-select Friends */}
             {myFriends.filter(f => f.status === "accepted").length > 0 && (
               <div className="mt-6 pt-5 border-t border-stone-100">
                 <p className="text-xs font-bold uppercase tracking-wider text-stone-400 mb-3">Quick Invite Friends</p>
@@ -879,7 +879,7 @@ export default function AdminTab({ tripId }: { tripId: number }) {
                 return (
                   <div key={member.id} className="p-4 flex items-center justify-between hover:bg-stone-50 transition-colors">
                     <div className="flex items-center gap-4">
-                      {/* ⭐ UPDATED: Profile Picture Container */}
+                      {/* UPDATED: Profile Picture Container */}
                       <div className={`w-11 h-11 rounded-full overflow-hidden flex items-center justify-center font-bold text-lg shadow-sm shrink-0 border border-stone-200 ${
                         member.status === "Member" 
                           ? "bg-stone-100 text-stone-500" 
@@ -902,7 +902,7 @@ export default function AdminTab({ tripId }: { tripId: number }) {
                     </div>
                     
                     <div className="flex items-center gap-3">
-                      {/* ⭐ NEW: Add Friend Button */}
+                      {/* NEW: Add Friend Button */}
                       {!member.isMe && member.status === "Member" && (
                         isFriend ? (
                             <span className="text-[10px] uppercase tracking-widest font-bold text-emerald-500 bg-emerald-50 px-2 py-1 rounded">Friends</span>
@@ -1095,7 +1095,7 @@ export default function AdminTab({ tripId }: { tripId: number }) {
                 </button>
               </div>
               
-              {/* ⭐ NEW BUTTONS */}
+              {/* NEW BUTTONS */}
               <button
                 onClick={() => { loadProfileTemplates(); setShowImportDialog(true); }}
                 className="px-4 py-2 border border-stone-200 text-stone-600 rounded-full hover:bg-stone-50 text-sm font-bold transition-all flex items-center gap-2"
@@ -1202,7 +1202,7 @@ export default function AdminTab({ tripId }: { tripId: number }) {
       )}
       {/* === EXPORT TEMPLATE DIALOG === */}
       {showExportDialog && (() => {
-        // ⭐ Filter templates to only show ones matching the current tab
+        // Filter templates to only show ones matching the current tab
         const compatibleTemplates = profileTemplates.filter(t => (t.type || "personal") === packingMode);
 
         return (
@@ -1280,7 +1280,7 @@ export default function AdminTab({ tripId }: { tripId: number }) {
 
       {/* === IMPORT TEMPLATE DIALOG === */}
       {showImportDialog && (() => {
-        // ⭐ Filter templates to only show ones matching the current tab
+        // Filter templates to only show ones matching the current tab
         const compatibleTemplates = profileTemplates.filter(t => (t.type || "personal") === packingMode);
 
         return (

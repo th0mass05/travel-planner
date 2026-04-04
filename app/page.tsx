@@ -1,11 +1,11 @@
 "use client";
 import { useRouter } from "next/navigation";
-import ProfileView from "./components/ProfileView"; // Adjust path if needed
+import ProfileView from "./components/ProfileView"; 
 import { onAuthStateChanged } from "firebase/auth";
-import { auth } from "../firebase";   // adjust path if needed
+import { auth } from "../firebase";   
 import { signOut } from "firebase/auth";
 import { collection, getDocs } from "firebase/firestore";
-import { db } from "../firebase";   // adjust path if needed
+import { db } from "../firebase";   
 import { doc, getDoc, setDoc, onSnapshot } from "firebase/firestore";
 import useUserName from "./hooks/useUserName";
 import CreatorBadge from "./hooks/CreatorBadge";
@@ -16,7 +16,7 @@ import Autocomplete from "react-google-autocomplete";
 import { GoogleMap, Marker, InfoWindow, useJsApiLoader } from '@react-google-maps/api';
 import TripAuthorInfo from "./helpers/TripAuthorInfo";
 import LinkedItemDetails from "./components/shared/LinkedItemDetails";
-import FriendsView from "./components/FriendsView"; // Adjust path as needed
+import FriendsView from "./components/FriendsView";
 import NotificationToggle from "./components/shared/NotificationToggle";
 import { FlightCard, HotelCard, TransportCard, PlaceCard, TripCard } from "./components/cards";
 import {AdminTab, ItineraryTab, PlacesTab, PhotosTab, ScrapbookTab, ShoppingTab, BudgetTab} from "./components/tabs";
@@ -34,7 +34,7 @@ import {
   ShoppingDialogProps, ActivityDialogProps, TripDialogProps, 
   ConfirmToItineraryDialogProps, IconType, ItineraryItem, ItineraryDay, 
   HomePageProps, TripCardProps, TripViewProps, TabId 
-} from "./types"; // <-- Adjust this path if your types folder is somewhere else!
+} from "./types"; 
 import { 
   createGoogleCalendarLink,
   deleteKey,
@@ -44,13 +44,13 @@ import {
   updateItineraryBySource,
   getAvailableLocations,
   mapLibraries
-} from "./helpers/helpers"; // Adjust this path to match your folder structure
+} from "./helpers/helpers";
 import {
   iconMap,
   categoryIcons,
   CATEGORY_COLORS,
   PLACE_CATEGORIES
-} from "./styling/styling"; // Adjust this path to match your folder structure
+} from "./styling/styling"; 
 import {
   Calendar,
   MapPin,
@@ -70,9 +70,9 @@ import {
   ShoppingBag,
   Wallet,
   Train,
-  FileText, // Add this
-  Download, // Add this
-  Trash2,   // Add this (optional, for cleaner delete icons)
+  FileText,
+  Download,
+  Trash2,
   Bell,
   BellOff,
   Users,
@@ -103,7 +103,7 @@ export default function TravelJournal() {
     await signOut(auth);
   };
 
-  // ⭐ SINGLE AUTH LISTENER (this handles redirect + loading trips)
+  // SINGLE AUTH LISTENER (this handles redirect + loading trips)
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, (user) => {
       if (!user) {
@@ -159,8 +159,8 @@ export default function TravelJournal() {
     const userEmail = auth.currentUser?.email;
 
     try {
-      // 🚀 OPTIMIZATION: Fetch ALL trips in 1 single request
-      // This uses the 'getAll' helper we added to firebaseStore.ts earlier
+      
+      
       const allTrips = await storage.getAll<TripData>("trip:");
       
       const loadedTrips: TripData[] = [];
@@ -413,7 +413,7 @@ function HomePage({
   const [editingTrip, setEditingTrip] = useState<TripData | null>(null);
   const handleSaveTrip = async (data: TripFormData) => {
     if (editingTrip) {
-      // ⭐ Use the prop from parent to update and reload
+      
       await onUpdateTrip(editingTrip.id, data);
     } else {
       // Create new trip
@@ -589,7 +589,7 @@ function TripView({ trip: initialTrip, onBack }: TripViewProps) {
   const tabsAnchorRef = useRef<HTMLDivElement>(null);
 
   // 2. SMARTER SCROLL EFFECT
-  // 2. SMARTER SCROLL EFFECT
+  
   useEffect(() => {
     // Add a tiny 50ms buffer to let the DOM settle and prevent the "jolt"
     const timer = setTimeout(() => {
@@ -610,7 +610,7 @@ function TripView({ trip: initialTrip, onBack }: TripViewProps) {
     // Cleanup the timer if the user clicks tabs really fast
     return () => clearTimeout(timer);
   }, [activeTab]);
-  // ... (Keep existing useEffect for Snapshot and Summary logic) ...
+  
   useEffect(() => {
     const unsub = onSnapshot(doc(db, "travelData", `trip:${initialTrip.id}`), (doc) => {
       if (doc.exists()) {
@@ -631,10 +631,9 @@ function TripView({ trip: initialTrip, onBack }: TripViewProps) {
     locations: 0
   });
 
-  // ... (Keep existing loadSummary logic) ...
-  // ... (Keep existing dayCount logic) ...
+  
   const loadSummary = async () => {
-    // ... paste your existing loadSummary logic here ...
+    
     // For brevity in this snippet, I am assuming you kept the logic from the previous file.
      const getAll = async (prefix: string) => {
       const res = await storage.list(prefix);
@@ -677,7 +676,7 @@ function TripView({ trip: initialTrip, onBack }: TripViewProps) {
 
   const tabs: { id: TabId; label: string; icon: any }[] = [
     { id: "itinerary", label: "Itinerary", icon: Calendar },
-    { id: "places", label: "Places", icon: MapPin }, // ⭐ NEW COMBINED TAB
+    { id: "places", label: "Places", icon: MapPin }, 
     { id: "shopping", label: "Wishlist", icon: ShoppingBag },
     { id: "photos", label: "Gallery", icon: Camera },
     { id: "scrapbook", label: "Journal", icon: Sparkles },

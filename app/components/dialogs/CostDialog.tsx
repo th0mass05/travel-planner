@@ -45,7 +45,7 @@ export default function CostDialog({
   };
 
   const save = async () => {
-    setError(""); // 👈 Clear any previous errors first
+    setError(""); //  Clear any previous errors first
     if (!noCost && !cost) {
       setError("Please enter a total cost or check 'No cost'.");
       return;
@@ -54,12 +54,12 @@ export default function CostDialog({
     const numericCost = noCost ? 0 : Number(cost || 0);
 
     if (numericCost < 0) {
-      setError("Cost cannot be negative."); // 👈 Nice inline error
+      setError("Cost cannot be negative."); //  Nice inline error
       return;
     }
 
     if (!noCost && selected.length === 0) {
-      setError("Please select at least one person who paid."); // 👈 Nice inline error
+      setError("Please select at least one person who paid."); //  Nice inline error
       return;
     }
 

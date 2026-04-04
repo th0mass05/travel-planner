@@ -22,7 +22,7 @@ export default function TripDialog({ initialData, onClose, onSubmit }: TripDialo
           country: "",
           startDate: "",
           endDate: "",
-          year: new Date().getFullYear(), // ⭐ FIX: Removed .toString()
+          year: new Date().getFullYear(), 
           tagline: "",
           imageUrl: "",
           bgGradient: "from-rose-100 to-teal-100",
@@ -45,10 +45,10 @@ export default function TripDialog({ initialData, onClose, onSubmit }: TripDialo
   };
 
   const handleSubmit = async () => {
-    setError(""); // 👈 Clear any previous errors
+    setError(""); 
 
     if (!formData.destination || !formData.startDate || !formData.endDate) {
-      setError("Please fill in the destination, start date, and end date."); // 👈 Nice inline error
+      setError("Please fill in the destination, start date, and end date."); 
       return;
     }
     
