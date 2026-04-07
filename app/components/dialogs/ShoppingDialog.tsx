@@ -1,14 +1,25 @@
 import { useState } from "react";
 import { MapPin } from "lucide-react";
 import { ShoppingData, ShoppingDialogProps } from "../../types";
-
+import { compressImage } from "@/app/helpers/helpers";
 export default function ShoppingDialog({ onClose, onAdd, shoppingPlaces, existingCategories }: ShoppingDialogProps) {
   const [formData, setFormData] = useState<ShoppingData>({
-    item: "", category: "", link: "", notes: "", 
+    item: "", category: "", link: "", notes: "", imageUrl: "", 
     linkedPlaces: [], 
     createdAt: new Date().toISOString(),
   });
-
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      try {
+        const compressedBase64 = await compressImage(file);
+        setFormData({ ...formData, imageUrl: compressedBase64 });
+      } catch (err) {
+        console.error("Image compression failed", err);
+        alert("Failed to load image. Please try another.");
+      }
+    }
+  };
   const handleSubmit = () => {
     if (!formData.item) return;
     onAdd({ ...formData, category: formData.category || "General" });
@@ -71,6 +82,24 @@ export default function ShoppingDialog({ onClose, onAdd, shoppingPlaces, existin
                className="w-full px-4 py-2.5 border border-stone-300 rounded-lg focus:border-stone-900 outline-none transition-all"
                placeholder="https://..."
              />
+          </div>
+          <div>
+            <label className="block text-xs font-bold uppercase tracking-wider text-stone-500 mb-1.5">Image (Optional)</label>
+            <input
+              type="file"
+              accept="image/*"
+              onChange={handleImageUpload}
+              className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:border-stone-900 outline-none file:mr-4 file:py-1.5 file:px-4 file:rounded-lg file:border-0 file:bg-stone-100 file:text-stone-700 hover:file:bg-stone-200 text-sm transition-all"
+            />
+            {formData.imageUrl && (
+              <div className="mt-3">
+                <img
+                  src={formData.imageUrl}
+                  alt="Preview"
+                  className="w-24 h-24 object-cover rounded-lg border border-stone-200 shadow-sm"
+                />
+              </div>
+            )}
           </div>
           {/* SCALABLE MULTI-SELECT: Selected Chips + Add Dropdown */}
           {shoppingPlaces.length > 0 && (

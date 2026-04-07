@@ -24,9 +24,15 @@ export default function TransportCard({
           </div>
           <div>
             <h4 className="text-lg font-serif font-bold text-stone-900">{transport.type}</h4>
-            {transport.code && <p className="text-stone-400 text-xs font-bold uppercase tracking-wider">{transport.code}</p>}
+            {transport.code && (
+              <p className="text-stone-400 text-xs font-bold uppercase tracking-wider">
+                {transport.code}
+              </p>
+            )}
           </div>
         </div>
+
+        {/* Toggle confirm state based on current transport status */}
         {transport.status !== "confirmed" ? (
           <button
             onClick={(e) => { e.stopPropagation(); onConfirm(); }}
@@ -36,42 +42,64 @@ export default function TransportCard({
           </button>
         ) : (
           <span className="bg-emerald-100 text-emerald-800 text-xs font-bold px-3 py-1 rounded-full flex items-center gap-1">
-             <Check size={12} strokeWidth={3} /> Confirmed
+            <Check size={12} strokeWidth={3} /> Confirmed
           </span>
         )}
       </div>
 
       <div className="flex-1 space-y-3 mb-4">
+        {/* Display the transport route */}
         <div className="flex items-center gap-2 text-stone-800 font-medium bg-stone-50 p-3 rounded-lg">
-           <span>{transport.departure}</span>
-           <span className="text-stone-300">➝</span>
-           <span>{transport.arrival}</span>
+          <span>{transport.departure}</span>
+          <span className="text-stone-300">➝</span>
+          <span>{transport.arrival}</span>
         </div>
-        
-        <p className="text-stone-500 text-sm pl-1">{transport.date} {transport.time && `@ ${transport.time}`}</p>
-        
+
+        {/* Show date and optional time */}
+        <p className="text-stone-500 text-sm pl-1">
+          {transport.date} {transport.time && `@ ${transport.time}`}
+        </p>
+
+        {/* Render optional price and additional notes if present */}
         {(transport.price || transport.details) && (
           <div className="text-xs text-stone-500 space-y-1 pt-1 pl-1">
-            {transport.price && <p>Cost: <span className="font-medium text-stone-900">{transport.price}</span></p>}
+            {transport.price && (
+              <p>
+                Cost: <span className="font-medium text-stone-900">{transport.price}</span>
+              </p>
+            )}
             {transport.details && <p className="italic">"{transport.details}"</p>}
           </div>
         )}
+
+        {/* Show creator and creation timestamp metadata */}
         <div className="pt-2 border-t border-stone-100">
-           <TripAuthorInfo uid={transport.createdByUid} createdAt={transport.createdAt} />
+          <TripAuthorInfo uid={transport.createdByUid} createdAt={transport.createdAt} />
         </div>
       </div>
 
+      {/* Footer actions for managing transport entry */}
       <div className="flex justify-end gap-3 text-xs font-bold uppercase tracking-wide border-t border-stone-100 pt-4 mt-auto">
         {transport.status === "confirmed" && (
-           <button 
-             onClick={(e) => { e.stopPropagation(); onUnconfirm(); }} 
-             className="text-amber-500 hover:text-amber-700 transition-colors"
-           >
-             Unconfirm
-           </button>
+          <button
+            onClick={(e) => { e.stopPropagation(); onUnconfirm(); }}
+            className="text-amber-500 hover:text-amber-700 transition-colors"
+          >
+            Unconfirm
+          </button>
         )}
-        <button onClick={(e) => { e.stopPropagation(); onEdit(); }} className="text-stone-400 hover:text-stone-900">Edit</button>
-        <button onClick={(e) => { e.stopPropagation(); onDelete(); }} className="text-red-300 hover:text-red-600">Delete</button>
+        <button
+          onClick={(e) => { e.stopPropagation(); onEdit(); }}
+          className="text-stone-400 hover:text-stone-900"
+        >
+          Edit
+        </button>
+        <button
+          onClick={(e) => { e.stopPropagation(); onDelete(); }}
+          className="text-red-300 hover:text-red-600"
+        >
+          Delete
+        </button>
       </div>
     </div>
   );

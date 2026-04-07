@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import { ShoppingData, StoredPlace } from "../../types";
 import { auth } from "../../../firebase";   // adjust path if needed
 import { ShoppingDialog, SimpleCostDialog } from "../../components/dialogs" ;
-import { ExternalLink, Plus, Trash2, ShoppingBag, MapPin } from "lucide-react";
+import { ExternalLink, Plus, Trash2, ShoppingBag, MapPin, Image as ImageIcon, X } from "lucide-react";
 import { deleteKey } from "../../helpers/helpers"; // Adjust this path to match your folder structure
 import { storage } from "../../../firebaseStore";
 
@@ -20,6 +20,7 @@ export default function ShoppingTab({ tripId }: { tripId: number }) {
   const [shoppingPlaces, setShoppingPlaces] = useState<StoredPlace[]>([]);
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [buyingItem, setBuyingItem] = useState<ShoppingItem | null>(null);
+  const [viewingImage, setViewingImage] = useState<string | null>(null);
 
   useEffect(() => {
     const user = auth.currentUser;
@@ -180,6 +181,15 @@ export default function ShoppingTab({ tripId }: { tripId: number }) {
                             {item.cost === 0 ? "Free" : `£${item.cost}`}
                         </span>
                     )}
+                    {item.imageUrl && (
+                      <button 
+                        onClick={() => setViewingImage(item.imageUrl!)} 
+                        className="text-stone-300 hover:text-stone-900 transition-colors"
+                        title="View attached picture"
+                      >
+                        <ImageIcon size={14} />
+                      </button>
+                    )}
                     {item.link && (
                       <a href={item.link} target="_blank" rel="noopener noreferrer" className="text-stone-300 hover:text-stone-900 transition-colors">
                         <ExternalLink size={14} />
@@ -286,6 +296,29 @@ export default function ShoppingTab({ tripId }: { tripId: number }) {
           onClose={() => setBuyingItem(null)}
           onSave={saveCost}
         />
+      )}
+      {viewingImage && (
+        <div 
+          className="fixed inset-0 bg-stone-900/80 backdrop-blur-sm flex items-center justify-center p-4 z-[60] animate-in fade-in duration-200"
+          onClick={() => setViewingImage(null)}
+        >
+          <div 
+            className="relative bg-transparent max-w-4xl max-h-[90vh] w-full flex justify-center items-center animate-in zoom-in-95 duration-200"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button 
+              onClick={() => setViewingImage(null)}
+              className="absolute -top-10 right-0 md:-right-10 text-white hover:text-stone-300 transition-colors"
+            >
+              <X size={32} />
+            </button>
+            <img 
+              src={viewingImage} 
+              alt="Wishlist Item Attachment" 
+              className="max-w-full max-h-[85vh] object-contain rounded-xl shadow-2xl bg-stone-900/50" 
+            />
+          </div>
+        </div>
       )}
     </div>
   );

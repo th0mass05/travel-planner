@@ -45,6 +45,7 @@ export type PlaceType =
   | "nature" 
   | "nightlife";
 
+
 export type PlaceData = {
   id: number;              
   name: string;
@@ -137,6 +138,7 @@ export type ShoppingData = {
   linkedPlaces?: { id: number; name: string }[];
   createdByUid?: string | null;
   createdAt?: string;
+  imageUrl?: string;
 };
 
 
