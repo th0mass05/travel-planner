@@ -7,15 +7,29 @@ export default function PhotoDialog({ onClose, onAdd }: PhotoDialogProps) {
   const [formData, setFormData] = useState<PhotoData>({
     url: "", caption: "", date: "", location: "",
   });
-
-  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    /* ... keep existing compression logic ... */
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    
+    // Store the raw file to upload later
+    setSelectedFile(file);
+    
+    // Instant UI preview (no compression wait time)
+    setFormData(prev => ({ ...prev, url: URL.createObjectURL(file) }));
+  };
+
+  const handleSave = async () => {
+    if (!selectedFile) return;
+    setIsUploading(true);
     try {
-      const compressedBase64 = await compressImage(file);
-      setFormData(prev => ({ ...prev, url: compressedBase64 }));
-    } catch (err) { console.error(err); }
+      await onAdd(formData, selectedFile);
+    } catch (error) {
+      console.error("Upload failed", error);
+    } finally {
+      setIsUploading(false);
+    }
   };
 
   return (
@@ -84,13 +98,15 @@ export default function PhotoDialog({ onClose, onAdd }: PhotoDialogProps) {
 
           <div className="flex gap-3 pt-4 mt-2">
             <button
-              onClick={() => onAdd(formData)}
-              className="flex-1 px-6 py-3 bg-stone-900 text-white font-bold rounded-lg hover:bg-stone-800 transition-colors shadow-lg"
+              onClick={handleSave}
+              disabled={isUploading || !selectedFile}
+              className="flex-1 px-6 py-3 bg-stone-900 text-white font-bold rounded-lg hover:bg-stone-800 transition-colors shadow-lg disabled:opacity-50"
             >
-              Save Memory
+              {isUploading ? "Uploading..." : "Save Memory"}
             </button>
             <button
               onClick={onClose}
+              disabled={isUploading}
               className="px-6 py-3 border border-stone-200 text-stone-600 font-bold rounded-lg hover:bg-stone-50 transition-colors"
             >
               Cancel

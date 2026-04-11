@@ -267,7 +267,7 @@ export type PlaceDialogProps = {
 
 export type PhotoDialogProps = {
   onClose: () => void;
-  onAdd: (data: PhotoData) => void;
+  onAdd: (data: PhotoData, file: File) => void;
 };
 
 export type FlightDialogProps = {

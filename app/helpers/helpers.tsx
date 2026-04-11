@@ -16,6 +16,7 @@ import { ShoppingBag, Check, MapPin } from "lucide-react";
 import { auth, db } from "../../firebase"; 
 import { storage } from "../../firebaseStore";
 import { doc, getDoc } from "firebase/firestore";
+import { getStorage, ref, uploadBytes, uploadString, getDownloadURL } from "firebase/storage";
 // Helper to generate a "Add to Google Calendar" URL
 export const createGoogleCalendarLink = (
   activity: string,
@@ -116,6 +117,26 @@ export const compressImage = (file: File): Promise<string> => {
     };
     reader.onerror = (error) => reject(error);
   });
+};
+
+// helper for the Dual-Image Strategy
+export const uploadDualImages = async (file: File, tripId: string) => {
+  const storage = getStorage();
+  const uniqueId = Date.now().toString();
+
+  // 1. Upload the massive original file
+  const originalRef = ref(storage, `trips/${tripId}/originals/${uniqueId}_${file.name}`);
+  await uploadBytes(originalRef, file);
+  const originalUrl = await getDownloadURL(originalRef);
+
+  // 2. Generate and upload the compressed thumbnail
+  const base64Thumbnail = await compressImage(file);
+  const thumbnailRef = ref(storage, `trips/${tripId}/thumbnails/${uniqueId}_thumb.jpg`);
+  // Upload the base64 string as a data_url
+  await uploadString(thumbnailRef, base64Thumbnail, "data_url");
+  const thumbnailUrl = await getDownloadURL(thumbnailRef);
+
+  return { thumbnailUrl, originalUrl };
 };
 
 
