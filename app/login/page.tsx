@@ -88,7 +88,37 @@ export default function Login() {
       router.push("/");
 
     } catch (e: any) {
-      setError(e.message);
+      // Map Firebase error codes to user-friendly messages
+      switch (e.code) {
+        // Modern Firebase uses 'invalid-credential' for both wrong email and password to protect user privacy
+        case "auth/invalid-credential":
+        case "auth/user-not-found":
+        case "auth/wrong-password":
+          setError("Incorrect email or password. Please try again.");
+          break;
+        case "auth/email-already-in-use":
+          setError("An account with this email already exists. Try logging in instead!");
+          break;
+        case "auth/weak-password":
+          setError("Your password is a bit too weak. Please use at least 6 characters.");
+          break;
+        case "auth/invalid-email":
+          setError("Please enter a valid email address.");
+          break;
+        case "auth/too-many-requests":
+          setError("Too many failed attempts. Please try again later or reset your password.");
+          break;
+        case "auth/network-request-failed":
+          setError("Network error. Please check your internet connection and try again.");
+          break;
+        default:
+          // Fallback for custom errors (like your username validation) or unknown Firebase errors
+          setError(
+            e.message 
+              ? e.message.replace("Firebase: ", "").replace(/\(auth\/.*\)\./, "") 
+              : "An unexpected error occurred. Please try again."
+          );
+      }
     }
   };
 
