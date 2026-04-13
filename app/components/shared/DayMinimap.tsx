@@ -30,6 +30,41 @@ export default function DayMinimap({
   const mapRef = useRef<MapRef>(null);
   const [points, setPoints] = useState<MapPoint[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [animatedCoords, setAnimatedCoords] = useState<number[][]>([]);
+  const animationRef = useRef<number>(0);
+  useEffect(() => {
+    if (points.length < 2) {
+      setAnimatedCoords([]);
+      return;
+    }
+
+    const fullCoords = points.map(p => [p.lng, p.lat]);
+    let currentStep = 0;
+    const totalSteps = 100; // Adjust for speed (higher = slower)
+    
+    // To make it smooth, we interpolate between stop A and stop B
+    // However, for a simple start, let's just draw stop-by-stop:
+    setAnimatedCoords([fullCoords[0]]); // Start at first point
+
+    const animate = () => {
+      if (currentStep <= fullCoords.length) {
+        setAnimatedCoords(fullCoords.slice(0, currentStep));
+        currentStep++;
+        animationRef.current = requestAnimationFrame(animate);
+      }
+    };
+
+    // Optional: Add a small delay before animation starts
+    const timeout = setTimeout(() => {
+      animate();
+    }, 500);
+
+    return () => {
+      cancelAnimationFrame(animationRef.current);
+      clearTimeout(timeout);
+    };
+  }, [points]); // Re-runs whenever the day's points change
+    // animated routes
 
   useEffect(() => {
     if (!isLoaded || !dayData) return;
@@ -113,13 +148,16 @@ export default function DayMinimap({
     }
   }, [points]);
 
-  const lineFeatures = useMemo(() => {
-    if (points.length < 2) return null;
-    return {
-      type: 'Feature',
-      geometry: { type: 'LineString', coordinates: points.map(p => [p.lng, p.lat]) }
-    };
-  }, [points]);
+  const animatedLineFeature = useMemo(() => {
+  if (animatedCoords.length < 2) return null;
+  return {
+    type: 'Feature',
+    geometry: { 
+      type: 'LineString', 
+      coordinates: animatedCoords 
+    }
+  };
+}, [animatedCoords]);
 
   if (!isLoaded) return <div className="w-full h-full bg-stone-100 rounded-2xl animate-pulse" />;
 
@@ -142,15 +180,17 @@ export default function DayMinimap({
         projection={{ name: 'globe' }}
         interactive={true}
       >
-        {lineFeatures && (
-          <Source type="geojson" data={lineFeatures as any}>
+        {animatedLineFeature && (
+          <Source type="geojson" data={animatedLineFeature as any}>
             <Layer 
               id="route-line"
               type="line"
               paint={{
-                'line-color': '#78716c',
-                'line-width': 1.5,
-                'line-dasharray': [2, 2] 
+                'line-color': '#f43f5e', 
+                'line-width': 2.5,
+                'line-dasharray': [2, 1], 
+                'line-cap': 'round',
+                'line-join': 'round'
               }}
             />
           </Source>

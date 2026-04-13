@@ -129,7 +129,7 @@ export default function Login() {
           {isSignup ? "Create Account" : "Welcome Back"}
         </h2>
 
-        {/* 👇 ADDED: <form> wrapper handles the "Enter" key automatically */}
+        {/* <form> wrapper handles the "Enter" key automatically */}
         <form onSubmit={handleSubmit} className="space-y-5">
           {isSignup && (
             <div>
