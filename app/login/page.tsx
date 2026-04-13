@@ -12,11 +12,12 @@ import {
 export default function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [username, setUsername] = useState(""); // ⭐ NEW
+  const [username, setUsername] = useState(""); 
   const [isSignup, setIsSignup] = useState(false);
   const [error, setError] = useState("");
   const router = useRouter();
   const [resetMsg, setResetMsg] = useState("");
+
   const handleForgotPassword = async () => {
       if (!email) {
         setError("Please enter your email address first.");
@@ -30,7 +31,10 @@ export default function Login() {
         setError(e.message);
       }
     };
-  const handleSubmit = async () => {
+
+  
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault(); // 👇 ADDED: Prevents the page from refreshing on Enter
     try {
       setError("");
 
@@ -90,76 +94,83 @@ export default function Login() {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-[#f5f1e8] font-sans">
-      <div className="bg-white p-8 rounded-2xl border border-stone-200 w-96 shadow-sm space-y-5">
-        <h2 className="text-3xl font-serif text-center text-stone-900 mb-2">
+      <div className="bg-white p-8 rounded-2xl border border-stone-200 w-96 shadow-sm">
+        <h2 className="text-3xl font-serif text-center text-stone-900 mb-6">
           {isSignup ? "Create Account" : "Welcome Back"}
         </h2>
 
-        {isSignup && (
+        {/* 👇 ADDED: <form> wrapper handles the "Enter" key automatically */}
+        <form onSubmit={handleSubmit} className="space-y-5">
+          {isSignup && (
+            <div>
+              <label className="block text-xs font-bold uppercase tracking-wider text-stone-500 mb-1.5">Username</label>
+              <input
+                type="text"
+                placeholder="e.g. travelbug99"
+                className="w-full border border-stone-300 rounded-lg px-4 py-2.5 outline-none focus:border-stone-900"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+              />
+            </div>
+          )}
+
           <div>
-            <label className="block text-xs font-bold uppercase tracking-wider text-stone-500 mb-1.5">Username</label>
+            <label className="block text-xs font-bold uppercase tracking-wider text-stone-500 mb-1.5">Email</label>
             <input
-              type="text"
-              placeholder="e.g. travelbug99"
+              type="email"
+              placeholder="you@email.com"
               className="w-full border border-stone-300 rounded-lg px-4 py-2.5 outline-none focus:border-stone-900"
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
             />
           </div>
-        )}
 
-        <div>
-          <label className="block text-xs font-bold uppercase tracking-wider text-stone-500 mb-1.5">Email</label>
-          <input
-            type="email"
-            placeholder="you@email.com"
-            className="w-full border border-stone-300 rounded-lg px-4 py-2.5 outline-none focus:border-stone-900"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-          />
-        </div>
+          <div>
+            <label className="block text-xs font-bold uppercase tracking-wider text-stone-500 mb-1.5">Password</label>
+            <input
+              type="password"
+              placeholder="••••••••"
+              className="w-full border border-stone-300 rounded-lg px-4 py-2.5 outline-none focus:border-stone-900"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+            />
+          </div>
 
-        <div>
-          <label className="block text-xs font-bold uppercase tracking-wider text-stone-500 mb-1.5">Password</label>
-          <input
-            type="password"
-            placeholder="••••••••"
-            className="w-full border border-stone-300 rounded-lg px-4 py-2.5 outline-none focus:border-stone-900"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-          />
-        </div>
+          {error && <p className="text-rose-500 text-sm font-medium">{error}</p>}
 
-        {error && <p className="text-rose-500 text-sm font-medium">{error}</p>}
-
-        <button
-          onClick={handleSubmit}
-          className="w-full bg-stone-900 text-white py-3 rounded-lg font-bold hover:bg-stone-800 transition-colors shadow-md mt-2"
-        >
-          {isSignup ? "Sign up" : "Login"}
-        </button>
-        {/* ⭐ NEW: Forgot Password Button */}
-        {!isSignup && (
           <button
-            onClick={handleForgotPassword}
-            className="w-full text-xs font-bold text-stone-400 hover:text-stone-900 transition-colors mt-2"
+            type="submit" 
+            className="cursor-pointer w-full bg-stone-900 text-white py-3 rounded-lg font-bold hover:bg-stone-800 transition-colors shadow-md mt-2"
           >
-            Forgot your password?
+            {isSignup ? "Sign up" : "Login"}
           </button>
-        )}
+        </form>
 
-        {/* ⭐ NEW: Reset Success Message */}
-        {resetMsg && (
-          <p className="text-emerald-600 text-sm font-medium text-center bg-emerald-50 p-3 rounded-lg border border-emerald-100">
-            {resetMsg}
-          </p>
-        )}
-        <button
-          onClick={() => { setIsSignup(!isSignup); setError(""); }}
-          className="w-full text-sm font-bold text-stone-500 hover:text-stone-900 transition-colors"
-        >
-          {isSignup ? "Already have an account? Login" : "Need an account? Sign up"}
-        </button>
+        <div className="space-y-3 mt-4">
+          {!isSignup && (
+            <button
+              type="button"
+              onClick={handleForgotPassword}
+              className="cursor-pointer w-full text-xs font-bold text-stone-400 hover:text-stone-900 transition-colors"
+            >
+              Forgot your password?
+            </button>
+          )}
+
+          {resetMsg && (
+            <p className="text-emerald-600 text-sm font-medium text-center bg-emerald-50 p-3 rounded-lg border border-emerald-100">
+              {resetMsg}
+            </p>
+          )}
+
+          <button
+            type="button"
+            onClick={() => { setIsSignup(!isSignup); setError(""); }}
+            className="cursor-pointer w-full text-sm font-bold text-stone-500 hover:text-stone-900 transition-colors"
+          >
+            {isSignup ? "Already have an account? Login" : "Need an account? Sign up"}
+          </button>
+        </div>
       </div>
     </div>
   );
