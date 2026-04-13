@@ -34,37 +34,52 @@ export default function DayMinimap({
   const animationRef = useRef<number>(0);
   useEffect(() => {
     if (points.length < 2) {
+      console.log("Not enough points to animate yet");
       setAnimatedCoords([]);
       return;
     }
 
+    console.log("Starting animation for", points.length, "points");
+
     const fullCoords = points.map(p => [p.lng, p.lat]);
-    let currentStep = 0;
-    const totalSteps = 100; // Adjust for speed (higher = slower)
     
-    // To make it smooth, we interpolate between stop A and stop B
-    // However, for a simple start, let's just draw stop-by-stop:
-    setAnimatedCoords([fullCoords[0]]); // Start at first point
+    // We want to create a lot of tiny steps between the actual points
+    // to make the animation smooth and visible.
+    const stepsPerSegment = 30; 
+    const interpolatedPath: number[][] = [];
+
+    for (let i = 0; i < fullCoords.length - 1; i++) {
+      const start = fullCoords[i];
+      const end = fullCoords[i + 1];
+      
+      for (let j = 0; j <= stepsPerSegment; j++) {
+        const ratio = j / stepsPerSegment;
+        const lng = start[0] + (end[0] - start[0]) * ratio;
+        const lat = start[1] + (end[1] - start[1]) * ratio;
+        interpolatedPath.push([lng, lat]);
+      }
+    }
+
+    let currentStep = 0;
+    // Start with just the first two tiny segments so the line is valid
+    setAnimatedCoords(interpolatedPath.slice(0, 2));
 
     const animate = () => {
-      if (currentStep <= fullCoords.length) {
-        setAnimatedCoords(fullCoords.slice(0, currentStep));
-        currentStep++;
+      if (currentStep < interpolatedPath.length) {
+        setAnimatedCoords(interpolatedPath.slice(0, currentStep));
+        currentStep += 1; // Increase this number to make it faster
         animationRef.current = requestAnimationFrame(animate);
       }
     };
 
-    // Optional: Add a small delay before animation starts
-    const timeout = setTimeout(() => {
-      animate();
-    }, 500);
+    // Give the map 1 second to finish flyTo/zoom before drawing
+    const timeout = setTimeout(animate, 1000);
 
     return () => {
       cancelAnimationFrame(animationRef.current);
       clearTimeout(timeout);
     };
-  }, [points]); // Re-runs whenever the day's points change
-    // animated routes
+  }, [points]);
 
   useEffect(() => {
     if (!isLoaded || !dayData) return;
@@ -181,7 +196,12 @@ export default function DayMinimap({
         interactive={true}
       >
         {animatedLineFeature && (
-          <Source type="geojson" data={animatedLineFeature as any}>
+          <Source 
+            id="route-source" 
+            key={`route-${date}`} // This forces a fresh source when you change days
+            type="geojson" 
+            data={animatedLineFeature as any}
+          >
             <Layer 
               id="route-line"
               type="line"
