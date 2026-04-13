@@ -46,27 +46,26 @@ export default function DayMinimap({
     }
   };
   useEffect(() => {
+    // --- ISSUE 2 FIX: Synchronous Reset ---
+    // We clear the path IMMEDIATELY when the effect triggers 
+    // so the old day's path vanishes before we even start "thinking"
+    setAnimatedCoords([]);
+    
     const generateMasterPath = async () => {
-      if (points.length < 2) {
-        setAnimatedCoords([]);
-        return;
-      }
+      if (points.length < 2) return;
 
-      setIsProcessing(true); // Show loader while fetching road data
+      setIsProcessing(true);
       const masterPath: number[][] = [];
-      const stepsPerSegment = 30;
+      const stepsPerTransitSegment = 60; // Increased for a slower, smoother transit line
 
       for (let i = 0; i < points.length - 1; i++) {
         const start = points[i];
         const end = points[i + 1];
-        
-        // Define types that should NOT use roads
-        const isTransit = ['flight', 'train', 'bus', 'ferry'].includes(end.type);
+        const isTransit = ['flight', 'train', 'bus', 'ferry', 'transit'].includes(end.type);
 
         if (isTransit) {
-          // --- BIRDS-EYE / ARC LOGIC ---
-          for (let j = 0; j <= stepsPerSegment; j++) {
-            const ratio = j / stepsPerSegment;
+          for (let j = 0; j <= stepsPerTransitSegment; j++) {
+            const ratio = j / stepsPerTransitSegment;
             let lng = start.lng + (end.lng - start.lng) * ratio;
             let lat = start.lat + (end.lat - start.lat) * ratio;
 
@@ -78,40 +77,43 @@ export default function DayMinimap({
             masterPath.push([lng, lat]);
           }
         } else {
-          // --- ROAD ROUTE LOGIC ---
-          // We call the Directions API for this specific segment
           const segmentCoords = await getRoadPath([start, end]);
           if (segmentCoords) {
             masterPath.push(...segmentCoords);
           } else {
-            // Fallback to straight line if API fails
             masterPath.push([start.lng, start.lat], [end.lng, end.lat]);
           }
         }
       }
 
       setIsProcessing(false);
-      startAnimation(masterPath);
-    };
-
-    const startAnimation = (fullPath: number[][]) => {
+      
+      // --- ISSUE 1 FIX: Animation Speed ---
       let currentStep = 0;
       const animate = () => {
-        if (currentStep <= fullPath.length) {
-          setAnimatedCoords(fullPath.slice(0, currentStep));
-          // Road paths have MANY points, so we jump by 3-5 to keep it fast
-          currentStep += 4; 
+        if (currentStep <= masterPath.length) {
+          setAnimatedCoords(masterPath.slice(0, currentStep));
+          
+          // SPEED CONTROL: 
+          // 1 = Very slow (best for few points)
+          // 2 = Moderate (good balance)
+          // 3+ = Fast
+          currentStep += 1; 
+
           animationRef.current = requestAnimationFrame(animate);
         }
       };
-      
-      setTimeout(animate, 800);
+
+      // Delay start until the map has likely finished its zoom/pan
+      const timeout = setTimeout(animate, 800);
+      return timeout;
     };
 
-    generateMasterPath();
+    const timeoutPromise = generateMasterPath();
 
     return () => {
       cancelAnimationFrame(animationRef.current);
+      timeoutPromise.then(timeout => timeout && clearTimeout(timeout));
     };
   }, [points]);
 
