@@ -32,52 +32,86 @@ export default function DayMinimap({
   const [isProcessing, setIsProcessing] = useState(false);
   const [animatedCoords, setAnimatedCoords] = useState<number[][]>([]);
   const animationRef = useRef<number>(0);
+  // Helper function to get the road path
+  const getRoadPath = async (segmentPoints: MapPoint[]) => {
+    const coordsString = segmentPoints.map(p => `${p.lng},${p.lat}`).join(';');
+    try {
+      const query = await fetch(
+        `https://api.mapbox.com/directions/v5/mapbox/driving/${coordsString}?geometries=geojson&access_token=${process.env.NEXT_PUBLIC_MAPBOX_TOKEN}`
+      );
+      const json = await query.json();
+      return json.routes?.[0]?.geometry?.coordinates || null;
+    } catch (e) {
+      return null;
+    }
+  };
   useEffect(() => {
-    if (points.length < 2) {
-      console.log("Not enough points to animate yet");
-      setAnimatedCoords([]);
-      return;
-    }
-
-    console.log("Starting animation for", points.length, "points");
-
-    const fullCoords = points.map(p => [p.lng, p.lat]);
-    
-    // We want to create a lot of tiny steps between the actual points
-    // to make the animation smooth and visible.
-    const stepsPerSegment = 30; 
-    const interpolatedPath: number[][] = [];
-
-    for (let i = 0; i < fullCoords.length - 1; i++) {
-      const start = fullCoords[i];
-      const end = fullCoords[i + 1];
-      
-      for (let j = 0; j <= stepsPerSegment; j++) {
-        const ratio = j / stepsPerSegment;
-        const lng = start[0] + (end[0] - start[0]) * ratio;
-        const lat = start[1] + (end[1] - start[1]) * ratio;
-        interpolatedPath.push([lng, lat]);
+    const generateMasterPath = async () => {
+      if (points.length < 2) {
+        setAnimatedCoords([]);
+        return;
       }
-    }
 
-    let currentStep = 0;
-    // Start with just the first two tiny segments so the line is valid
-    setAnimatedCoords(interpolatedPath.slice(0, 2));
+      setIsProcessing(true); // Show loader while fetching road data
+      const masterPath: number[][] = [];
+      const stepsPerSegment = 30;
 
-    const animate = () => {
-      if (currentStep < interpolatedPath.length) {
-        setAnimatedCoords(interpolatedPath.slice(0, currentStep));
-        currentStep += 1; // Increase this number to make it faster
-        animationRef.current = requestAnimationFrame(animate);
+      for (let i = 0; i < points.length - 1; i++) {
+        const start = points[i];
+        const end = points[i + 1];
+        
+        // Define types that should NOT use roads
+        const isTransit = ['flight', 'train', 'bus', 'ferry'].includes(end.type);
+
+        if (isTransit) {
+          // --- BIRDS-EYE / ARC LOGIC ---
+          for (let j = 0; j <= stepsPerSegment; j++) {
+            const ratio = j / stepsPerSegment;
+            let lng = start.lng + (end.lng - start.lng) * ratio;
+            let lat = start.lat + (end.lat - start.lat) * ratio;
+
+            if (end.type === 'flight') {
+              const distance = Math.abs(end.lng - start.lng);
+              const arcHeight = distance * 0.2; 
+              lat += Math.sin(Math.PI * ratio) * arcHeight;
+            }
+            masterPath.push([lng, lat]);
+          }
+        } else {
+          // --- ROAD ROUTE LOGIC ---
+          // We call the Directions API for this specific segment
+          const segmentCoords = await getRoadPath([start, end]);
+          if (segmentCoords) {
+            masterPath.push(...segmentCoords);
+          } else {
+            // Fallback to straight line if API fails
+            masterPath.push([start.lng, start.lat], [end.lng, end.lat]);
+          }
+        }
       }
+
+      setIsProcessing(false);
+      startAnimation(masterPath);
     };
 
-    // Give the map 1 second to finish flyTo/zoom before drawing
-    const timeout = setTimeout(animate, 1000);
+    const startAnimation = (fullPath: number[][]) => {
+      let currentStep = 0;
+      const animate = () => {
+        if (currentStep <= fullPath.length) {
+          setAnimatedCoords(fullPath.slice(0, currentStep));
+          // Road paths have MANY points, so we jump by 3-5 to keep it fast
+          currentStep += 4; 
+          animationRef.current = requestAnimationFrame(animate);
+        }
+      };
+      
+      setTimeout(animate, 800);
+    };
+
+    generateMasterPath();
 
     return () => {
       cancelAnimationFrame(animationRef.current);
-      clearTimeout(timeout);
     };
   }, [points]);
 
@@ -206,11 +240,12 @@ export default function DayMinimap({
               id="route-line"
               type="line"
               paint={{
-                'line-color': '#f43f5e', 
-                'line-width': 2.5,
-                'line-dasharray': [2, 1], 
-                'line-cap': 'round',
-                'line-join': 'round'
+                'line-color': '#292524', // Deep Stone
+                'line-width': 1.8, 
+                'line-dasharray': [3, 2], 
+                'line-cap': 'round', // Makes corners look hand-drawn
+                'line-join': 'round', // Prevents sharp "spikes" on tight street corners
+                'line-opacity': 0.8 
               }}
             />
           </Source>
