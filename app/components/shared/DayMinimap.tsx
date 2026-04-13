@@ -87,18 +87,21 @@ export default function DayMinimap({
       }
 
       setIsProcessing(false);
-      
-      // --- ISSUE 1 FIX: Animation Speed ---
+    
+      // --- SLOW MOTION FIX ---
       let currentStep = 0;
+      const speed = 0.6; // 1.0 was original, 0.6 is 40% slower
+
       const animate = () => {
-        if (currentStep <= masterPath.length) {
-          setAnimatedCoords(masterPath.slice(0, currentStep));
+        // Use Math.floor because slice needs an integer
+        const index = Math.floor(currentStep);
+
+        if (index <= masterPath.length) {
+          setAnimatedCoords(masterPath.slice(0, index));
           
-          // SPEED CONTROL: 
-          // 1 = Very slow (best for few points)
-          // 2 = Moderate (good balance)
-          // 3+ = Fast
-          currentStep += 1; 
+          // This is where the magic happens. 
+          // Adding 0.6 means we only add a new point roughly every ~1.6 frames.
+          currentStep += speed; 
 
           animationRef.current = requestAnimationFrame(animate);
         }
