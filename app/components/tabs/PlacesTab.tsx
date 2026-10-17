@@ -21,9 +21,22 @@ import MapboxMap, { Marker, Popup } from 'react-map-gl/mapbox';
 import { useJsApiLoader } from '@react-google-maps/api';
 import { mapLibraries } from "../../helpers/helpers";
 import { PLACE_CATEGORIES, CATEGORY_COLORS } from "../../styling/styling";
+import { confirmedPlaceSources, deleteItineraryActivity } from "../../helpers/itineraryPlaces";
 
 export default function PlacesTab({ tripId, country }: PlacesTabProps) {
-  const [places, setPlaces] = useState<StoredPlace[]>([]);
+  const [storedPlaces, setPlaces] = useState<StoredPlace[]>([]);
+  const [confirmationState, setConfirmationState] = useState<{ tripId: number; sources: Set<string> } | null>(null);
+  const [confirmationError, setConfirmationError] = useState("");
+  const places = useMemo(() => storedPlaces.map(place => ({
+    ...place,
+    confirmed: confirmationState?.tripId === tripId
+      ? confirmationState.sources.has(`place:${place.id}`)
+      : place.confirmed,
+  })), [storedPlaces, confirmationState, tripId]);
+
+  useEffect(() => storage.subscribeToList(`itinerary:${tripId}:date:`, days => {
+    setConfirmationState({ tripId, sources: confirmedPlaceSources(days) });
+  }), [tripId]);
   const [activeCategory, setActiveCategory] = useState<PlaceType | "all">("all");
   const [activeLocationPath, setActiveLocationPath] = useState<string[]>([]);
   const [editingPlace, setEditingPlace] = useState<StoredPlace | null>(null);
@@ -169,28 +182,14 @@ export default function PlacesTab({ tripId, country }: PlacesTabProps) {
   };
   const handleRemoveSpecificConfirmation = async (date: string, itemId: number) => {
     if (!unconfirmingPlace) return;
-
-    // 1. Remove it from the itinerary date
-    const key = `itinerary:${tripId}:date:${date}`;
-    const existing = await storage.get(key);
-    if (existing?.value) {
-      const day = JSON.parse(existing.value);
-      day.items = day.items.filter((i: any) => i.id !== itemId);
-      await storage.set(key, day);
-    }
-
-    // 2. Remove it from local UI state
-    const updatedConfs = placeConfirmations.filter(c => c.item.id !== itemId);
-    setPlaceConfirmations(updatedConfs);
-
-    // 3. If that was the LAST confirmation, completely unconfirm the place
-    if (updatedConfs.length === 0) {
-      const updatedPlace = { ...unconfirmingPlace, confirmed: false, visited: false };
-      delete updatedPlace.cost;
-      delete updatedPlace.paidBy;
-      delete updatedPlace.rating; 
-      await storage.set(`place:${tripId}:${unconfirmingPlace.category}:${unconfirmingPlace.id}`, updatedPlace);
-      setUnconfirmingPlace(null);
+    setConfirmationError("");
+    try {
+      await deleteItineraryActivity(tripId, date, itemId);
+      const updatedConfs = placeConfirmations.filter(c => c.date !== date || c.item.id !== itemId);
+      setPlaceConfirmations(updatedConfs);
+      if (updatedConfs.length === 0) setUnconfirmingPlace(null);
+    } catch {
+      setConfirmationError("Could not remove this date. Please try again.");
     }
   };
   const handleEditPlace = async (formData: PlaceFormData) => {
@@ -527,7 +526,7 @@ export default function PlacesTab({ tripId, country }: PlacesTabProps) {
               onOpenShoppingList={setShoppingListPlace}
               onEdit={setEditingPlace}
               onConfirm={setConfirmingPlace}
-              onUnconfirm={setUnconfirmingPlace}
+              onUnconfirm={place => { setConfirmationError(""); setUnconfirmingPlace(place); }}
               onDelete={deletePlace}
             />
           ))}
@@ -551,6 +550,7 @@ export default function PlacesTab({ tripId, country }: PlacesTabProps) {
         <div className="fixed inset-0 bg-stone-900/40 backdrop-blur-sm flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 animate-in zoom-in-95 duration-200">
             <h3 className="text-xl font-serif text-stone-900 mb-2">Unconfirm Dates</h3>
+            {confirmationError && <p role="alert" className="mb-4 rounded-lg border border-rose-100 bg-rose-50 p-3 text-sm text-rose-600">{confirmationError}</p>}
             <p className="text-sm text-stone-500 mb-6">Select which scheduled visit to <strong>{unconfirmingPlace.name}</strong> you want to remove.</p>
             
             {placeConfirmations.length === 0 ? (

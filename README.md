@@ -4,6 +4,8 @@ A full-stack website for planning, and journalling trips collaboratively. This w
 
 Built with Next.js, Firebase, Google Maps API, and Mapbox API.
 
+FlightAware flight lookup: see [setup and usage](docs/flight-search.md).
+
 ## Features
 
 - Itinerary View: A page to record the details of the trip (including both a timeline and calendar view), including a map with markers for each location, a timeline of events, and AI-powered tips based on the day.

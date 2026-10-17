@@ -1169,6 +1169,7 @@ export default function AdminTab({ tripId }: { tripId: number }) {
       {/* === DIALOGS (Hidden until triggered) === */}
       {showFlightDialog && (
         <FlightDialog
+          tripId={tripId}
           initialData={editingFlight || undefined}
           defaultDate={tripStartDate}
           onClose={() => { setShowFlightDialog(false); setEditingFlight(null); }}

@@ -271,6 +271,7 @@ export type PhotoDialogProps = {
 };
 
 export type FlightDialogProps = {
+  tripId?: number;
   onClose: () => void;
   onAdd: (data: FlightData) => void;
   initialData?: FlightData; // optional, used for edit mode

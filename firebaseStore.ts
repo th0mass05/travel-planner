@@ -9,10 +9,19 @@ import {
   query,
   where,
   documentId,
-  deleteDoc
+  deleteDoc,
+  writeBatch
 } from "firebase/firestore";
 
 export const storage = {
+
+  async updateMany(updates: { key: string; value: Record<string, unknown> }[]) {
+    const batch = writeBatch(db);
+    updates.forEach(({ key, value }) => {
+      batch.set(doc(db, "travelData", key), value, { merge: true });
+    });
+    await batch.commit();
+  },
 
   async get(key: string) {
     const snap = await getDoc(doc(db, "travelData", key));

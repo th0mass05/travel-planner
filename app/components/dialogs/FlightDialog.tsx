@@ -1,9 +1,11 @@
 import { useState } from "react";
 import { Plane } from "lucide-react";
 import {FlightData, FlightDialogProps } from "../../types"; 
+import FlightSearch from "../shared/FlightSearch";
+import { applyFlightMatch } from "../../helpers/flightSearch";
 
 
-export default function FlightDialog({ onClose, onAdd, initialData, defaultDate }: FlightDialogProps) { 
+export default function FlightDialog({ onClose, onAdd, initialData, defaultDate, tripId }: FlightDialogProps) {
   const [formData, setFormData] = useState<FlightData>(
     initialData ?? {
       airline: "", flightNumber: "", 
@@ -32,8 +34,13 @@ export default function FlightDialog({ onClose, onAdd, initialData, defaultDate 
         <h3 className="text-2xl font-serif text-stone-900 mb-6">
             {initialData ? "Edit Flight" : "Add Flight"}
         </h3>
+        {tripId && <FlightSearch tripId={tripId} defaultDate={initialData?.date || defaultDate} onSelect={match => {
+          setFormData(previous => applyFlightMatch(previous, match));
+          setError("");
+        }} />}
         
         <div className="space-y-6">
+          <p className="text-xs text-stone-500">Enter departure and arrival times in each airport’s local time.</p>
           {/* Airline & Flight No */}
           <div className="grid grid-cols-2 gap-4">
             <div>

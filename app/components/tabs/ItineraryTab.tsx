@@ -12,12 +12,14 @@ import {ActivityDialog, LocationManagerDialog} from "../dialogs";
 import DayMinimap from "../shared/DayMinimap";
 import TransitMinimap from "../shared/TransitMinimap";
 import ProTipWidget from "../shared/AITips";
+import { deleteItineraryActivity } from "../../helpers/itineraryPlaces";
 export default function ItineraryTab({ trip }: { trip: TripData }) {
   // ... existing state ...
   const [days, setDays] = useState<ItineraryDay[]>([]);
   const [viewMode, setViewMode] = useState<"timeline" | "calendar">("timeline");
   const [currentDayIndex, setCurrentDayIndex] = useState(0);
   const [showAddDialog, setShowAddDialog] = useState(false);
+  const [deleteError, setDeleteError] = useState("");
   
   // Location Manager State
   const [showLocDialog, setShowLocDialog] = useState(false);
@@ -153,12 +155,12 @@ export default function ItineraryTab({ trip }: { trip: TripData }) {
   };
 
   const deleteActivity = async (date: string, activityId: number) => {
-       const key = `itinerary:${trip.id}:date:${date}`;
-       const existing = await storage.get(key);
-       if (!existing?.value) return;
-       const parsed = JSON.parse(existing.value);
-       parsed.items = parsed.items.filter((i: ItineraryItem) => i.id !== activityId);
-       await storage.set(key, parsed);
+    setDeleteError("");
+    try {
+      await deleteItineraryActivity(trip.id, date, activityId);
+    } catch {
+      setDeleteError("Could not delete this activity. Please try again.");
+    }
   };
   const [editingActivity, setEditingActivity] = useState<ItineraryItem | null>(null); // ⭐ NEW
   // ⭐ NEW: Handle Edit Save
@@ -268,6 +270,7 @@ export default function ItineraryTab({ trip }: { trip: TripData }) {
   };
   return (
     <div className="space-y-8">
+      {deleteError && <p role="alert" className="rounded-lg border border-rose-100 bg-rose-50 p-3 text-sm text-rose-600">{deleteError}</p>}
       {/* Header Controls */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
         <div>

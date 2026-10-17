@@ -111,66 +111,59 @@ export default function PlaceCard({
           <TripAuthorInfo uid={place.createdByUid} createdAt={place.createdAt} />
         </div>
 
-        <div className="pt-4 border-t border-stone-100 flex items-center justify-between">
+        <div className="pt-4 border-t border-stone-100 space-y-3">
+          <div className="flex flex-wrap items-center justify-between gap-3">
           {/* Toggle visited state */}
-          <label className="flex items-center gap-2 cursor-pointer group/check">
-            <div
-              className={`w-5 h-5 rounded border transition-colors flex items-center justify-center ${
-                place.visited ? "bg-stone-900 border-stone-900 text-white" : "border-stone-300 group-hover/check:border-stone-900"
-              }`}
-            >
-              {place.visited && <Check size={12} />}
-            </div>
+          <label className="inline-flex items-center gap-2 py-1 cursor-pointer group/check shrink-0">
             <input
               type="checkbox"
-              checked={place.visited}
+              checked={Boolean(place.visited)}
               onChange={() => onToggleVisited(place)}
-              className="hidden"
+              className="w-4 h-4 rounded border-stone-300 accent-stone-900 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-stone-900"
             />
             <span className="text-xs font-bold uppercase text-stone-400 group-hover/check:text-stone-900">
               Visited
             </span>
           </label>
-
-          <div className="flex gap-3 text-[11px] sm:text-xs font-bold uppercase tracking-wide items-center">
             {/* Show linked shopping list summary for shopping places with associated items */}
             {place.category === "shopping" &&
               shoppingItems.filter((i) => i.linkedPlaces?.some((p) => p.id === place.id)).length > 0 && (
                 <button
                   onClick={() => onOpenShoppingList(place)}
-                  className="text-indigo-500 hover:text-indigo-700 flex items-center gap-1 mr-1"
+                  className="text-stone-500 hover:text-stone-900 inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-stone-50 text-xs font-bold whitespace-nowrap"
                 >
                   <ShoppingBag size={14} />
                   List ({shoppingItems.filter((i) => i.linkedPlaces?.some((p) => p.id === place.id)).length})
                 </button>
               )}
-
-            <button onClick={() => onEdit(place)} className="text-stone-400 hover:text-stone-900">
+          </div>
+          <div className="flex flex-wrap gap-2 text-xs font-bold items-center">
+            <button onClick={() => onEdit(place)} className="px-3 py-2 rounded-lg border border-stone-200 text-stone-600 hover:bg-stone-50 hover:text-stone-900 whitespace-nowrap">
               Edit
             </button>
 
             {/* Show confirm actions based on whether the place already has a confirmed visit */}
             {!place.confirmed ? (
-              <button onClick={() => onConfirm(place)} className="text-rose-400 hover:text-rose-600">
+              <button onClick={() => onConfirm(place)} className="px-3 py-2 rounded-lg bg-rose-50 border border-rose-100 text-rose-600 hover:bg-rose-100 whitespace-nowrap">
                 Confirm
               </button>
             ) : (
-              <div className="flex items-center gap-3 border-l border-r border-stone-200 px-3">
+              <>
                 <button
                   onClick={() => onConfirm(place)}
-                  className="text-emerald-500 hover:text-emerald-700 flex items-center gap-0.5"
+                  className="px-3 py-2 rounded-lg bg-rose-50 border border-rose-100 text-rose-600 hover:bg-rose-100 inline-flex items-center gap-1.5 whitespace-nowrap"
                   title="Add Another Date"
                 >
                   <Plus size={12} strokeWidth={3} /> Confirm New Date
                 </button>
-                <button onClick={() => onUnconfirm(place)} className="text-amber-500 hover:text-amber-700">
+                <button onClick={() => onUnconfirm(place)} className="px-3 py-2 rounded-lg border border-stone-200 text-stone-600 hover:bg-stone-50 hover:text-stone-900 whitespace-nowrap">
                   Unconfirm
                 </button>
-              </div>
+              </>
             )}
 
-            <button onClick={() => onDelete(place.id, place.category)} className="text-stone-300 hover:text-red-500">
-              Del
+            <button onClick={() => onDelete(place.id, place.category)} className="px-3 py-2 rounded-lg text-stone-400 hover:text-rose-600 hover:bg-rose-50 whitespace-nowrap">
+              Delete
             </button>
           </div>
         </div>
