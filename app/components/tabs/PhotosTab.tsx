@@ -6,7 +6,7 @@ import {
 import { 
   PhotoData, PhotosTabProps
 } from "../../types"; 
-import { deleteKey, uploadDualImages } from "../../helpers/helpers";
+import { uploadDualImages } from "../../helpers/helpers";
 import {
   Plus, Calendar, MapPin, Camera, Download
 } from "lucide-react";
@@ -27,7 +27,7 @@ export default function PhotosTab({ tripId }: PhotosTabProps) {
     const unsubscribe = storage.subscribeToList(
       `photo:${tripId}:`, 
       (newPhotos) => {
-        setPhotos(newPhotos.sort((a: any, b: any) => b.id - a.id));
+        setPhotos(newPhotos.sort((a: PhotoItem, b: PhotoItem) => b.id - a.id));
       }
     );
 
@@ -53,42 +53,43 @@ export default function PhotosTab({ tripId }: PhotosTabProps) {
     await storage.set(`photo:${tripId}:${photo.id}`, photo);
   };
 
-  const deletePhoto = async (photoId: number) => {
-    await deleteKey(`photo:${tripId}:${photoId}`);
-  };
-
-
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
+    <div className="space-y-8">
+      <div className="flex flex-col gap-4 border-b border-stone-100 pb-5 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h2 className="text-3xl font-serif text-gray-900">Photo Gallery</h2>
-          <p className="text-gray-800 mt-1">{photos.length} photos captured</p>
+          <h2 className="text-3xl font-serif text-stone-900">Photo Gallery</h2>
+          <p className="text-stone-500 mt-3">The places, people and moments from your journey.</p>
         </div>
+        <div className="flex flex-wrap items-center gap-3">
+          <span className="text-xs font-bold uppercase tracking-wider text-stone-500 bg-stone-100 px-3 py-1.5 rounded-full">
+            {photos.length} {photos.length === 1 ? "photo" : "photos"}
+          </span>
         <button
           onClick={() => setShowAddDialog(true)}
-          className="px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800 flex items-center gap-2"
+          className="px-5 py-2.5 bg-stone-900 text-white rounded-full hover:bg-stone-800 text-sm font-bold shadow-lg hover:shadow-xl transition-all flex items-center gap-2 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-stone-900"
         >
-          <Plus size={18} />
+          <Plus size={16} />
           Add Photo
         </button>
+        </div>
       </div>
 
       {photos.length === 0 ? (
-        <div className="bg-white border-2 border-dashed border-gray-300 rounded-lg p-12 text-center">
-          <div className="w-16 h-16 rounded-full bg-purple-100 flex items-center justify-center mb-4 mx-auto">
-            <Camera size={32} className="text-purple-600" />
+        <div className="bg-white border border-dashed border-stone-200 rounded-2xl px-6 py-16 sm:py-20 text-center">
+          <div className="w-14 h-14 rounded-full bg-rose-50 flex items-center justify-center mb-5 mx-auto">
+            <Camera size={24} className="text-rose-500" />
           </div>
-          <h3 className="text-xl font-semibold text-gray-800 mb-2">
-            Add More Memories
+          <h3 className="text-2xl font-serif text-stone-900 mb-2">
+            Every journey has a story
           </h3>
-          <p className="text-gray-800 mb-4">
-            Upload photos from your trip to keep your journal complete
+          <p className="text-stone-500 text-sm leading-relaxed max-w-sm mx-auto mb-6">
+            Add your first photo and keep your favourite moments together.
           </p>
           <button
             onClick={() => setShowAddDialog(true)}
-            className="px-6 py-3 bg-gray-900 text-white rounded-lg"
+            className="inline-flex items-center gap-2 px-5 py-2.5 bg-stone-900 text-white rounded-full hover:bg-stone-800 text-sm font-bold shadow-lg transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-stone-900"
           >
+            <Plus size={16} />
             Upload First Photo
           </button>
         </div>
@@ -97,35 +98,36 @@ export default function PhotosTab({ tripId }: PhotosTabProps) {
           {photos.map((photo: PhotoItem) => (
             <div
               key={photo.id}
-              className="bg-white border-2 border-gray-200 rounded-lg overflow-hidden hover:border-purple-300 hover:shadow-2xl transition-all group flex flex-col"
+              className="bg-white border border-stone-200 rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition-shadow group flex flex-col min-w-0"
             >
-              <div className="relative h-64 w-full overflow-hidden rounded-t-lg">
+              <div className="relative aspect-[4/3] w-full overflow-hidden bg-stone-100">
                 <img
                   src={photo.url} // Renders the fast 80% quality thumbnail
-                  alt={photo.caption}
-                  className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+                  alt={photo.caption || (photo.location ? `Trip photo in ${photo.location}` : "Trip memory")}
+                  loading="lazy"
+                  className="w-full h-full object-cover transition-transform duration-500 motion-safe:group-hover:scale-105"
                 />
               </div>
 
-              <div className="p-4 flex flex-col flex-grow">
-                <p className="font-medium text-gray-800 mb-2">
-                  {photo.caption}
+              <div className="p-5 flex flex-col flex-grow">
+                <p className="font-serif text-xl leading-snug text-stone-900 mb-2 break-words">
+                  {photo.caption || "A moment to remember"}
                 </p>
-                <div className="mb-2">
-                  <TripAuthorInfo uid={photo.createdByUid} createdAt={photo.createdAt} />
+                <div className="mb-4">
+                  <TripAuthorInfo uid={photo.createdByUid} createdAt={photo.createdAt} className="flex-wrap !text-stone-400" />
                 </div>
 
                 {/* Add a flex container to push the download button to the right */}
-                <div className="mt-auto pt-2 flex items-end justify-between text-sm text-gray-800">
-                  <div className="space-y-1">
-                    <div className="flex items-center gap-2">
-                      <Calendar size={14} />
+                <div className="mt-auto pt-4 border-t border-stone-100 flex items-end justify-between gap-3 text-xs text-stone-500">
+                  <div className="space-y-2 min-w-0">
+                    {photo.date && <div className="flex items-center gap-2">
+                      <Calendar size={14} className="shrink-0 text-stone-400" />
                       <span>{photo.date}</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <MapPin size={14} />
-                      <span>{photo.location}</span>
-                    </div>
+                    </div>}
+                    {photo.location && <div className="flex items-start gap-2">
+                      <MapPin size={14} className="shrink-0 text-rose-400" />
+                      <span className="break-words">{photo.location}</span>
+                    </div>}
                   </div>
 
                   {/* DOWNLOAD BUTTON */}
@@ -135,8 +137,9 @@ export default function PhotosTab({ tripId }: PhotosTabProps) {
                       target="_blank"
                       rel="noopener noreferrer"
                       download
-                      className="p-2 bg-stone-100 text-stone-700 hover:bg-purple-100 hover:text-purple-700 rounded-full transition-colors"
+                      className="p-2.5 shrink-0 bg-stone-50 border border-stone-200 text-stone-500 hover:bg-stone-900 hover:border-stone-900 hover:text-white rounded-full transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-stone-900"
                       title="Download High-Res Original"
+                      aria-label={`Download original photo: ${photo.caption || "Trip memory"}`}
                     >
                       <Download size={18} />
                     </a>

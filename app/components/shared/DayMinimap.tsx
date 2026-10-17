@@ -88,7 +88,7 @@ export default function DayMinimap({
 
       setIsProcessing(false);
     
-      // --- SLOW MOTION FIX ---
+      
       let currentStep = 0;
       const speed = 0.6; // 1.0 was original, 0.6 is 40% slower
 
@@ -99,8 +99,7 @@ export default function DayMinimap({
         if (index <= masterPath.length) {
           setAnimatedCoords(masterPath.slice(0, index));
           
-          // This is where the magic happens. 
-          // Adding 0.6 means we only add a new point roughly every ~1.6 frames.
+          
           currentStep += speed; 
 
           animationRef.current = requestAnimationFrame(animate);

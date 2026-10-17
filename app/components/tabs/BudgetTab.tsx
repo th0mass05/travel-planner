@@ -110,7 +110,7 @@ export default function BudgetTab({ tripId }: { tripId: number }) {
         storage.getAll<StoredPlace>(`place:${tripId}:eat:`),
         storage.getAll<StoredPlace>(`place:${tripId}:visit:`),
         (mode === "mine" && myUid) ? storage.getAll<any>(`shopping:${tripId}:user:${myUid}:`) : Promise.resolve([]),
-        (mode === "shared") ? storage.getAll<any>(`expense:${tripId}:shared:`) : Promise.resolve([]),
+        storage.getAll<any>(`expense:${tripId}:shared:`),
         (mode === "mine" && myUid) ? storage.getAll<any>(`expense:${tripId}:user:${myUid}:`) : Promise.resolve([])
       ]);
 
@@ -136,7 +136,7 @@ export default function BudgetTab({ tripId }: { tripId: number }) {
         label: string,
         cost: string | number,
         paidBy?: { uid: string; amount: number }[],
-        manualData?: { id: number, sourceKey: string } // 👈 NEW
+        manualData?: { id: number, sourceKey?: string }
       ) => {
         let cents = 0;
 
@@ -205,9 +205,10 @@ export default function BudgetTab({ tripId }: { tripId: number }) {
             const cat = (e.category && newBudgetState[e.category]) ? e.category : "other";
             
             // 👈 NEW: Construct the exact storage key so we can delete it later
-            const sourceKey = mode === "shared" 
-                ? `expense:${tripId}:shared:${e.id}`
-                : `expense:${tripId}:user:${myUid}:${e.id}`;
+            // Shared allocations are visible in My Spending; delete them in Shared Budget.
+            const sourceKey = forceMine
+                ? `expense:${tripId}:user:${myUid}:${e.id}`
+                : mode === "shared" ? `expense:${tripId}:shared:${e.id}` : undefined;
 
             if (forceMine) {
                 const cents = toCents(e.amount);
